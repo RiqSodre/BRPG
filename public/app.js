@@ -768,13 +768,18 @@ function renderMapTab() {
         <aside class="map-side">
           <div id="token-panel"></div>
           <div id="aoe-panel"></div>
-          <h3>Tokens no mapa</h3>
-          <div class="row">
-            <button class="btn small gold" id="btn-tokens-init" title="Traz todo mundo que está na aba Iniciativa">⚔️ Da iniciativa</button>
-            <button class="btn small" id="btn-tokens-pcs">🎮 Jogadores</button>
-            <button class="btn small ghost" id="btn-token-new">+ Avulso</button>
+          <div id="combat-order"></div>
+          <div class="side-section">
+            <div class="side-section-label">
+              <span>TOKENS NO MAPA</span>
+            </div>
+            <div class="row" style="margin-bottom:8px;gap:4px;">
+              <button class="btn small gold" id="btn-tokens-init" title="Traz todo mundo que está na aba Iniciativa">⚔️ Iniciativa</button>
+              <button class="btn small" id="btn-tokens-pcs">🎮 Jogadores</button>
+              <button class="btn small ghost" id="btn-token-new">+ Avulso</button>
+            </div>
+            <div id="token-list"></div>
           </div>
-          <div id="token-list"></div>
         </aside>
       </div>`;
 
@@ -953,6 +958,7 @@ function renderMapSide() {
   renderCombatHud();
   renderTokenPanel();
   renderAoePanel();
+  renderCombatOrder();
   renderTokenList();
 }
 
@@ -1027,11 +1033,17 @@ async function applyHp(tokens, delta) {
       avisos.push(`💀 ${t.name} caiu`);
     }
     alvo.hp = novo;
-    if (e) mexeuNoCombate = true; else mexeuNoToken = true;
+    if (e) {
+      t.hp = novo; // espelha no token para o canvas repintar imediatamente
+      mexeuNoCombate = true;
+    } else {
+      mexeuNoToken = true;
+    }
   }
 
   if (mexeuNoCombate) await saveCombatState();
   if (mexeuNoToken) pushBattle();
+  if (bmap) bmap.draw();
   renderMapSide();
 
   const verbo = delta < 0 ? `💥 ${-delta} de dano` : `💚 ${delta} de cura`;
@@ -1226,9 +1238,13 @@ function renderAoePanel() {
       <button class="btn small ghost" id="aoe-clear">Limpar área</button>
     </div>`;
 
+  // Captura os IDs no momento em que a área foi desenhada; resolve os tokens ao vivo no clique
+  // para garantir que operam sobre o state atual (não referências obsoletas de antes de um broadcast).
+  const alvosIds = new Set(alvos.map((t) => t.id));
+  const liveAlvos = () => state.battle.tokens.filter((t) => alvosIds.has(t.id));
   const valor = () => Math.abs(Number($('#aoe-amount').value) || 0);
-  $('#aoe-dmg').onclick = () => applyHp(alvos, -valor());
-  $('#aoe-half').onclick = () => applyHp(alvos, -Math.floor(valor() / 2));
+  $('#aoe-dmg').onclick = () => applyHp(liveAlvos(), -valor());
+  $('#aoe-half').onclick = () => applyHp(liveAlvos(), -Math.floor(valor() / 2));
   $('#aoe-clear').onclick = () => bmap.setAoe(null);
 }
 
@@ -1252,6 +1268,77 @@ function addTokens(defs) {
   pushBattle();
   toast(added ? `➕ ${added} token(s) no mapa.` : 'Todos já estavam no mapa.');
   renderMapSide();
+}
+
+// Painel de ordem de iniciativa na sidebar do mapa — exibido quando o combate está ativo.
+// Mostra todos os combatentes em ordem, HP, condições e salvaguardas de morte.
+// Clicar na linha seleciona e centraliza o token correspondente no canvas.
+function renderCombatOrder() {
+  const el = $('#combat-order');
+  if (!el) return;
+  const c = state.combat;
+  if (!c.entries?.length) { el.innerHTML = ''; return; }
+
+  el.innerHTML = `
+    <div class="side-section co-section">
+      <div class="side-section-label co-label">
+        <span>⚔️ INICIATIVA · Rodada ${c.round}</span>
+      </div>
+      ${c.entries.map((e, i) => {
+        const isTurn = i === c.turn;
+        const frac = e.maxHp > 0 ? Math.max(0, Math.min(1, (e.hp ?? 0) / e.maxHp)) : null;
+        const hpColor = frac > 0.5 ? 'var(--ok)' : frac > 0.25 ? 'var(--accent2)' : 'var(--danger)';
+        const downed = e.maxHp > 0 && (e.hp ?? 0) <= 0;
+        const conds = (e.conditions || []).map((cd) => `<span class="co-cond" title="${esc(cd)}">${condIcon(cd)}</span>`).join('');
+        const tok = tokenOf(e.name);
+        const retrato = tok?.imageUrl || state.characters.find((x) => x.name === e.name)?.imageUrl || '';
+        return `
+          <div class="co-row ${isTurn ? 'is-turn' : ''} ${downed ? 'downed' : ''}" data-co-i="${i}">
+            <span class="co-turn-arrow">${isTurn ? '▶' : ''}</span>
+            <span class="co-init-num">${esc(e.init)}</span>
+            ${retrato
+              ? `<img class="co-avatar" src="${esc(retrato)}" alt="" onerror="this.style.display='none'" />`
+              : `<span class="co-avatar placeholder"></span>`}
+            <div class="co-info">
+              <div class="co-name">${esc(e.name)}${e.concentration ? ' <span title="Concentrando">🧠</span>' : ''}</div>
+              ${frac !== null ? `
+                <div class="hp-bar"><span style="width:${Math.round(frac * 100)}%;background:${hpColor}"></span></div>
+                <span class="hp-text">${esc(e.hp)}/${esc(e.maxHp)} PV${conds ? ' · ' + conds : ''}</span>
+              ` : (conds ? `<span class="hp-text">${conds}</span>` : '')}
+              ${downed ? `
+                <div class="death-saves" style="margin-top:4px;">
+                  ☠️ ✅${'●'.repeat(e.deathSaves?.s || 0)}${'○'.repeat(3 - (e.deathSaves?.s || 0))}
+                  <button class="btn small ghost" data-co-dss="${i}" style="padding:0 5px;">+</button>
+                  ❌${'●'.repeat(e.deathSaves?.f || 0)}${'○'.repeat(3 - (e.deathSaves?.f || 0))}
+                  <button class="btn small ghost" data-co-dsf="${i}" style="padding:0 5px;">+</button>
+                </div>` : ''}
+            </div>
+          </div>`;
+      }).join('')}
+    </div>`;
+
+  $$('#combat-order .co-row').forEach((row) => {
+    row.onclick = (e) => {
+      if (e.target.closest('button')) return;
+      const i = Number(row.dataset.coI);
+      const t = tokenOf(c.entries[i]?.name);
+      if (t) { bmap.select(t.id); bmap.centerOn(t.col, t.row); }
+    };
+  });
+  $$('#combat-order [data-co-dss]').forEach((b) => b.onclick = async () => {
+    const e = c.entries[Number(b.dataset.coDss)];
+    if (!e) return;
+    e.deathSaves = { ...(e.deathSaves || { s: 0, f: 0 }), s: Math.min(3, (e.deathSaves?.s || 0) + 1) };
+    await saveCombatState();
+    renderMapSide();
+  });
+  $$('#combat-order [data-co-dsf]').forEach((b) => b.onclick = async () => {
+    const e = c.entries[Number(b.dataset.coDsf)];
+    if (!e) return;
+    e.deathSaves = { ...(e.deathSaves || { s: 0, f: 0 }), f: Math.min(3, (e.deathSaves?.f || 0) + 1) };
+    await saveCombatState();
+    renderMapSide();
+  });
 }
 
 function renderTokenList() {
