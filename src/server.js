@@ -9,6 +9,7 @@ import {
   getDb, save, listItems, getItem, addItem, updateItem, removeItem, newId,
   AUDIO_DIR, MAPS_DIR, IMAGES_DIR, SAMPLES_DIR,
 } from './store.js';
+import { importFromVault, exportToVault } from './obsidian.js';
 import * as bot from './bot.js';
 import * as ai from './ai.js';
 import * as tts from './tts.js';
@@ -397,6 +398,22 @@ export function startServer() {
       .join('\n');
     const ok = await bot.postMessage(`⚔️ **Iniciativa — Rodada ${combat.round}**\n${lines}`);
     res.json({ ok });
+  }));
+
+  // ---- Obsidian: importar / exportar dados da campanha ----
+  app.post('/api/obsidian/import', wrap(async (req, res) => {
+    const db = getDb();
+    const obs = db.settings.obsidian || {};
+    const result = importFromVault(db, obs);
+    save();
+    res.json(result);
+  }));
+
+  app.post('/api/obsidian/export', wrap(async (req, res) => {
+    const db = getDb();
+    const obs = db.settings.obsidian || {};
+    const result = exportToVault(db, obs);
+    res.json(result);
   }));
 
   const port = process.env.PORT || 3000;

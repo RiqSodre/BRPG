@@ -418,3 +418,20 @@ textarea { resize: vertical; min-height: 80px; }
 .help-text { color: var(--muted); font-size: 13px; line-height: 1.6; }
 .settings-form { max-width: 520px; display: flex; flex-direction: column; gap: 12px; }
 .settings-form label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
+
+/* Seção de configurações com separador */
+.settings-section { margin-top: 28px; border-top: 1px solid var(--border); padding-top: 20px; }
+.settings-section h3 { font-size: 15px; font-weight: 600; margin: 0 0 6px; }
+
+/* Grid de pastas do Obsidian: 2 colunas */
+.settings-folders { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.settings-folders > div { display: flex; flex-direction: column; }
+
+/* Botões de ação do Obsidian */
+.obs-actions { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+.btn-outline { background: transparent; border: 1px solid var(--accent); color: var(--accent); }
+.btn-outline:hover { background: var(--accent); color: #fff; }
+
+/* Resultado da importação/exportação */
+.obs-result { margin-top: 14px; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; font-size: 13px; line-height: 1.6; max-width: 520px; }
+.obs-detail { margin-top: 8px; font-size: 12px; color: var(--muted); max-height: 180px; overflow-y: auto; }

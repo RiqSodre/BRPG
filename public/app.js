@@ -1898,6 +1898,7 @@ function renderAiTab() {
 // ---------- Configurações ----------
 function renderSettings() {
   const s = state.settings;
+  const obs = s.obsidian || {};
   $('#tab-settings').innerHTML = `
     <div class="tab-header"><h2>⚙️ Configurações</h2></div>
     <form class="settings-form" id="settings-form">
@@ -1910,14 +1911,66 @@ function renderSettings() {
     <div class="help-text">
       <b>Status do bot:</b> ${state.bot.connected ? `conectado como ${esc(state.bot.tag)}` : 'desconectado — confira o DISCORD_TOKEN no arquivo .env e reinicie.'}<br/>
       Use <code>/entrar</code> no Discord (estando em um canal de voz) ou o botão "Conectar voz" na barra acima.
+    </div>
+
+    <div class="settings-section">
+      <h3>🗒️ Obsidian</h3>
+      <p class="help-text">Aponte para a pasta da campanha no seu vault e importe/exporte personagens, cenas, sessões e lore como arquivos Markdown.</p>
+      <form class="settings-form" id="obs-form">
+        <div>
+          <label>Caminho da pasta da campanha</label>
+          <input name="vaultPath" placeholder="Ex: C:\\Users\\Você\\Documents\\Obsidian Vault\\Campanha" value="${esc(obs.vaultPath || '')}" />
+        </div>
+        <div class="settings-folders">
+          <div><label>Pasta → Jogadores (PCs)</label><input name="folderPlayers" value="${esc(obs.folderPlayers || 'Players')}" /></div>
+          <div><label>Pasta → Inimigos</label><input name="folderEnemies" value="${esc(obs.folderEnemies || 'Inimigos')}" /></div>
+          <div><label>Pasta → NPCs / Facções</label><input name="folderNpcs" value="${esc(obs.folderNpcs || 'Facções e NPCs')}" /></div>
+          <div><label>Pasta → Locais / Cenas</label><input name="folderScenes" value="${esc(obs.folderScenes || 'Locais e Ganchos')}" /></div>
+          <div><label>Pasta → Sessões</label><input name="folderSessions" value="${esc(obs.folderSessions || 'Sessões')}" /></div>
+          <div><label>Pasta ou arquivo → Lore geral</label><input name="folderLore" value="${esc(obs.folderLore || 'Guia geral')}" /></div>
+        </div>
+        <button class="btn" type="submit">Salvar configuração do Obsidian</button>
+      </form>
+      <div class="obs-actions">
+        <button class="btn btn-outline" id="btn-obs-import">🔄 Importar do Obsidian</button>
+        <button class="btn btn-outline" id="btn-obs-export">📤 Exportar para Obsidian</button>
+      </div>
+      <div id="obs-result" class="obs-result" style="display:none"></div>
     </div>`;
 
   loadChannels();
+
   $('#settings-form').onsubmit = async (e) => {
     e.preventDefault();
     const data = Object.fromEntries(new FormData(e.target).entries());
     await tryApi(() => api('/settings', { method: 'PUT', body: data }), '⚙️ Configurações salvas!');
     refresh();
+  };
+
+  $('#obs-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const fields = Object.fromEntries(new FormData(e.target).entries());
+    await tryApi(() => api('/settings', { method: 'PUT', body: { obsidian: fields } }), '🗒️ Configuração do Obsidian salva!');
+    refresh();
+  };
+
+  $('#btn-obs-import').onclick = async () => {
+    const r = await tryApi(() => api('/obsidian/import', { method: 'POST' }));
+    if (!r) return;
+    const res = $('#obs-result');
+    res.style.display = 'block';
+    res.innerHTML = `<b>Importação concluída:</b> ${r.created} criados, ${r.updated} atualizados.<br/>`
+      + (r.details.length ? `<div class="obs-detail">${r.details.join('<br/>')}</div>` : '');
+    refresh();
+  };
+
+  $('#btn-obs-export').onclick = async () => {
+    const r = await tryApi(() => api('/obsidian/export', { method: 'POST' }));
+    if (!r) return;
+    const res = $('#obs-result');
+    res.style.display = 'block';
+    res.innerHTML = `<b>Exportação concluída:</b> ${r.written} arquivo(s) escritos no vault.<br/>`
+      + (r.details.length ? `<div class="obs-detail">${r.details.join('<br/>')}</div>` : '');
   };
 }
 

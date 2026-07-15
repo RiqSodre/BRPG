@@ -22,6 +22,15 @@ const DEFAULTS = {
     textChannelId: '',
     voiceChannelId: '',
     volume: 0.4,
+    obsidian: {
+      vaultPath: '',
+      folderPlayers: 'Players',
+      folderEnemies: 'Inimigos',
+      folderNpcs: 'Facções e NPCs',
+      folderScenes: 'Locais e Ganchos',
+      folderSessions: 'Sessões',
+      folderLore: 'Guia geral',
+    },
   },
   story: [],      // { id, title, category, content, updatedAt }
   characters: [], // { id, name, type: 'pc'|'npc', player, race, klass, level, ac, hp, maxHp, stats, description, secrets, voice, imageUrl }
@@ -45,7 +54,13 @@ export function initStore() {
   fs.mkdirSync(IMAGES_DIR, { recursive: true });
   fs.mkdirSync(SAMPLES_DIR, { recursive: true });
   if (fs.existsSync(DB_FILE)) {
-    db = { ...structuredClone(DEFAULTS), ...JSON.parse(fs.readFileSync(DB_FILE, 'utf8')) };
+    const saved = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+    db = { ...structuredClone(DEFAULTS), ...saved };
+    // Mescla settings profundamente para novos campos (ex: obsidian) não sumirem em arquivos antigos
+    db.settings = { ...structuredClone(DEFAULTS.settings), ...saved.settings };
+    if (saved.settings?.obsidian) {
+      db.settings.obsidian = { ...structuredClone(DEFAULTS.settings.obsidian), ...saved.settings.obsidian };
+    }
   } else {
     db = structuredClone(DEFAULTS);
     save();
