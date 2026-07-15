@@ -131,7 +131,6 @@ function renderAll() {
   renderBoothTab();
   renderMapTab();
   renderSessions();
-  renderCombat();
   renderAiTab();
   renderSettings();
   $('#volume').value = state.settings.volume ?? 0.4;
@@ -769,7 +768,8 @@ function renderMapTab() {
           <canvas id="map-canvas"></canvas>
           <p class="help-text">Clique num token para agir sobre ele · arraste para mover (mostra o deslocamento) · <b>Espaço</b> passa o turno · <b>setas</b> movem o selecionado · <b>Del</b> remove · <b>Esc</b> limpa a seleção.</p>
         </div>
-        <aside class="map-side">
+        <div class="map-resize-handle" id="map-resize-handle"></div>
+        <aside class="map-side" id="map-side">
           <div id="token-panel"></div>
           <div id="aoe-panel"></div>
           <div id="combat-order"></div>
@@ -941,6 +941,40 @@ function renderMapTab() {
         imageUrl: state.characters.find((c) => c.name === e.name)?.imageUrl || '',
       })));
     };
+
+    // Resize da sidebar arrastando a alça
+    (() => {
+      const handle = $('#map-resize-handle');
+      const side = $('#map-side');
+      if (!handle || !side) return;
+      let dragging = false;
+      let startX = 0;
+      let startW = 0;
+      handle.addEventListener('mousedown', (e) => {
+        dragging = true;
+        startX = e.clientX;
+        startW = side.offsetWidth;
+        handle.classList.add('dragging');
+        document.body.style.userSelect = 'none';
+        document.body.style.cursor = 'col-resize';
+      });
+      document.addEventListener('mousemove', (e) => {
+        if (!dragging) return;
+        const delta = startX - e.clientX;
+        const newW = Math.max(180, Math.min(520, startW + delta));
+        side.style.width = newW + 'px';
+        side.style.minWidth = newW + 'px';
+        if (bmap) bmap.resize();
+      });
+      document.addEventListener('mouseup', () => {
+        if (!dragging) return;
+        dragging = false;
+        handle.classList.remove('dragging');
+        document.body.style.userSelect = '';
+        document.body.style.cursor = '';
+        if (bmap) bmap.resize();
+      });
+    })();
   }
 
   // Lista de mapas (preservando a seleção)
@@ -999,7 +1033,7 @@ async function nextTurn(dir) {
 // Rola a iniciativa dos inimigos e ordena a mesa inteira
 async function rollInitiative() {
   const c = state.combat;
-  if (!c.entries.length) return toast('Adicione combatentes na aba ⚔️ Iniciativa primeiro.', true);
+  if (!c.entries.length) return toast('Adicione combatentes à lista de iniciativa primeiro.', true);
   for (const e of c.entries) {
     if (!e.isPc) e.init = d20() + (e.initMod || 0);
   }
@@ -1045,8 +1079,9 @@ async function applyHp(tokens, delta) {
     }
   }
 
+  // pushBattle ANTES do await para capturar o HP mutado antes que um broadcast reverta o state.battle
+  if (mexeuNoToken || mexeuNoCombate) pushBattle();
   if (mexeuNoCombate) await saveCombatState();
-  if (mexeuNoToken) pushBattle();
   if (bmap) bmap.draw();
   renderMapSide();
 
@@ -1231,24 +1266,56 @@ function renderAoePanel() {
   el.innerHTML = `
     <div class="act-panel aoe">
       <div class="act-head"><b>🎯 Área — raio ${aoe.radius.toFixed(1)} m</b></div>
-      ${alvos.length ? `<div class="aoe-targets">${alvos.map((t) =>
-        `<span class="cond-chip">${t.kind === 'pc' ? '🎮' : '👹'} ${esc(t.name)}</span>`).join('')}</div>`
+      ${alvos.length
+        ? `<div class="aoe-targets">${alvos.map((t) => `<span class="cond-chip">${t.kind === 'pc' ? '🎮' : '👹'} ${esc(t.name)}</span>`).join('')}</div>`
         : '<div class="help-text">Ninguém dentro da área.</div>'}
+      <div class="aoe-roll-row">
+        <span class="aoe-roll-label">Dano:</span>
+        <input type="text" id="aoe-expr" placeholder="8d6" class="aoe-expr-input" />
+        <button class="btn small ghost" id="aoe-roll" title="Rolar dano">🎲 Rolar</button>
+        <span class="aoe-result" id="aoe-result"></span>
+      </div>
       <div class="act-hp">
-        <input type="number" id="aoe-amount" min="1" placeholder="8d6 = 28" />
-        <button class="btn small danger" id="aoe-dmg" title="Dano cheio em todos">💥 Todos</button>
-        <button class="btn small" id="aoe-half" title="Metade do dano — para quem passou na salvaguarda">½ Salvou</button>
+        <button class="btn small danger" id="aoe-dmg" title="Dano cheio em todos" disabled>💥 Todos</button>
+        <button class="btn small" id="aoe-half" title="Metade do dano" disabled>½ Salvou</button>
       </div>
       <button class="btn small ghost" id="aoe-clear">Limpar área</button>
     </div>`;
 
-  // Captura os IDs no momento em que a área foi desenhada; resolve os tokens ao vivo no clique
-  // para garantir que operam sobre o state atual (não referências obsoletas de antes de um broadcast).
   const alvosIds = new Set(alvos.map((t) => t.id));
   const liveAlvos = () => state.battle.tokens.filter((t) => alvosIds.has(t.id));
-  const valor = () => Math.abs(Number($('#aoe-amount').value) || 0);
-  $('#aoe-dmg').onclick = () => applyHp(liveAlvos(), -valor());
-  $('#aoe-half').onclick = () => applyHp(liveAlvos(), -Math.floor(valor() / 2));
+
+  let rolledValue = 0;
+
+  const setResult = (total, expr, breakdown) => {
+    rolledValue = total;
+    const resEl = $('#aoe-result');
+    if (resEl) {
+      resEl.innerHTML = `<span class="aoe-total">${total}</span>${breakdown ? `<span class="aoe-breakdown">${esc(breakdown)}</span>` : ''}`;
+    }
+    const dmgBtn = $('#aoe-dmg');
+    const halfBtn = $('#aoe-half');
+    if (dmgBtn) dmgBtn.disabled = false;
+    if (halfBtn) halfBtn.disabled = false;
+  };
+
+  $('#aoe-roll').onclick = async () => {
+    const expr = $('#aoe-expr').value.trim() || '1d6';
+    const r = await tryApi(() => api('/roll', { method: 'POST', body: { expr } }));
+    if (!r) return;
+    setResult(r.total, expr, r.detail || null);
+  };
+
+  $('#aoe-expr').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#aoe-roll').click(); });
+
+  $('#aoe-dmg').onclick = () => {
+    if (!rolledValue) return toast('Role o dano primeiro.', true);
+    applyHp(liveAlvos(), -rolledValue);
+  };
+  $('#aoe-half').onclick = () => {
+    if (!rolledValue) return toast('Role o dano primeiro.', true);
+    applyHp(liveAlvos(), -Math.floor(rolledValue / 2));
+  };
   $('#aoe-clear').onclick = () => bmap.setAoe(null);
 }
 
@@ -1275,74 +1342,177 @@ function addTokens(defs) {
 }
 
 // Painel de ordem de iniciativa na sidebar do mapa — exibido quando o combate está ativo.
-// Mostra todos os combatentes em ordem, HP, condições e salvaguardas de morte.
-// Clicar na linha seleciona e centraliza o token correspondente no canvas.
 function renderCombatOrder() {
   const el = $('#combat-order');
   if (!el) return;
   const c = state.combat;
-  if (!c.entries?.length) { el.innerHTML = ''; return; }
+
+  const saveCombat = async () => { await tryApi(() => api('/combat', { method: 'PUT', body: c })); refresh(); };
 
   el.innerHTML = `
-    <div class="side-section co-section">
-      <div class="side-section-label co-label">
-        <span>⚔️ INICIATIVA · Rodada ${c.round}</span>
+    <div class="co-header">
+      <span class="co-label-text">⚔️ INICIATIVA · R.${c.round}</span>
+      <div class="co-controls">
+        <button class="btn small ghost co-btn" id="co-add" title="Adicionar combatente">+</button>
+        <button class="btn small ghost co-btn" id="co-pcs" title="Adicionar jogadores">👥</button>
+        <button class="btn small ghost co-btn" id="co-sort" title="Ordenar por iniciativa">⇅</button>
+        <button class="btn small ghost co-btn" id="co-srd" title="Bestiário SRD">📖</button>
       </div>
+    </div>
+    ${c.entries.length ? `
+    <div class="co-turn-bar">
+      <button class="btn small co-btn" id="co-next">▶ Próximo</button>
+      <button class="btn small ghost co-btn" id="co-announce" title="Postar no Discord">📤</button>
+      <button class="btn small danger co-btn" id="co-end">✕ Fim</button>
+    </div>` : ''}
+    <div id="co-list">
       ${c.entries.map((e, i) => {
         const isTurn = i === c.turn;
-        const frac = e.maxHp > 0 ? Math.max(0, Math.min(1, (e.hp ?? 0) / e.maxHp)) : null;
-        const hpColor = frac > 0.5 ? 'var(--ok)' : frac > 0.25 ? 'var(--accent2)' : 'var(--danger)';
         const downed = e.maxHp > 0 && (e.hp ?? 0) <= 0;
-        const conds = (e.conditions || []).map((cd) => `<span class="co-cond" title="${esc(cd)}">${condIcon(cd)}</span>`).join('');
         const tok = tokenOf(e.name);
         const retrato = tok?.imageUrl || state.characters.find((x) => x.name === e.name)?.imageUrl || '';
+        const conds = (e.conditions || []).map((cd) =>
+          `<span class="cond-chip ie-cond" data-rm-cond="${i}|${esc(cd)}" title="Remover ${esc(cd)}">${condIcon(cd)}</span>`
+        ).join('');
         return `
-          <div class="co-row ${isTurn ? 'is-turn' : ''} ${downed ? 'downed' : ''}" data-co-i="${i}">
-            <span class="co-turn-arrow">${isTurn ? '▶' : ''}</span>
-            <span class="co-init-num">${esc(e.init)}</span>
+          <div class="init-entry ${isTurn ? 'is-turn' : ''} ${downed ? 'downed' : ''}" data-ie-i="${i}">
+            <span class="ie-arrow">${isTurn ? '▶' : ''}</span>
+            <input class="input ie-init" type="number" value="${esc(e.init)}" data-ci="${i}" data-cf="init" title="Iniciativa" />
             ${retrato
-              ? `<img class="co-avatar" src="${esc(retrato)}" alt="" onerror="this.style.display='none'" />`
-              : `<span class="co-avatar placeholder"></span>`}
-            <div class="co-info">
-              <div class="co-name">${esc(e.name)}${e.concentration ? ' <span title="Concentrando">🧠</span>' : ''}</div>
-              ${frac !== null ? `
-                <div class="hp-bar"><span style="width:${Math.round(frac * 100)}%;background:${hpColor}"></span></div>
-                <span class="hp-text">${esc(e.hp)}/${esc(e.maxHp)} PV${conds ? ' · ' + conds : ''}</span>
-              ` : (conds ? `<span class="hp-text">${conds}</span>` : '')}
-              ${downed ? `
-                <div class="death-saves" style="margin-top:4px;">
+              ? `<img class="ie-avatar" src="${esc(retrato)}" alt="" onerror="this.src=''" />`
+              : `<span class="ie-avatar placeholder" style="font-size:12px;display:flex;align-items:center;justify-content:center;">${e.isPc ? '🎮' : '👹'}</span>`}
+            <div class="ie-main">
+              <input class="input ie-name" value="${esc(e.name)}" data-ci="${i}" data-cf="name" title="Nome" />
+              <div class="ie-row2">
+                <input class="input ie-hp" type="number" value="${esc(e.hp ?? '')}" data-ci="${i}" data-cf="hp" title="PV atual" />
+                <span class="ie-sep">/</span>
+                <input class="input ie-maxhp" type="number" value="${esc(e.maxHp ?? '')}" data-ci="${i}" data-cf="maxHp" title="PV máximo" />
+                <span class="ie-pv">PV</span>
+                <button class="btn small ghost ie-conc${e.concentration ? ' on' : ''}" data-conc="${i}" title="Concentração">🧠</button>
+                <select class="input ie-cond-sel" data-add-cond="${i}" title="Adicionar condição">
+                  <option value="">+</option>
+                  ${CONDITIONS.filter((x) => !(e.conditions || []).includes(x)).map((x) => `<option value="${esc(x)}">${esc(x)}</option>`).join('')}
+                </select>
+                <button class="btn small danger ie-del" data-remove-combatant="${i}" title="Remover">🗑</button>
+              </div>
+              ${conds ? `<div class="ie-conds">${conds}</div>` : ''}
+              ${downed && e.maxHp ? `
+                <div class="death-saves">
                   ☠️ ✅${'●'.repeat(e.deathSaves?.s || 0)}${'○'.repeat(3 - (e.deathSaves?.s || 0))}
-                  <button class="btn small ghost" data-co-dss="${i}" style="padding:0 5px;">+</button>
+                  <button class="btn small ghost" data-ds-s="${i}">+</button>
                   ❌${'●'.repeat(e.deathSaves?.f || 0)}${'○'.repeat(3 - (e.deathSaves?.f || 0))}
-                  <button class="btn small ghost" data-co-dsf="${i}" style="padding:0 5px;">+</button>
+                  <button class="btn small ghost" data-ds-f="${i}">+</button>
                 </div>` : ''}
             </div>
           </div>`;
       }).join('')}
-    </div>`;
+    </div>
+    ${!c.entries.length ? '<div class="empty" style="font-size:12px;padding:8px 4px;">Use + para adicionar ou 📖 para buscar no bestiário.</div>' : ''}`;
 
-  $$('#combat-order .co-row').forEach((row) => {
+  $$('#co-list .init-entry').forEach((row) => {
     row.onclick = (e) => {
-      if (e.target.closest('button')) return;
-      const i = Number(row.dataset.coI);
+      if (e.target.closest('button, input, select')) return;
+      const i = Number(row.dataset.ieI);
       const t = tokenOf(c.entries[i]?.name);
       if (t) { bmap.select(t.id); bmap.centerOn(t.col, t.row); }
     };
   });
-  $$('#combat-order [data-co-dss]').forEach((b) => b.onclick = async () => {
-    const e = c.entries[Number(b.dataset.coDss)];
-    if (!e) return;
-    e.deathSaves = { ...(e.deathSaves || { s: 0, f: 0 }), s: Math.min(3, (e.deathSaves?.s || 0) + 1) };
-    await saveCombatState();
-    renderMapSide();
+
+  $$('#co-list [data-ci]').forEach((inp) => inp.onchange = () => {
+    const e = c.entries[Number(inp.dataset.ci)];
+    const fn = inp.dataset.cf;
+    const val = inp.type === 'number' ? Number(inp.value) : inp.value;
+    if (fn === 'hp') {
+      const dmg = (e.hp ?? 0) - val;
+      if (dmg > 0 && e.concentration) toast(`🧠 ${e.name} tomou ${dmg} de dano concentrando: CD ${Math.max(10, Math.floor(dmg / 2))}!`);
+      if (val <= 0 && e.hp > 0) e.deathSaves = { s: 0, f: 0 };
+    }
+    e[fn] = val;
+    saveCombat();
   });
-  $$('#combat-order [data-co-dsf]').forEach((b) => b.onclick = async () => {
-    const e = c.entries[Number(b.dataset.coDsf)];
-    if (!e) return;
-    e.deathSaves = { ...(e.deathSaves || { s: 0, f: 0 }), f: Math.min(3, (e.deathSaves?.f || 0) + 1) };
-    await saveCombatState();
-    renderMapSide();
+
+  $$('#co-list [data-conc]').forEach((btn) => btn.onclick = (ev) => {
+    ev.stopPropagation();
+    const e = c.entries[Number(btn.dataset.conc)];
+    e.concentration = !e.concentration;
+    saveCombat();
   });
+
+  $$('#co-list [data-add-cond]').forEach((sel) => sel.onchange = () => {
+    if (!sel.value) return;
+    const e = c.entries[Number(sel.dataset.addCond)];
+    e.conditions = [...(e.conditions || []), sel.value];
+    sel.value = '';
+    saveCombat();
+  });
+
+  $$('#co-list [data-rm-cond]').forEach((b) => b.onclick = (ev) => {
+    ev.stopPropagation();
+    const [i, cond] = b.dataset.rmCond.split('|');
+    const e = c.entries[Number(i)];
+    e.conditions = (e.conditions || []).filter((x) => x !== cond);
+    saveCombat();
+  });
+
+  $$('#co-list [data-remove-combatant]').forEach((b) => b.onclick = (ev) => {
+    ev.stopPropagation();
+    c.entries.splice(Number(b.dataset.removeCombatant), 1);
+    if (c.turn >= c.entries.length) c.turn = 0;
+    saveCombat();
+  });
+
+  $$('#co-list [data-ds-s]').forEach((b) => b.onclick = (ev) => {
+    ev.stopPropagation();
+    const e = c.entries[Number(b.dataset.dsS)];
+    e.deathSaves = e.deathSaves || { s: 0, f: 0 };
+    e.deathSaves.s = Math.min(3, (e.deathSaves.s || 0) + 1);
+    if (e.deathSaves.s >= 3) toast(`💚 ${e.name} estabilizou!`);
+    saveCombat();
+  });
+
+  $$('#co-list [data-ds-f]').forEach((b) => b.onclick = (ev) => {
+    ev.stopPropagation();
+    const e = c.entries[Number(b.dataset.dsF)];
+    e.deathSaves = e.deathSaves || { s: 0, f: 0 };
+    e.deathSaves.f = Math.min(3, (e.deathSaves.f || 0) + 1);
+    if (e.deathSaves.f >= 3) toast(`💀 ${e.name} morreu...`);
+    saveCombat();
+  });
+
+  const coAdd = $('#co-add');
+  const coPcs = $('#co-pcs');
+  const coSort = $('#co-sort');
+  const coSrd = $('#co-srd');
+  const coNext = $('#co-next');
+  const coAnnounce = $('#co-announce');
+  const coEnd = $('#co-end');
+
+  if (coAdd) coAdd.onclick = () => {
+    c.entries.push({ name: 'Monstro', init: 10, hp: 10, maxHp: 10, conditions: [], deathSaves: { s: 0, f: 0 } });
+    saveCombat();
+  };
+  if (coPcs) coPcs.onclick = () => {
+    for (const pc of state.characters.filter((x) => x.type === 'pc')) {
+      if (!c.entries.some((e) => e.name === pc.name)) {
+        c.entries.push({ name: pc.name, init: 10, hp: pc.hp ?? 0, maxHp: pc.maxHp ?? 0, conditions: [], deathSaves: { s: 0, f: 0 }, isPc: true });
+      }
+    }
+    saveCombat();
+  };
+  if (coSort) coSort.onclick = () => { c.entries.sort((a, b) => b.init - a.init); c.turn = 0; saveCombat(); };
+  if (coSrd) coSrd.onclick = () => srdModal();
+  if (coNext) coNext.onclick = () => {
+    if (!c.entries.length) return;
+    c.turn = (c.turn + 1) % c.entries.length;
+    if (c.turn === 0) c.round += 1;
+    const cur = c.entries[c.turn];
+    if (cur?.conditions?.length) toast(`⚠️ ${cur.name} está: ${cur.conditions.join(', ')}`);
+    saveCombat();
+  };
+  if (coAnnounce) coAnnounce.onclick = () => tryApi(() => api('/combat/announce', { method: 'POST' }), '📤 Iniciativa postada!');
+  if (coEnd) coEnd.onclick = () => {
+    if (confirm('Encerrar o combate e limpar a lista?')) { c.entries = []; c.round = 1; c.turn = 0; saveCombat(); }
+  };
 }
 
 function renderTokenList() {
@@ -1628,154 +1798,43 @@ const CONDITIONS = ['Agarrado', 'Amedrontado', 'Atordoado', 'Caído', 'Cego', 'C
 const d20 = () => 1 + Math.floor(Math.random() * 20);
 const abilityMod = (score) => Math.floor((Number(score) - 10) / 2);
 
-function renderCombat() {
-  const c = state.combat;
-  $('#tab-combat').innerHTML = `
-    <div class="tab-header">
-      <h2>⚔️ Iniciativa — Rodada ${c.round}</h2>
-      <div class="actions">
-        <button class="btn small ghost" id="btn-add-combatant">+ Adicionar</button>
-        <button class="btn small ghost" id="btn-add-pcs">+ Jogadores</button>
-        <button class="btn small" id="btn-sort-init">Ordenar</button>
-        <button class="btn small gold" id="btn-next-turn">▶ Próximo turno</button>
-        <button class="btn small" id="btn-announce">📤 Postar no Discord</button>
-        <button class="btn small danger" id="btn-end-combat">Encerrar</button>
-      </div>
+function srdModal() {
+  $('#modal').innerHTML = `
+    <h3>📖 Bestiário SRD</h3>
+    <div class="row" style="align-items:center;margin-bottom:10px;">
+      <input id="srd-query" placeholder="goblin, dragon, skeleton... (nome em inglês)" style="flex:1;" />
+      <button class="btn small" id="btn-srd-search">🔍 Buscar</button>
     </div>
-    <div class="card" style="margin-bottom:14px;">
-      <h3>📖 Bestiário (SRD)</h3>
-      <div class="row" style="align-items:center;">
-        <input id="srd-query" placeholder="goblin, dragon, skeleton... (em inglês)" style="flex:1;" />
-        <button class="btn small" id="btn-srd-search">🔍 Buscar</button>
-      </div>
-      <div id="srd-results"></div>
-    </div>
-    <table class="combat-table">
-      <thead><tr><th>Init</th><th>Nome</th><th>PV</th><th>PV máx</th><th title="Concentração">🧠</th><th>Condições</th><th></th></tr></thead>
-      <tbody>${c.entries.map((e, i) => `
-        <tr class="${i === c.turn ? 'current' : ''}">
-          <td><input type="number" value="${esc(e.init)}" data-ci="${i}" data-cf="init" /></td>
-          <td><input class="name-input" value="${esc(e.name)}" data-ci="${i}" data-cf="name" />
-            ${e.hp <= 0 && e.maxHp ? `<div class="death-saves" data-ds="${i}">☠️
-              <span title="Sucessos">✅${'●'.repeat(e.deathSaves?.s || 0)}${'○'.repeat(3 - (e.deathSaves?.s || 0))}</span>
-              <button class="btn small ghost" data-ds-s="${i}">+</button>
-              <span title="Falhas">❌${'●'.repeat(e.deathSaves?.f || 0)}${'○'.repeat(3 - (e.deathSaves?.f || 0))}</span>
-              <button class="btn small ghost" data-ds-f="${i}">+</button>
-            </div>` : ''}
-          </td>
-          <td><input type="number" value="${esc(e.hp)}" data-ci="${i}" data-cf="hp" /></td>
-          <td><input type="number" value="${esc(e.maxHp)}" data-ci="${i}" data-cf="maxHp" /></td>
-          <td><input type="checkbox" ${e.concentration ? 'checked' : ''} data-conc="${i}" title="Concentrando em magia" /></td>
-          <td>
-            ${(e.conditions || []).map((cond) => `<span class="badge purple cond-badge" data-rm-cond="${i}|${esc(cond)}" title="Clique para remover">${esc(cond)} ✕</span>`).join(' ')}
-            <select data-add-cond="${i}" class="cond-select">
-              <option value="">+ condição</option>
-              ${CONDITIONS.filter((x) => !(e.conditions || []).includes(x)).map((x) => `<option>${x}</option>`).join('')}
-            </select>
-          </td>
-          <td><button class="btn small danger" data-remove-combatant="${i}">🗑</button></td>
-        </tr>`).join('')}</tbody>
-    </table>
-    ${c.entries.length ? '' : '<div class="empty">Adicione combatentes manualmente, traga os jogadores ou busque monstros no bestiário acima.</div>'}`;
+    <div id="srd-results" style="max-height:340px;overflow-y:auto;"></div>
+    <div class="modal-actions">
+      <button class="btn ghost" id="modal-cancel">Fechar</button>
+    </div>`;
+  $('#modal-backdrop').classList.remove('hidden');
+  $('#modal-cancel').onclick = closeModal;
 
-  const saveCombat = async () => { await api('/combat', { method: 'PUT', body: c }); refresh(); };
-
-  // Bestiário SRD
   const doSearch = async () => {
     const q = $('#srd-query').value.trim();
     if (!q) return;
     $('#srd-results').innerHTML = '<div class="help-text">Buscando...</div>';
     const results = await tryApi(() => api(`/srd/monsters?q=${encodeURIComponent(q)}`));
     if (!results) return;
-    $('#srd-results').innerHTML = results.length ? results.slice(0, 12).map((m) => `
-      <div class="row" style="align-items:center; padding:4px 0;">
-        <span style="flex:1;">${esc(m.name)}</span>
-        <button class="btn small ghost" data-srd-view="${esc(m.index)}">📋 Ficha</button>
-        <button class="btn small" data-srd-add="${esc(m.index)}">➕ Iniciativa</button>
-        <button class="btn small gold" data-srd-map="${esc(m.index)}" title="Entra na iniciativa e já aparece no mapa">🗺️ Iniciativa + mapa</button>
-      </div>`).join('') : '<div class="help-text">Nada encontrado — a busca é pelo nome em inglês (SRD).</div>';
+    $('#srd-results').innerHTML = results.length
+      ? results.slice(0, 12).map((m) => `
+          <div class="srd-result-row">
+            <span>${esc(m.name)}</span>
+            <button class="btn small ghost" data-srd-view="${esc(m.index)}">📋 Ficha</button>
+            <button class="btn small" data-srd-add="${esc(m.index)}">➕ Iniciativa</button>
+            <button class="btn small gold" data-srd-map="${esc(m.index)}" title="Iniciativa + mapa">🗺️</button>
+          </div>`).join('')
+      : '<div class="help-text">Nada encontrado — busque pelo nome em inglês (ex: goblin, dragon, skeleton).</div>';
 
     $$('#srd-results [data-srd-view]').forEach((b) => b.onclick = () => showMonster(b.dataset.srdView));
-    $$('#srd-results [data-srd-add]').forEach((b) => b.onclick = () => addMonster(b.dataset.srdAdd, false));
-    $$('#srd-results [data-srd-map]').forEach((b) => b.onclick = () => addMonster(b.dataset.srdMap, true));
+    $$('#srd-results [data-srd-add]').forEach((b) => b.onclick = () => { closeModal(); addMonster(b.dataset.srdAdd, false); });
+    $$('#srd-results [data-srd-map]').forEach((b) => b.onclick = () => { closeModal(); addMonster(b.dataset.srdMap, true); });
   };
   $('#btn-srd-search').onclick = doSearch;
   $('#srd-query').addEventListener('keydown', (e) => { if (e.key === 'Enter') doSearch(); });
-
-  // Controles do combate
-  $('#btn-add-combatant').onclick = () => { c.entries.push({ name: 'Monstro', init: 10, hp: 10, maxHp: 10, conditions: [], deathSaves: { s: 0, f: 0 } }); saveCombat(); };
-  $('#btn-add-pcs').onclick = () => {
-    for (const pc of state.characters.filter((x) => x.type === 'pc')) {
-      if (!c.entries.some((e) => e.name === pc.name)) {
-        c.entries.push({ name: pc.name, init: 10, hp: pc.hp ?? 0, maxHp: pc.maxHp ?? 0, conditions: [], deathSaves: { s: 0, f: 0 }, isPc: true });
-      }
-    }
-    saveCombat();
-  };
-  $('#btn-sort-init').onclick = () => { c.entries.sort((a, b) => b.init - a.init); c.turn = 0; saveCombat(); };
-  $('#btn-next-turn').onclick = () => {
-    if (!c.entries.length) return;
-    c.turn = (c.turn + 1) % c.entries.length;
-    if (c.turn === 0) c.round += 1;
-    const cur = c.entries[c.turn];
-    if (cur?.conditions?.length) toast(`⚠️ ${cur.name} está: ${cur.conditions.join(', ')}`);
-    saveCombat();
-  };
-  $('#btn-end-combat').onclick = () => {
-    if (confirm('Encerrar o combate e limpar a lista?')) { c.entries = []; c.round = 1; c.turn = 0; saveCombat(); }
-  };
-  $('#btn-announce').onclick = () => tryApi(() => api('/combat/announce', { method: 'POST' }), '📤 Iniciativa postada!');
-
-  $$('#tab-combat [data-ci]').forEach((inp) => inp.onchange = () => {
-    const e = c.entries[Number(inp.dataset.ci)];
-    const fieldName = inp.dataset.cf;
-    const newVal = inp.type === 'number' ? Number(inp.value) : inp.value;
-    if (fieldName === 'hp') {
-      const dmg = (e.hp ?? 0) - newVal;
-      if (dmg > 0 && e.concentration) {
-        toast(`🧠 ${e.name} tomou ${dmg} de dano concentrando: salvaguarda de CON CD ${Math.max(10, Math.floor(dmg / 2))}!`);
-      }
-      if (newVal <= 0 && e.hp > 0) e.deathSaves = { s: 0, f: 0 };
-    }
-    e[fieldName] = newVal;
-    if (fieldName === 'hp') { saveCombat(); return; } // re-renderiza para mostrar/ocultar death saves
-    api('/combat', { method: 'PUT', body: c });
-  });
-  $$('#tab-combat [data-conc]').forEach((inp) => inp.onchange = () => {
-    c.entries[Number(inp.dataset.conc)].concentration = inp.checked;
-    api('/combat', { method: 'PUT', body: c });
-  });
-  $$('#tab-combat [data-add-cond]').forEach((sel) => sel.onchange = () => {
-    if (!sel.value) return;
-    const e = c.entries[Number(sel.dataset.addCond)];
-    e.conditions = [...(e.conditions || []), sel.value];
-    saveCombat();
-  });
-  $$('#tab-combat [data-rm-cond]').forEach((b) => b.onclick = () => {
-    const [i, cond] = b.dataset.rmCond.split('|');
-    const e = c.entries[Number(i)];
-    e.conditions = (e.conditions || []).filter((x) => x !== cond);
-    saveCombat();
-  });
-  $$('#tab-combat [data-ds-s]').forEach((b) => b.onclick = () => {
-    const e = c.entries[Number(b.dataset.dsS)];
-    e.deathSaves = e.deathSaves || { s: 0, f: 0 };
-    e.deathSaves.s = (e.deathSaves.s + 1) % 4;
-    if (e.deathSaves.s === 3) toast(`💚 ${e.name} estabilizou!`);
-    saveCombat();
-  });
-  $$('#tab-combat [data-ds-f]').forEach((b) => b.onclick = () => {
-    const e = c.entries[Number(b.dataset.dsF)];
-    e.deathSaves = e.deathSaves || { s: 0, f: 0 };
-    e.deathSaves.f = (e.deathSaves.f + 1) % 4;
-    if (e.deathSaves.f === 3) toast(`💀 ${e.name} morreu...`);
-    saveCombat();
-  });
-  $$('#tab-combat [data-remove-combatant]').forEach((b) => b.onclick = () => {
-    c.entries.splice(Number(b.dataset.removeCombatant), 1);
-    if (c.turn >= c.entries.length) c.turn = 0;
-    saveCombat();
-  });
+  setTimeout(() => $('#srd-query')?.focus(), 50);
 }
 
 // Quadrados que a criatura ocupa, pelo tamanho do SRD
@@ -1825,35 +1884,207 @@ async function addMonster(index, aoMapa) {
   refresh();
 }
 
+// ---------- Glossário PT-BR do Bestiário SRD ----------
+const _PT_SIZES = { Tiny:'Minúsculo', Small:'Pequeno', Medium:'Médio', Large:'Grande', Huge:'Enorme', Gargantuan:'Colossal' };
+const _PT_TYPES = { aberration:'aberração', beast:'besta', celestial:'celestial', construct:'constructo', dragon:'dragão', elemental:'elemental', fey:'feérico', fiend:'demônio', giant:'gigante', humanoid:'humanoide', monstrosity:'monstruosidade', ooze:'gosma', plant:'planta', undead:'morto-vivo' };
+const _PT_ALIGNS = { 'lawful good':'leal e bom','neutral good':'neutro e bom','chaotic good':'caótico e bom','lawful neutral':'leal e neutro','true neutral':'neutro verdadeiro','neutral':'neutro','chaotic neutral':'caótico e neutro','lawful evil':'leal e mau','neutral evil':'neutro e mau','chaotic evil':'caótico e mau','unaligned':'sem alinhamento','any alignment':'qualquer alinhamento','any chaotic alignment':'qualquer alinhamento caótico','any evil alignment':'qualquer alinhamento mau','any non-good alignment':'qualquer alinhamento não-bom','any non-lawful alignment':'qualquer alinhamento não-leal' };
+const _PT_SPEEDS = { walk:'', fly:'Voo', swim:'Natação', climb:'Escalada', burrow:'Escavação', hover:'Pairar' };
+const _PT_SENSES = { darkvision:'Visão no Escuro', blindsight:'Visão às Cegas', tremorsense:'Tremorsense', truesight:'Visão Verdadeira', passive_perception:'Percepção Passiva' };
+const _PT_SKILLS = { acrobatics:'Acrobacia', 'animal handling':'Adestrar Animais', arcana:'Arcanismo', athletics:'Atletismo', deception:'Enganação', history:'História', insight:'Perspicácia', intimidation:'Intimidação', investigation:'Investigação', medicine:'Medicina', nature:'Natureza', perception:'Percepção', performance:'Atuação', persuasion:'Persuasão', religion:'Religião', 'sleight of hand':'Prestidigitação', stealth:'Furtividade', survival:'Sobrevivência' };
+
+// Substituições ordenadas do mais específico ao mais genérico
+const _PT_PHRASES = [
+  [/Melee or Ranged Weapon Attack/gi,'Ataque de Arma CâC ou à Distância'],
+  [/Melee Weapon Attack/gi,'Ataque de Arma Corpo a Corpo'],
+  [/Ranged Weapon Attack/gi,'Ataque de Arma à Distância'],
+  [/Melee Spell Attack/gi,'Ataque Mágico Corpo a Corpo'],
+  [/Ranged Spell Attack/gi,'Ataque Mágico à Distância'],
+  [/\+(\d+) to hit/gi,'+$1 para acertar'],
+  [/reach (\d+) ft\.?/gi,(_,n)=>`alcance ${(+n*0.3).toFixed(1).replace('.',',')} m`],
+  [/range (\d+)\/(\d+) ft\.?/gi,(_,a,b)=>`alcance ${Math.round(+a*0.3)}/${Math.round(+b*0.3)} m`],
+  [/(\d+) ft\.?/gi,(_,n)=>`${Math.round(+n*0.3)} m`],
+  [/\bone target\b/gi,'um alvo'],[/\bone creature\b/gi,'uma criatura'],[/\bone object\b/gi,'um objeto'],
+  [/\bthe target\b/gi,'o alvo'],[/\beach creature\b/gi,'cada criatura'],[/\bcreatures\b/gi,'criaturas'],[/\bcreature\b/gi,'criatura'],
+  [/\bHit:/g,'Acerto:'],[/\bMiss:/g,'Erro:'],
+  [/\bSaving Throw:/gi,'Teste de Resistência:'],[/\bsaving throw\b/gi,'teste de resistência'],
+  [/\bDC (\d+)\b/g,'CD $1'],
+  [/\bStrength\b/g,'Força'],[/\bDexterity\b/g,'Destreza'],[/\bConstitution\b/g,'Constituição'],
+  [/\bIntelligence\b/g,'Inteligência'],[/\bWisdom\b/g,'Sabedoria'],[/\bCharisma\b/g,'Carisma'],
+  [/\bslashing damage\b/gi,'dano cortante'],[/\bpiercing damage\b/gi,'dano perfurante'],[/\bbludgeoning damage\b/gi,'dano contundente'],
+  [/\bfire damage\b/gi,'dano de fogo'],[/\bcold damage\b/gi,'dano de frio'],[/\blightning damage\b/gi,'dano de raio'],
+  [/\bthunder damage\b/gi,'dano de trovão'],[/\bacid damage\b/gi,'dano de ácido'],[/\bpoison damage\b/gi,'dano de veneno'],
+  [/\bradiant damage\b/gi,'dano radiante'],[/\bnecrotic damage\b/gi,'dano necrótico'],[/\bpsychic damage\b/gi,'dano psíquico'],[/\bforce damage\b/gi,'dano de força'],
+  [/\bslashing\b/gi,'cortante'],[/\bpiercing\b/gi,'perfurante'],[/\bbludgeoning\b/gi,'contundente'],
+  [/\bfire\b/gi,'fogo'],[/\bcold\b/gi,'frio'],[/\blightning\b/gi,'raio'],[/\bthunder\b/gi,'trovão'],
+  [/\bacid\b/gi,'ácido'],[/\bradiant\b/gi,'radiante'],[/\bnecrotic\b/gi,'necrótico'],[/\bpsychic\b/gi,'psíquico'],
+  [/\bblinded\b/gi,'cego'],[/\bcharmed\b/gi,'enfeitiçado'],[/\bdeafened\b/gi,'surdo'],[/\bfrightened\b/gi,'amedrontado'],
+  [/\bgrappled\b/gi,'agarrado'],[/\bincapacitated\b/gi,'incapacitado'],[/\binvisible\b/gi,'invisível'],
+  [/\bparalyzed\b/gi,'paralisado'],[/\bpetrified\b/gi,'petrificado'],[/\bpoisoned\b/gi,'envenenado'],
+  [/\bprone\b/gi,'caído'],[/\brestrained\b/gi,'contido'],[/\bstunned\b/gi,'atordoado'],[/\bunconscious\b/gi,'inconsciente'],
+  [/\bMultiattack\b/g,'Ataque Múltiplo'],[/\bSpellcasting\b/g,'Conjuração'],[/\bInnate Spellcasting\b/g,'Conjuração Inata'],
+  [/\bPack Tactics\b/g,'Táticas de Matilha'],[/\bLegendary Resistance\b/g,'Resistência Lendária'],[/\bMagic Resistance\b/g,'Resistência à Magia'],
+  [/\bMagic Weapons\b/g,'Armas Mágicas'],[/\bSunlight Sensitivity\b/g,'Sensibilidade à Luz Solar'],[/\bUndead Fortitude\b/g,'Fortitude dos Mortos-Vivos'],
+  [/\bCharge\b/g,'Investida'],[/\bEvasion\b/g,'Esquiva'],[/\bSneak Attack\b/g,'Ataque Furtivo'],[/\bAggressive\b/g,'Agressivo'],
+  [/\bAmbusher\b/g,'Emboscador'],[/\bFalse Appearance\b/g,'Aparência Falsa'],[/\bShapechanger\b/g,'Metamorfo'],
+  [/\bKeen Sight\b/g,'Visão Aguçada'],[/\bKeen Smell\b/g,'Olfato Aguçado'],[/\bKeen Hearing\b/g,'Audição Aguçada'],[/\bKeen Senses\b/g,'Sentidos Aguçados'],
+  [/\bWeb Sense\b/g,'Sentido de Teia'],[/\bWeb Walker\b/g,'Caminhante de Teia'],[/\bDeath Burst\b/g,'Explosão de Morte'],
+  [/\bBites?\b/gi,(m)=>/s$/i.test(m)?'Mordidas':'Mordida'],[/\bClaws?\b/gi,(m)=>/s$/i.test(m)?'Garras':'Garra'],[/\bTail\b/gi,'Cauda'],[/\bTentacles?\b/gi,(m)=>/s$/i.test(m)?'Tentáculos':'Tentáculo'],
+  [/\bSlam\b/g,'Pancada'],[/\bFist\b/g,'Soco'],[/\bGreatsword\b/g,'Espadão'],[/\bLongsword\b/g,'Espada Longa'],[/\bShortsword\b/g,'Espada Curta'],
+  [/\bScimitar\b/g,'Cimitarra'],[/\bShortbow\b/g,'Arco Curto'],[/\bLongbow\b/g,'Arco Longo'],[/\bHandaxe\b/g,'Machadinha'],
+  [/\bJavelin\b/g,'Dardo'],[/\bSpear\b/g,'Lança'],[/\bDagger\b/g,'Adaga'],[/\bMace\b/g,'Maça'],[/\bGlaive\b/g,'Glaive'],
+  [/\bhit points?\b/gi,(m)=>m==='hit points'?'pontos de vida':'ponto de vida'],
+  [/\bArmor Class\b/gi,'Classe de Armadura'],[/\bopportunity attack\b/gi,'ataque de oportunidade'],
+  [/\bbonus action\b/gi,'ação bônus'],[/\breaction\b/gi,'reação'],[/\battack roll\b/gi,'rolagem de ataque'],
+  [/\bproficiency bonus\b/gi,'bônus de proficiência'],[/\bhalf damage\b/gi,'metade do dano'],[/\bno damage\b/gi,'nenhum dano'],
+  [/\bspell slot\b/gi,'espaço de magia'],[/\bspell slots\b/gi,'espaços de magia'],
+  [/\bcantrips?\b/gi,(m)=>m==='cantrips'?'truques':'truque'],
+  [/\bspells?\b/gi,(m)=>m==='spells'?'magias':'magia'],
+  [/\brounds?\b/gi,(m)=>m.toLowerCase()==='rounds'?'rodadas':'rodada'],
+  [/\bturns?\b/gi,(m)=>m.toLowerCase()==='turns'?'turnos':'turno'],
+  [/\bhours?\b/gi,(m)=>m.toLowerCase()==='hours'?'horas':'hora'],
+  [/\bminutes?\b/gi,(m)=>m.toLowerCase()==='minutes'?'minutos':'minuto'],
+  [/\bdays?\b/gi,(m)=>m.toLowerCase()==='days'?'dias':'dia'],
+  [/\bmagical\b/gi,'mágico'],[/\bweapon\b/gi,'arma'],[/\bdamage\b/gi,'dano'],[/\bmovement\b/gi,'movimento'],
+  // Sentidos em texto corrido
+  [/\bdarkvision\b/gi,'visão no escuro'],[/\bblindsite\b/gi,'visão às cegas'],[/\bblindsight\b/gi,'visão às cegas'],
+  [/\btremorsense\b/gi,'tremorsense'],[/\btruesight\b/gi,'visão verdadeira'],
+  // Padrões de frase frequentes em blocos de ação
+  [/\bor be ([a-z]+ed)\b/gi,(_,cond)=>`ou ficar ${_srdPt(cond)}`],
+  [/\buntil the end of its next turn\b/gi,'até o final do seu próximo turno'],
+  [/\buntil the start of its next turn\b/gi,'até o início do seu próximo turno'],
+  [/\buntil the end of your next turn\b/gi,'até o final do seu próximo turno'],
+  [/\bat the start of each of its turns\b/gi,'no início de cada um dos seus turnos'],
+  [/\bat the end of each of its turns\b/gi,'no final de cada um dos seus turnos'],
+  [/\bonce per day\b/gi,'uma vez por dia'],[/\bonce per turn\b/gi,'uma vez por turno'],
+  [/\bon a failed save\b/gi,'em uma falha no teste'],[/\bon a successful save\b/gi,'em um sucesso no teste'],
+  [/\bwhile it is\b/gi,'enquanto está'],[/\bwhile it has\b/gi,'enquanto tem'],
+  [/\bif it fails\b/gi,'se falhar'],[/\bif it succeeds\b/gi,'se tiver sucesso'],
+  [/\bfor the duration\b/gi,'pela duração'],[/\buntil dispelled\b/gi,'até ser dissipado'],
+  [/\bin addition\b/gi,'além disso'],[/\binstead\b/gi,'em vez disso'],[/\bhowever\b/gi,'porém'],
+  [/\bup to\b/gi,'até'],[/\bat least\b/gi,'pelo menos'],[/\bat most\b/gi,'no máximo'],
+  [/\bwithin (\d+ m)\b/gi,'a $1 de distância'],
+];
+
+function _srdPt(text) {
+  if (!text) return text;
+  let t = String(text);
+  for (const [re, rep] of _PT_PHRASES) t = t.replace(re, rep);
+  return t;
+}
+
+let _srdLang = 'pt'; // estado global do toggle no modal
+
 async function showMonster(index) {
   const m = await tryApi(() => api(`/srd/monsters/${index}`));
   if (!m) return;
-  const mods = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
-  const modLabels = ['FOR', 'DES', 'CON', 'INT', 'SAB', 'CAR'];
-  const fmtMod = (v) => { const mod = abilityMod(v); return `${v} (${mod >= 0 ? '+' : ''}${mod})`; };
-  const list = (arr, key = 'name') => (arr || []).map((x) => x[key] || x).join(', ') || '—';
-  const block = (title, items) => (items || []).length
-    ? `<h4 style="color:var(--accent2); margin:10px 0 4px;">${title}</h4>` +
-      items.map((a) => `<p style="margin:4px 0;"><b>${esc(a.name)}.</b> ${esc(a.desc)}</p>`).join('')
-    : '';
-  openModal(`📋 ${m.name}`, `
-    <div class="help-text" style="font-size:13.5px; line-height:1.55;">
-      <i>${esc(m.size)} ${esc(m.type)}, ${esc(m.alignment)}</i><br/>
-      <b>CA</b> ${esc(m.armor_class?.[0]?.value ?? '?')} · <b>PV</b> ${esc(m.hit_points)} (${esc(m.hit_dice)}) ·
-      <b>Deslocamento</b> ${esc(Object.entries(m.speed || {}).map(([k, v]) => `${k} ${v}`).join(', '))}<br/>
-      ${mods.map((k, i) => `<b>${modLabels[i]}</b> ${fmtMod(m[k])}`).join(' · ')}<br/>
-      <b>Sentidos</b> ${esc(Object.entries(m.senses || {}).map(([k, v]) => `${k.replace(/_/g, ' ')} ${v}`).join(', ') || '—')} ·
-      <b>Idiomas</b> ${esc(m.languages || '—')} · <b>CR</b> ${esc(m.challenge_rating)} (${esc(m.xp)} XP)<br/>
-      ${m.damage_resistances?.length ? `<b>Resistências</b> ${esc(list(m.damage_resistances))}<br/>` : ''}
-      ${m.damage_immunities?.length ? `<b>Imunidades</b> ${esc(list(m.damage_immunities))}<br/>` : ''}
-      ${m.condition_immunities?.length ? `<b>Imune a condições</b> ${esc(list(m.condition_immunities))}<br/>` : ''}
-      ${block('Habilidades', m.special_abilities)}
-      ${block('Ações', m.actions)}
-      ${block('Ações Lendárias', m.legendary_actions)}
-    </div>
-  `, async () => {}, 'Fechar');
-  // Sem campos para salvar — o submit apenas fecha
-  $('#modal-form').onsubmit = (e) => { e.preventDefault(); closeModal(); };
+
+  const renderMonster = (lang) => {
+    const pt = lang === 'pt';
+    const T = (s) => pt ? _srdPt(s) : s;
+    const Tname = (s) => pt ? _srdPt(s) : s;
+
+    const mods = ['strength','dexterity','constitution','intelligence','wisdom','charisma'];
+    const modLabels = ['FOR','DES','CON','INT','SAB','CAR'];
+    const fmtMod = (v) => { const mod = abilityMod(v); return `${v} (${mod >= 0 ? '+' : ''}${mod})`; };
+
+    const size   = pt ? (_PT_SIZES[m.size] || m.size) : m.size;
+    const type   = pt ? (_PT_TYPES[m.type?.toLowerCase()] || m.type) : m.type;
+    const align  = pt ? (_PT_ALIGNS[m.alignment?.toLowerCase()] || m.alignment) : m.alignment;
+
+    const ftToM = (s) => String(s).replace(/(\d+)\s*ft\.?/gi, (_, n) => `${Math.round(+n * 0.3)} m`);
+
+    const speedStr = Object.entries(m.speed || {}).map(([k, v]) => {
+      const label = pt ? (_PT_SPEEDS[k] ?? k) : k;
+      const val   = pt ? ftToM(v) : v;
+      return label ? `${label} ${val}` : String(val);
+    }).join(', ');
+
+    const sensesStr = Object.entries(m.senses || {}).map(([k, v]) => {
+      const label = pt ? (_PT_SENSES[k] || k.replace(/_/g,' ')) : k.replace(/_/g,' ');
+      const val   = pt ? ftToM(v) : v;
+      return `${label} ${val}`;
+    }).join(', ') || '—';
+
+    const dmgList = (arr) => (arr || []).map((x) => {
+      const s = x.name || x;
+      return pt ? (_srdPt(s)) : s;
+    }).join(', ') || '—';
+
+    const block = (title, items) => (items || []).length
+      ? `<h4 class="srd-block-title">${esc(title)}</h4>` +
+        items.map((a) => `<p class="srd-block-item"><b>${esc(Tname(a.name))}.</b> ${esc(T(a.desc))}</p>`).join('')
+      : '';
+
+    const skillsStr = Object.entries(m.proficiencies?.reduce((acc, p) => {
+      if (p.proficiency?.name?.startsWith('Skill:')) {
+        const sk = p.proficiency.name.replace('Skill: ','');
+        acc[sk] = (p.value >= 0 ? '+' : '') + p.value;
+      }
+      return acc;
+    }, {}) || {}).map(([k,v]) => {
+      const label = pt ? (_PT_SKILLS[k.toLowerCase()] || k) : k;
+      return `${label} ${v}`;
+    }).join(', ');
+
+    const savesStr = Object.entries(m.proficiencies?.reduce((acc, p) => {
+      if (p.proficiency?.name?.startsWith('Saving Throw:')) {
+        const sv = p.proficiency.name.replace('Saving Throw: ','');
+        acc[sv] = (p.value >= 0 ? '+' : '') + p.value;
+      }
+      return acc;
+    }, {}) || {}).map(([k,v]) => {
+      const labels = {Strength:'FOR',STR:'FOR',Dexterity:'DES',DEX:'DES',Constitution:'CON',CON:'CON',Intelligence:'INT',INT:'INT',Wisdom:'SAB',WIS:'SAB',Charisma:'CAR',CHA:'CAR'};
+      return `${(pt ? labels[k] : k) || k} ${v}`;
+    }).join(', ');
+
+    const langToggleLabel = pt ? '🇺🇸 Ver em inglês' : '🇧🇷 Ver em português';
+
+    return `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <i style="font-size:13px;color:var(--muted);">${esc(size)} ${esc(type)}, ${esc(align)}</i>
+        <button class="btn small ghost" id="srd-lang-toggle" style="font-size:11px;">${langToggleLabel}</button>
+      </div>
+      <div class="srd-stat-bar">
+        <span><b>CA</b> ${esc(m.armor_class?.[0]?.value ?? '?')}</span>
+        <span><b>PV</b> ${esc(m.hit_points)} <small>(${esc(m.hit_dice)})</small></span>
+        <span><b>${pt ? 'Desl.' : 'Speed'}</b> ${esc(speedStr)}</span>
+      </div>
+      <div class="srd-ability-row">
+        ${mods.map((k, i) => `<div class="srd-ability"><div class="srd-ab-label">${modLabels[i]}</div><div class="srd-ab-val">${fmtMod(m[k])}</div></div>`).join('')}
+      </div>
+      <div class="srd-meta">
+        ${savesStr ? `<div><b>${pt ? 'TR' : 'Saves'}</b> ${esc(savesStr)}</div>` : ''}
+        ${skillsStr ? `<div><b>${pt ? 'Perícias' : 'Skills'}</b> ${esc(skillsStr)}</div>` : ''}
+        ${m.damage_resistances?.length ? `<div><b>${pt ? 'Resistências' : 'Resistances'}</b> ${esc(dmgList(m.damage_resistances))}</div>` : ''}
+        ${m.damage_immunities?.length ? `<div><b>${pt ? 'Imunidades' : 'Immunities'}</b> ${esc(dmgList(m.damage_immunities))}</div>` : ''}
+        ${m.condition_immunities?.length ? `<div><b>${pt ? 'Imune a' : 'Immune to'}</b> ${esc(dmgList(m.condition_immunities))}</div>` : ''}
+        <div><b>${pt ? 'Sentidos' : 'Senses'}</b> ${esc(sensesStr)}</div>
+        <div><b>${pt ? 'Idiomas' : 'Languages'}</b> ${esc(m.languages || '—')}</div>
+        <div><b>CR</b> ${esc(m.challenge_rating)} (${esc(m.xp)} XP)</div>
+      </div>
+      ${block(pt ? 'Habilidades' : 'Traits', m.special_abilities)}
+      ${block(pt ? 'Ações' : 'Actions', m.actions)}
+      ${block(pt ? 'Reações' : 'Reactions', m.reactions)}
+      ${block(pt ? 'Ações Lendárias' : 'Legendary Actions', m.legendary_actions)}`;
+  };
+
+  const buildModal = (lang) => {
+    $('#modal').innerHTML = `
+      <h3>📋 ${esc(m.name)}</h3>
+      <div id="srd-sheet" style="font-size:13px;line-height:1.6;max-height:65vh;overflow-y:auto;">${renderMonster(lang)}</div>
+      <div class="modal-actions">
+        <button class="btn ghost" id="modal-cancel">Fechar</button>
+        <button class="btn small" id="srd-add-quick">➕ Iniciativa</button>
+        <button class="btn small gold" id="srd-map-quick" title="Iniciativa + mapa">🗺️ + Mapa</button>
+      </div>`;
+    $('#modal-backdrop').classList.remove('hidden');
+    $('#modal-cancel').onclick = closeModal;
+    $('#srd-lang-toggle').onclick = () => { _srdLang = _srdLang === 'pt' ? 'en' : 'pt'; buildModal(_srdLang); };
+    $('#srd-add-quick').onclick = () => { closeModal(); addMonster(m.index, false); };
+    $('#srd-map-quick').onclick = () => { closeModal(); addMonster(m.index, true); };
+  };
+
+  buildModal(_srdLang);
 }
 
 // ---------- Assistente IA ----------
