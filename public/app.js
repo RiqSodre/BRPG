@@ -982,12 +982,14 @@ async function nextTurn(dir) {
   const atual = c.entries[c.turn];
   if (atual?.conditions?.length) toast(`⚠️ ${atual.name} está: ${atual.conditions.join(', ')}`);
   await saveCombatState();
+  renderMapSide();
   focusTurn();
 }
 
 // Rola a iniciativa dos inimigos e ordena a mesa inteira
 async function rollInitiative() {
   const c = state.combat;
+  if (!c.entries.length) return toast('Adicione combatentes na aba ⚔️ Iniciativa primeiro.', true);
   for (const e of c.entries) {
     if (!e.isPc) e.init = d20() + (e.initMod || 0);
   }
@@ -995,7 +997,9 @@ async function rollInitiative() {
   c.turn = 0;
   c.round = 1;
   await saveCombatState();
-  toast('🎲 Iniciativa rolada para os inimigos e a ordem refeita.');
+  renderMapSide();
+  await refresh();
+  toast('🎲 Iniciativa rolada! Ordem: ' + c.entries.map((e) => e.name).join(' → '));
   focusTurn();
 }
 
@@ -1028,6 +1032,7 @@ async function applyHp(tokens, delta) {
 
   if (mexeuNoCombate) await saveCombatState();
   if (mexeuNoToken) pushBattle();
+  renderMapSide();
 
   const verbo = delta < 0 ? `💥 ${-delta} de dano` : `💚 ${delta} de cura`;
   const alvosTxt = tokens.map((t) => t.name).join(', ');
@@ -1039,6 +1044,7 @@ async function toggleCondition(t, cond) {
   const atuais = alvo.conditions || [];
   alvo.conditions = atuais.includes(cond) ? atuais.filter((x) => x !== cond) : [...atuais, cond];
   if (entryOf(t)) await saveCombatState(); else pushBattle();
+  renderMapSide();
 }
 
 function removeToken(id) {
@@ -1138,8 +1144,15 @@ function renderTokenPanel() {
     el.innerHTML = '<div class="help-text panel-hint">Clique num token do mapa para aplicar dano, cura e condições.</div>';
     return;
   }
-  const frac = t.maxHp > 0 ? Math.max(0, Math.min(1, (t.hp ?? 0) / t.maxHp)) : null;
+  // Para tokens ligados à iniciativa, PV e condições vivem no entry, não no token
+  const entry = entryOf(t);
+  const fonte = entry || t;
+  const hp = Number(fonte.hp ?? t.hp ?? 0);
+  const maxHp = Number(fonte.maxHp ?? t.maxHp ?? 0);
+  const frac = maxHp > 0 ? Math.max(0, Math.min(1, hp / maxHp)) : null;
   const cor = frac > 0.5 ? '#4ade80' : frac > 0.25 ? '#c4a747' : '#e05252';
+  const conds = fonte.conditions || [];
+  const conc = fonte.concentration || false;
 
   el.innerHTML = `
     <div class="act-panel">
@@ -1147,9 +1160,10 @@ function renderTokenPanel() {
         ${t.imageUrl ? `<img class="token-avatar" src="${esc(t.imageUrl)}" alt="" onerror="this.remove()" />` : ''}
         <div class="act-name">
           <b>${esc(t.name)}</b>
+          ${entry ? `<small style="color:var(--muted);font-size:11px;">⚔️ na iniciativa</small>` : ''}
           ${frac !== null ? `
             <div class="hp-bar"><span style="width:${frac * 100}%; background:${cor}"></span></div>
-            <small class="hp-text">${esc(t.hp)}/${esc(t.maxHp)} PV</small>` : '<small class="hp-text">sem PV definidos</small>'}
+            <small class="hp-text">${hp}/${maxHp} PV</small>` : '<small class="hp-text">sem PV definidos</small>'}
         </div>
       </div>
       <div class="act-hp">
@@ -1159,11 +1173,11 @@ function renderTokenPanel() {
       </div>
       <div class="act-conds">
         ${CONDITIONS.map((c) => {
-          const on = (t.conditions || []).includes(c);
+          const on = conds.includes(c);
           return `<button class="cond-toggle ${on ? 'on' : ''}" data-cond="${esc(c)}" title="${esc(c)}">${condIcon(c)}</button>`;
         }).join('')}
       </div>
-      <label class="tool-check"><input type="checkbox" id="act-conc" ${t.concentration ? 'checked' : ''} /> 🧠 Concentrando</label>
+      <label class="tool-check"><input type="checkbox" id="act-conc" ${conc ? 'checked' : ''} /> 🧠 Concentrando</label>
       <div class="row">
         <button class="btn small ghost" id="act-dup" title="Cria uma cópia do token com PV cheios">📋 Duplicar</button>
         <button class="btn small ghost" id="act-hide">${t.hidden ? '🙈 Mostrar' : '👁️ Esconder'}</button>
@@ -1183,6 +1197,7 @@ function renderTokenPanel() {
     const alvo = entryOf(t) || t;
     alvo.concentration = e.target.checked;
     if (entryOf(t)) await saveCombatState(); else pushBattle();
+    renderMapSide();
   };
   $('#act-dup').onclick = () => duplicateToken(t.id);
   $('#act-hide').onclick = () => { t.hidden = !t.hidden; pushBattle(); renderMapSide(); };
