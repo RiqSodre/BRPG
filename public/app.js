@@ -59,9 +59,13 @@ function openModal(title, fieldsHtml, onSave, saveLabel = 'Salvar') {
     e.preventDefault();
     const fd = new FormData(e.target);
     const data = Object.fromEntries(fd.entries());
-    await onSave(data);
-    closeModal();
-    refresh();
+    try {
+      await onSave(data);
+      closeModal();
+      refresh();
+    } catch (err) {
+      toast(err.message || 'Erro ao salvar.', true);
+    }
   };
 }
 function closeModal() { $('#modal-backdrop').classList.add('hidden'); }
@@ -1502,7 +1506,16 @@ function mapModal(m = {}) {
       setTimeout(() => bmap.fit(), 100);
     } else {
       delete data.file;
-      await api(`/maps/${m.id}`, { method: 'PUT', body: data });
+      const updated = await api(`/maps/${m.id}`, { method: 'PUT', body: data });
+      // Atualiza o mapa em state.maps imediatamente (sem esperar o refresh completo)
+      const idx = state.maps.findIndex((x) => x.id === updated.id);
+      if (idx >= 0) state.maps[idx] = updated;
+      // Se esse mapa for o ativo, redesenha o canvas e refaz o fit
+      if (state.battle.mapId === updated.id) {
+        bmap.setData({ map: updated, battle: state.battle, combat: state.combat });
+        bmap.fit();
+      }
+      toast('🗺️ Grid atualizado!');
     }
   });
 }
