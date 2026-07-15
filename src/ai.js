@@ -1,17 +1,18 @@
-// Integração com a IA (Claude): o assistente recebe toda a campanha como
-// contexto e ajuda o Mestre a consultar a história, improvisar e gerar recaps.
-import Anthropic from '@anthropic-ai/sdk';
+// Integração com IA via Groq (Llama 3.3 70B) — gratuito em groq.com.
+// Para configurar: crie uma conta em groq.com, gere uma API key e adicione
+// GROQ_API_KEY=sua_key no arquivo .env do projeto.
+import Groq from 'groq-sdk';
 import { getDb, getItem } from './store.js';
 
-const MODEL = 'claude-sonnet-4-6';
+const MODEL = 'llama-3.3-70b-versatile';
 
-let anthropic = null;
+let groq = null;
 function getClient() {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    throw new Error('ANTHROPIC_API_KEY não definida no .env — a IA está desligada.');
+  if (!process.env.GROQ_API_KEY) {
+    throw new Error('GROQ_API_KEY não definida no .env — acesse groq.com, crie uma conta gratuita e gere uma API key.');
   }
-  if (!anthropic) anthropic = new Anthropic();
-  return anthropic;
+  if (!groq) groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+  return groq;
 }
 
 // Serializa toda a campanha em texto para servir de contexto à IA.
@@ -69,13 +70,15 @@ Quando inventar algo novo, sinalize com "(novo)" para o Mestre saber que não es
 
 async function ask(messages, maxTokens = 1500) {
   const system = SYSTEM_PROMPT.replace('{CONTEXT}', buildCampaignContext());
-  const resp = await getClient().messages.create({
+  const resp = await getClient().chat.completions.create({
     model: MODEL,
     max_tokens: maxTokens,
-    system,
-    messages,
+    messages: [
+      { role: 'system', content: system },
+      ...messages,
+    ],
   });
-  return resp.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n');
+  return resp.choices[0]?.message?.content?.trim() ?? '';
 }
 
 // Chat livre do Mestre com o assistente (history = [{role, content}])
@@ -107,7 +110,7 @@ export async function improviseNpc(npcId, situation) {
   }], 800);
 }
 
-// Sugere áudios da biblioteca para uma cena — a automação de som que o Mestre pediu.
+// Sugere áudios da biblioteca para uma cena.
 export async function suggestSceneAudio(sceneId) {
   const db = getDb();
   const scene = getItem('scenes', sceneId);
@@ -118,21 +121,32 @@ export async function suggestSceneAudio(sceneId) {
     `- id:${a.id} | ${a.name} | tipo:${a.type} | tags: ${(a.tags || []).join(', ') || '-'}`
   ).join('\n');
 
-  const resp = await getClient().messages.create({
+  const resp = await getClient().chat.completions.create({
     model: MODEL,
     max_tokens: 500,
-    system: 'Você escolhe trilhas sonoras para cenas de RPG. Responda APENAS com JSON válido, sem markdown.',
-    messages: [{
-      role: 'user',
-      content: `Cena: "${scene.title}"\nDescrição: ${scene.readAloud || ''}\nNotas: ${scene.gmNotes || ''}\n\n` +
-        `Biblioteca de áudio disponível:\n${library}\n\n` +
-        `Escolha o que melhor combina com a cena. Responda só com JSON:\n` +
-        `{"ambientAudioId": "<id ou null>", "musicAudioId": "<id ou null>", "sfxIds": ["<ids de efeitos úteis nesta cena>"], "reasoning": "<1 frase>"}`,
-    }],
+    messages: [
+      {
+        role: 'system',
+        content: 'Você escolhe trilhas sonoras para cenas de RPG. Responda APENAS com JSON válido, sem markdown, sem explicação.',
+      },
+      {
+        role: 'user',
+        content: `Cena: "${scene.title}"\nDescrição: ${scene.readAloud || ''}\nNotas: ${scene.gmNotes || ''}\n\n` +
+          `Biblioteca de áudio disponível:\n${library}\n\n` +
+          `Escolha o que melhor combina com a cena. Responda SOMENTE com JSON no formato:\n` +
+          `{"ambientAudioId": "<id ou null>", "musicAudioId": "<id ou null>", "sfxIds": [], "reasoning": "<1 frase>"}`,
+      },
+    ],
   });
-  const text = resp.content.filter((b) => b.type === 'text').map((b) => b.text).join('');
-  const json = JSON.parse(text.replace(/```json?|```/g, '').trim());
-  // Valida ids contra a biblioteca
+
+  const text = resp.choices[0]?.message?.content?.trim() ?? '{}';
+  let json;
+  try {
+    // Remove blocos de markdown caso o modelo os inclua mesmo com a instrução
+    json = JSON.parse(text.replace(/```json?|```/g, '').trim());
+  } catch {
+    throw new Error('A IA retornou uma resposta inválida para a sugestão de áudio. Tente de novo.');
+  }
   const valid = (id) => db.audio.some((a) => a.id === id);
   return {
     ambientAudioId: valid(json.ambientAudioId) ? json.ambientAudioId : null,
