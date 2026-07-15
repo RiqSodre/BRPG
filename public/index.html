@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mesa do Mestre</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-icon">🐉</span>
+      <div>
+        <h1 id="campaign-name">Mesa do Mestre</h1>
+        <small id="campaign-system">D&D 5e</small>
+      </div>
+    </div>
+    <nav>
+      <div class="nav-divider">SESSÃO</div>
+      <button class="nav-btn active" data-tab="scenes">🎭 Cenas</button>
+      <button class="nav-btn" data-tab="sessions">🗓️ Sessões</button>
+      <button class="nav-btn" data-tab="ai">✨ Assistente IA</button>
+      <div class="nav-divider">COMBATE</div>
+      <button class="nav-btn" data-tab="map">🗺️ Mapa de Batalha</button>
+      <button class="nav-btn" data-tab="combat">⚔️ Iniciativa</button>
+      <div class="nav-divider">CAMPANHA</div>
+      <button class="nav-btn" data-tab="story">📜 História</button>
+      <button class="nav-btn" data-tab="characters">🧙 Personagens</button>
+      <button class="nav-btn" data-tab="audio">🎵 Áudio</button>
+      <button class="nav-btn" data-tab="booth">🎙️ Cabine</button>
+      <button class="nav-btn" data-tab="settings">⚙️ Config</button>
+    </nav>
+    <div class="bot-status" id="bot-status">
+      <span class="dot off"></span> Bot desconectado
+    </div>
+  </aside>
+
+  <main class="content">
+    <!-- Barra de controle de som, sempre visível -->
+    <div class="sound-bar">
+      <div class="sound-now" id="now-playing">🔇 Nenhum som tocando</div>
+      <div class="sound-controls">
+        <select id="voice-channel-select" title="Canal de voz"></select>
+        <button id="btn-join" class="btn small">🎙️ Conectar voz</button>
+        <button id="btn-leave" class="btn small ghost">Sair</button>
+        <button id="btn-stop-sound" class="btn small danger">⏹ Parar som</button>
+        <label class="volume">🔊 <input type="range" id="volume" min="0" max="1" step="0.05" /></label>
+        <span class="dice-quick">
+          <input id="dice-expr" placeholder="1d20+5" size="7" />
+          <button id="btn-roll" class="btn small">🎲</button>
+          <span id="dice-result"></span>
+        </span>
+      </div>
+    </div>
+
+    <section id="tab-scenes" class="tab active"></section>
+    <section id="tab-story" class="tab"></section>
+    <section id="tab-characters" class="tab"></section>
+    <section id="tab-audio" class="tab"></section>
+    <section id="tab-booth" class="tab"></section>
+    <section id="tab-map" class="tab"></section>
+    <section id="tab-sessions" class="tab"></section>
+    <section id="tab-combat" class="tab"></section>
+    <section id="tab-ai" class="tab"></section>
+    <section id="tab-settings" class="tab"></section>
+  </main>
+
+  <div id="modal-backdrop" class="modal-backdrop hidden">
+    <div class="modal" id="modal"></div>
+  </div>
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="booth.js"></script>
+  <script src="battlemap.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

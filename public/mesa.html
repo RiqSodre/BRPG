@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mesa — tela dos jogadores</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="player-body">
+  <header class="player-bar">
+    <div class="player-title">
+      <span class="brand-icon">🗺️</span>
+      <b id="player-campaign">Mesa</b>
+      <span id="player-map" class="badge"></span>
+    </div>
+    <div id="player-turn" class="player-turn">Sem combate em andamento</div>
+    <div class="player-conn"><span class="dot off" id="player-dot"></span> <span id="player-status">conectando...</span></div>
+  </header>
+  <div class="player-stage">
+    <canvas id="player-canvas"></canvas>
+    <aside class="player-initiative" id="player-initiative"></aside>
+  </div>
+  <script src="battlemap.js"></script>
+  <script src="mesa.js"></script>
+</body>
+</html>
