@@ -965,6 +965,7 @@ function renderMapTab() {
               <span class="ov-sep"></span>
               <label class="tool-check" title="Mostrar os números de PV dos inimigos aos jogadores"><input type="checkbox" id="show-enemy-hp" /> ❤️ PV inimigos</label>
               <span class="ov-sep"></span>
+              <button class="ov-btn" id="btn-sound-toggle" title="Soundboard: solta efeitos no canal de voz (atalhos 1-9)">🔊 Sons</button>
               <button class="ov-btn" id="btn-img-toggle" title="Ajustar a imagem do mapa ao grid">🖼️ Imagem</button>
             </div>
             <div class="ov-panel ov-img hidden" id="img-align">
@@ -977,6 +978,11 @@ function renderMapTab() {
               <button class="ov-btn" data-img="in" title="Aumentar">➕</button>
               <button class="ov-btn" data-img="auto" title="Esticar para preencher o grid">⤢ Encaixar</button>
             </div>
+          </div>
+
+          <!-- Soundboard: efeitos no canal de voz sem sair do mapa (canto inferior esquerdo) -->
+          <div class="map-overlay ov-bl hidden" id="soundboard">
+            <div class="ov-panel ov-sounds" id="soundboard-panel"></div>
           </div>
 
           <!-- HUD de turno (compacto, flutuando embaixo) -->
@@ -1020,6 +1026,12 @@ function renderMapTab() {
       if (!naAba || digitando || $('#modal-backdrop').classList.contains('hidden') === false) return;
 
       const sel = bmap.tokenById(bmap.selectedId);
+      // 1-9 soltam os efeitos do soundboard na voz, sem tirar a mão do mapa
+      if (/^[1-9]$/.test(e.key)) {
+        const sfx = sfxDaBatalha()[Number(e.key) - 1];
+        if (sfx) { e.preventDefault(); tocarSfx(sfx); }
+        return;
+      }
       if (e.key === ' ') { e.preventDefault(); nextTurn(1); }
       else if (e.key === 'Escape') { bmap.select(null); bmap.setAoe(null); }
       else if ((e.key === 'Delete' || e.key === 'Backspace') && sel) {
@@ -1106,6 +1118,13 @@ function renderMapTab() {
       toast(e.target.checked
         ? '👁️ Os jogadores agora veem os PV exatos dos inimigos.'
         : '🎭 Os jogadores voltam a ver só o estado dos inimigos (Ferido, Quase morto...).');
+    };
+
+    // Botão 🔊 mostra/esconde o soundboard de batalha
+    $('#btn-sound-toggle').onclick = () => {
+      const p = $('#soundboard');
+      p.classList.toggle('hidden');
+      $('#btn-sound-toggle').classList.toggle('active', !p.classList.contains('hidden'));
     };
 
     // Botão 🖼️ mostra/esconde os controles de alinhar a imagem do mapa
@@ -1198,7 +1217,38 @@ function renderMapTab() {
   $('#vision-enabled').checked = Boolean(state.battle.vision?.enabled);
   $('#vision-radius').value = state.battle.vision?.radius ?? 12;
   bmap.setData({ map, battle: state.battle, combat: state.combat });
+  renderSoundboard();
   renderMapSide();
+}
+
+// ---------- Soundboard de batalha ----------
+// Efeitos one-shot no canal de voz, sem sair do mapa. Os 9 primeiros ganham
+// atalho numérico para o Mestre soltar o golpe sem tirar a mão do mapa.
+const sfxDaBatalha = () => (state.audio || []).filter((a) => a.type === 'sfx');
+
+function tocarSfx(audio) {
+  if (!audio) return;
+  if (!state.bot?.connected) return toast('O bot está desconectado — sem som no Discord.', true);
+  tryApi(() => api(`/sound/play/${audio.id}`, { method: 'POST' }), `🔊 ${audio.name}`);
+}
+
+function renderSoundboard() {
+  const el = $('#soundboard-panel');
+  if (!el) return;
+  const sfx = sfxDaBatalha();
+  el.innerHTML = `
+    <span class="ov-label">🔊 Efeitos</span>
+    ${sfx.length ? sfx.map((a, i) => `
+      <button class="ov-btn sfx-btn" data-sfx-play="${a.id}" title="${esc(a.name)}${(a.tags || []).length ? ` · ${esc(a.tags.join(', '))}` : ''}">
+        ${i < 9 ? `<kbd class="sfx-key">${i + 1}</kbd>` : ''}${esc(a.name.replace(/_/g, ' ').slice(0, 22))}${a.name.length > 22 ? '…' : ''}
+      </button>`).join('')
+      : '<span class="ov-label">Nenhum efeito na biblioteca — suba sons na aba 🎵 Áudio.</span>'}
+    ${sfx.length ? '<span class="ov-sep"></span><button class="ov-btn danger" id="sfx-stop" title="Parar tudo que está tocando">⏹ Parar</button>' : ''}`;
+
+  $$('#soundboard-panel [data-sfx-play]').forEach((b) => b.onclick = () =>
+    tocarSfx(sfx.find((a) => a.id === b.dataset.sfxPlay)));
+  const stop = $('#sfx-stop');
+  if (stop) stop.onclick = () => tryApi(() => api('/sound/stop', { method: 'POST' }), '⏹ Som parado.');
 }
 
 // ---------- Gerenciamento do combate pelo mapa ----------

@@ -382,6 +382,15 @@ textarea { resize: vertical; min-height: 80px; }
 .map-overlay .ov-panel { pointer-events: auto; }
 .ov-top { top: 10px; left: 10px; right: 10px; flex-wrap: wrap; align-items: flex-start; }
 .ov-img.hidden { display: none; }
+/* Soundboard flutuante, canto inferior esquerdo (o HUD fica no centro) */
+.ov-bl { bottom: 10px; left: 10px; max-width: 46%; }
+.ov-sounds { max-width: 100%; }
+.sfx-btn { gap: 5px; }
+.sfx-key {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
+  padding: 0 4px; font-size: 10px; font-weight: 700; color: var(--accent2);
+  font-family: inherit; line-height: 1.5;
+}
 .ov-panel {
   display: flex; align-items: center; gap: 3px; flex-wrap: wrap;
   background: rgba(20,17,28,0.82); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
