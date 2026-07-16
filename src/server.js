@@ -285,6 +285,22 @@ export function startServer() {
   app.get('/api/srd/monsters/:index', wrap(async (req, res) => {
     res.json(await srdFetch(`/api/2014/monsters/${encodeURIComponent(req.params.index)}`));
   }));
+  // Baixa a arte oficial do monstro (quando existe) e guarda em data/images,
+  // pra não depender do dnd5eapi.co em jogo e o token ficar com imagem permanente.
+  app.get('/api/srd/monsters/:index/image', wrap(async (req, res) => {
+    const safe = String(req.params.index).replace(/[^a-z0-9-]/gi, '');
+    if (!safe) return res.json({ url: null });
+    const filename = `srd-${safe}.png`;
+    const dest = path.join(IMAGES_DIR, filename);
+    const localUrl = `/images/${filename}`;
+    if (fs.existsSync(dest)) return res.json({ url: localUrl });
+    const m = await srdFetch(`/api/2014/monsters/${encodeURIComponent(req.params.index)}`);
+    if (!m.image) return res.json({ url: null });
+    const r = await fetch(`https://www.dnd5eapi.co${m.image}`);
+    if (!r.ok) return res.json({ url: null });
+    fs.writeFileSync(dest, Buffer.from(await r.arrayBuffer()));
+    res.json({ url: localUrl });
+  }));
 
   // ---- Retratos (personagens e tokens) ----
   app.post('/api/images', imageUpload.single('file'), wrap(async (req, res) => {

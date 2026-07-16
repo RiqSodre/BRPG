@@ -975,11 +975,27 @@ function renderMapSide() {
 const tokenOf = (name) => state.battle.tokens.find((t) => (t.combatName || t.name) === name);
 const entryOf = (t) => state.combat.entries.find((e) => e.name === (t.combatName || t.name));
 
+// Busca (e cacheia no servidor) a arte oficial do monstro do SRD. Silencioso: se não
+// houver imagem, devolve vazio sem incomodar o Mestre.
+async function srdImage(index) {
+  if (!index) return '';
+  try { const r = await api(`/srd/monsters/${index}/image`); return r?.url || ''; }
+  catch { return ''; }
+}
+
+// Retrato de um combatente: token > arte guardada no entry > retrato do personagem.
+function retratoDe(entry, tok) {
+  return tok?.imageUrl || entry?.imageUrl || state.characters.find((c) => c.name === entry?.name)?.imageUrl || '';
+}
+
 // Coloca no mapa o token de um combatente da iniciativa (se ainda não estiver lá).
-function placeOnMap(entry) {
+async function placeOnMap(entry) {
   const map = activeMap();
   if (!map) return toast('Coloque um mapa em jogo primeiro.', true);
   if (tokenOf(entry.name)) return; // já está no mapa
+  const imageUrl = state.characters.find((c) => c.name === entry.name)?.imageUrl
+    || entry.imageUrl
+    || await srdImage(entry.srdIndex);
   const i = state.battle.tokens.length;
   state.battle.tokens.push({
     id: Math.random().toString(16).slice(2, 10),
@@ -990,25 +1006,26 @@ function placeOnMap(entry) {
     row: Math.min(map.rows - 1, Math.floor(i / map.cols)),
     size: 1, hidden: false, color: '',
     hp: entry.hp, maxHp: entry.maxHp,
-    imageUrl: state.characters.find((c) => c.name === entry.name)?.imageUrl || '',
+    imageUrl,
   });
   pushBattle();
   renderMapSide();
 }
 
 // Coloca no mapa todos os combatentes que ainda não têm token.
-function placeAllOnMap() {
+async function placeAllOnMap() {
   const map = activeMap();
   if (!map) return toast('Coloque um mapa em jogo primeiro.', true);
   const faltando = state.combat.entries.filter((e) => !tokenOf(e.name));
   if (!faltando.length) return;
-  addTokens(faltando.map((e) => ({
+  const defs = await Promise.all(faltando.map(async (e) => ({
     name: e.name,
     kind: e.isPc ? 'pc' : 'enemy',
     hp: e.hp, maxHp: e.maxHp,
     combatName: e.name,
-    imageUrl: state.characters.find((c) => c.name === e.name)?.imageUrl || '',
+    imageUrl: state.characters.find((c) => c.name === e.name)?.imageUrl || e.imageUrl || await srdImage(e.srdIndex),
   })));
+  addTokens(defs);
 }
 
 async function saveCombatState() {
@@ -1145,8 +1162,8 @@ function renderCombatHud() {
   const atual = c.entries[c.turn];
   const proximo = c.entries.length > 1 ? c.entries[(c.turn + 1) % c.entries.length] : null;
   const t = atual ? tokenOf(atual.name) : null;
-  const retrato = t?.imageUrl || state.characters.find((x) => x.name === atual?.name)?.imageUrl;
-  const retratoProx = proximo ? (tokenOf(proximo.name)?.imageUrl || state.characters.find((x) => x.name === proximo?.name)?.imageUrl) : null;
+  const retrato = atual ? retratoDe(atual, t) : null;
+  const retratoProx = proximo ? retratoDe(proximo, tokenOf(proximo.name)) : null;
 
   const hpFrac = atual?.maxHp > 0 ? Math.max(0, Math.min(1, (atual.hp ?? 0) / atual.maxHp)) : null;
   const hpCor = hpFrac > 0.5 ? '#4ade80' : hpFrac > 0.25 ? '#c4a747' : '#e05252';
@@ -1388,7 +1405,7 @@ function renderCombatOrder() {
         const downed = e.maxHp > 0 && (e.hp ?? 0) <= 0;
         const tok = tokenOf(e.name);
         const onMap = !!tok;
-        const retrato = tok?.imageUrl || state.characters.find((x) => x.name === e.name)?.imageUrl || '';
+        const retrato = retratoDe(e, tok);
         const conds = (e.conditions || []).map((cd) =>
           `<span class="cond-chip ie-cond" data-rm-cond="${i}|${esc(cd)}" title="Remover ${esc(cd)}">${condIcon(cd)}</span>`
         ).join('');
@@ -1922,6 +1939,7 @@ async function addMonster(index, aoMapa) {
   // O SRD fala em pés ("30 ft."); a mesa fala em metros.
   const pes = parseInt(String(m.speed?.walk || '30'), 10) || 30;
   const metros = Math.round((pes / 5) * 1.5 * 10) / 10;
+  const arte = await srdImage(m.index);
 
   c.entries.push({
     name: nome,
@@ -1930,6 +1948,7 @@ async function addMonster(index, aoMapa) {
     hp: m.hit_points, maxHp: m.hit_points,
     conditions: [], deathSaves: { s: 0, f: 0 },
     srdIndex: m.index,
+    imageUrl: arte,
   });
   await tryApi(() => api('/combat', { method: 'PUT', body: c }));
 
@@ -1945,7 +1964,7 @@ async function addMonster(index, aoMapa) {
       size: SRD_SIZE[m.size] || 1,
       speed: metros,
       hp: m.hit_points, maxHp: m.hit_points,
-      hidden: false, color: '', imageUrl: '',
+      hidden: false, color: '', imageUrl: arte,
     });
     pushBattle();
     toast(`🗺️ ${nome} entrou na iniciativa (d20${mod >= 0 ? '+' : ''}${mod}) e está no mapa.`);
@@ -2046,7 +2065,10 @@ function _srdPt(text) {
 let _srdLang = 'pt'; // estado global do toggle no modal
 
 async function showMonster(index) {
-  const m = await tryApi(() => api(`/srd/monsters/${index}`));
+  const [m, arte] = await Promise.all([
+    tryApi(() => api(`/srd/monsters/${index}`)),
+    srdImage(index),
+  ]);
   if (!m) return;
 
   const renderMonster = (lang) => {
@@ -2111,6 +2133,7 @@ async function showMonster(index) {
     const langToggleLabel = pt ? '🇺🇸 Ver em inglês' : '🇧🇷 Ver em português';
 
     return `
+      ${arte ? `<div class="srd-hero"><img src="${esc(arte)}" alt="${esc(m.name)}" onerror="this.closest('.srd-hero').remove()" /></div>` : ''}
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
         <i style="font-size:13px;color:var(--muted);">${esc(size)} ${esc(type)}, ${esc(align)}</i>
         <button class="btn small ghost" id="srd-lang-toggle" style="font-size:11px;">${langToggleLabel}</button>
