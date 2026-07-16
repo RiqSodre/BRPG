@@ -751,46 +751,45 @@ function renderMapTab() {
           <!-- Barra de ferramentas flutuante no topo (quebra linha em telas estreitas) -->
           <div class="map-overlay ov-top">
             <div class="ov-panel">
-              <button class="ov-btn tool active" data-tool="select" title="Mover / arrastar tokens">✋</button>
-              <button class="ov-btn tool" data-tool="ruler" title="Medir distância (diagonal 5e)">📏</button>
-              <button class="ov-btn tool" data-tool="ping" title="Ping na tela dos jogadores">📍</button>
-              <button class="ov-btn tool" data-tool="aoe" title="Área de efeito (arraste do centro)">🎯</button>
-              <button class="ov-btn tool" data-tool="reveal" title="Pincel: revelar névoa">🔦</button>
-              <button class="ov-btn tool" data-tool="hide" title="Pincel: cobrir de névoa">🌫️</button>
-              <span class="ov-sep"></span>
-              <button class="ov-btn" id="btn-map-fit" title="Enquadrar o mapa na tela">⤢</button>
-              <button class="ov-btn" id="ov-help" title="Clique num token para agir sobre ele · arraste para mover (mostra o deslocamento) · Espaço passa o turno · setas movem o selecionado · Del remove · Esc limpa a seleção">❔</button>
+              <button class="ov-btn tool active" data-tool="select" title="Arrastar tokens">✋ Mover</button>
+              <button class="ov-btn tool" data-tool="ruler" title="Medir distância (diagonal 5e)">📏 Medir</button>
+              <button class="ov-btn tool" data-tool="ping" title="Piscar um ponto na tela dos jogadores">📍 Ping</button>
+              <button class="ov-btn tool" data-tool="aoe" title="Área de efeito (arraste do centro)">🎯 Área</button>
+              <button class="ov-btn tool" data-tool="reveal" title="Pincel: revelar névoa">🔦 Revelar</button>
+              <button class="ov-btn tool" data-tool="hide" title="Pincel: cobrir de névoa">🌫️ Cobrir</button>
+              <button class="ov-btn" id="btn-map-fit" title="Enquadrar o mapa na tela">⤢ Enquadrar</button>
+              <button class="ov-btn" id="ov-help" title="Clique num token para agir sobre ele · arraste para mover (mostra o deslocamento) · Espaço passa o turno · setas movem o selecionado · Del remove · Esc limpa a seleção">❔ Ajuda</button>
             </div>
             <div class="ov-panel">
               <select id="map-select" title="Mapa em jogo"></select>
-              <button class="ov-btn gold" id="btn-map-activate" title="Colocar este mapa em jogo">▶</button>
-              <button class="ov-btn" id="btn-new-map" title="Novo mapa">＋</button>
-              <button class="ov-btn" id="btn-sample-maps" title="Mapas de exemplo">📚</button>
-              <button class="ov-btn" id="btn-edit-map" title="Editar grid">▦</button>
-              <button class="ov-btn danger" id="btn-del-map" title="Excluir mapa">🗑</button>
-              <a class="ov-btn" href="/mesa.html" target="_blank" title="Abrir a tela dos jogadores (segunda tela / Discord)">🖥️</a>
+              <button class="ov-btn gold" id="btn-map-activate" title="Colocar este mapa em jogo">▶ Em jogo</button>
+              <button class="ov-btn" id="btn-new-map" title="Criar um novo mapa">＋ Novo</button>
+              <button class="ov-btn" id="btn-sample-maps" title="Mapas prontos de exemplo">📚 Exemplos</button>
+              <button class="ov-btn" id="btn-edit-map" title="Editar o grid do mapa">▦ Grid</button>
+              <button class="ov-btn danger" id="btn-del-map" title="Excluir este mapa">🗑 Excluir</button>
+              <a class="ov-btn" href="/mesa.html" target="_blank" title="Abrir a tela dos jogadores (segunda tela / Discord)">🖥️ Jogadores</a>
             </div>
             <div class="ov-panel">
-              <label class="tool-check" title="Névoa de guerra pintada à mão"><input type="checkbox" id="fog-enabled" /> 🌫️</label>
-              <button class="ov-btn" id="btn-fog-all" title="Revelar tudo">☀️</button>
-              <button class="ov-btn" id="btn-fog-none" title="Cobrir tudo">🌑</button>
+              <label class="tool-check" title="Névoa de guerra pintada à mão"><input type="checkbox" id="fog-enabled" /> 🌫️ Névoa</label>
+              <button class="ov-btn" id="btn-fog-all" title="Revelar o mapa inteiro">☀️ Revelar tudo</button>
+              <button class="ov-btn" id="btn-fog-none" title="Cobrir o mapa inteiro">🌑 Cobrir tudo</button>
               <span class="ov-sep"></span>
-              <label class="tool-check" title="Cada personagem revela um raio ao redor de si; o resto fica na névoa"><input type="checkbox" id="vision-enabled" /> 👁️</label>
-              <input type="number" id="vision-radius" min="3" max="60" step="1" class="vision-radius-input" title="Raio de visão dos personagens (metros)" />
+              <label class="tool-check" title="Cada personagem revela um raio ao redor de si; o resto fica na névoa"><input type="checkbox" id="vision-enabled" /> 👁️ Visão</label>
+              <input type="number" id="vision-radius" min="3" max="60" step="1" class="vision-radius-input" title="Raio de visão dos personagens (metros)" /><span class="ov-label">m</span>
               <span class="ov-sep"></span>
-              <label class="tool-check" title="Mostrar os números de PV dos inimigos aos jogadores"><input type="checkbox" id="show-enemy-hp" /> ❤️</label>
+              <label class="tool-check" title="Mostrar os números de PV dos inimigos aos jogadores"><input type="checkbox" id="show-enemy-hp" /> ❤️ PV inimigos</label>
               <span class="ov-sep"></span>
-              <button class="ov-btn" id="btn-img-toggle" title="Ajustar a imagem do mapa ao grid">🖼️</button>
+              <button class="ov-btn" id="btn-img-toggle" title="Ajustar a imagem do mapa ao grid">🖼️ Imagem</button>
             </div>
             <div class="ov-panel ov-img hidden" id="img-align">
-              <span class="ov-label">Imagem</span>
+              <span class="ov-label">Ajustar imagem:</span>
               <button class="ov-btn" data-img="left" title="Mover à esquerda">◀</button>
               <button class="ov-btn" data-img="right" title="Mover à direita">▶</button>
               <button class="ov-btn" data-img="up" title="Mover para cima">▲</button>
               <button class="ov-btn" data-img="down" title="Mover para baixo">▼</button>
               <button class="ov-btn" data-img="out" title="Diminuir">➖</button>
               <button class="ov-btn" data-img="in" title="Aumentar">➕</button>
-              <button class="ov-btn" data-img="auto" title="Esticar para preencher o grid">⤢</button>
+              <button class="ov-btn" data-img="auto" title="Esticar para preencher o grid">⤢ Encaixar</button>
             </div>
           </div>
 
@@ -1123,8 +1122,9 @@ async function nextTurn(dir) {
 async function rollInitiative() {
   const c = state.combat;
   if (!c.entries.length) return toast('Adicione combatentes à lista de iniciativa primeiro.', true);
+  // Rola d20 (+ modificador, quando houver) para TODO mundo do combate e ordena.
   for (const e of c.entries) {
-    if (!e.isPc) e.init = d20() + (e.initMod || 0);
+    e.init = d20() + (e.initMod || 0);
   }
   c.entries.sort((a, b) => b.init - a.init);
   c.turn = 0;
@@ -1132,7 +1132,7 @@ async function rollInitiative() {
   await saveCombatState();
   renderMapSide();
   await refresh();
-  toast('🎲 Iniciativa rolada! Ordem: ' + c.entries.map((e) => e.name).join(' → '));
+  toast('🎲 Iniciativa rolada para todos! Ordem: ' + c.entries.map((e) => `${e.name} (${e.init})`).join(' → '));
   focusTurn();
 }
 
@@ -1259,9 +1259,9 @@ function renderCombatHud() {
     <div class="hud-actions">
       <button class="btn small ghost" id="hud-prev" title="Voltar um turno">◀</button>
       <button class="btn gold" id="hud-next" title="Próximo turno (Espaço)">▶ Próximo</button>
-      <button class="btn small ghost" id="hud-roll" title="Rolar a iniciativa dos inimigos e reordenar">🎲</button>
-      <button class="btn small ghost" id="hud-announce" title="Postar a ordem no Discord">📤</button>
-      <button class="btn small ghost danger" id="hud-end" title="Encerrar o combate">⏹</button>
+      <button class="btn small" id="hud-roll" title="Rola a iniciativa de TODOS os combatentes e reordena">🎲 Rolar iniciativa</button>
+      <button class="btn small ghost" id="hud-announce" title="Postar a ordem no Discord">📤 Postar</button>
+      <button class="btn small ghost danger" id="hud-end" title="Encerrar o combate">⏹ Fim</button>
     </div>`;
 
   $('#hud-next').onclick = () => nextTurn(1);
