@@ -2162,6 +2162,21 @@ const _PT_PHRASES = [
   [/\bin addition\b/gi,'além disso'],[/\binstead\b/gi,'em vez disso'],[/\bhowever\b/gi,'porém'],
   [/\bup to\b/gi,'até'],[/\bat least\b/gi,'pelo menos'],[/\bat most\b/gi,'no máximo'],
   [/\bwithin (\d+ m)\b/gi,'a $1 de distância'],
+  // Frases seguras (tradução de frase inteira, sem quebrar concordância)
+  [/\bon each of its turns\b/gi,'em cada um de seus turnos'],
+  [/\bas a bonus action\b/gi,'como uma ação bônus'],
+  [/\bas an action\b/gi,'como uma ação'],[/\bas a reaction\b/gi,'como uma reação'],
+  [/\bopportunity attacks?\b/gi,(m)=>/s$/i.test(m)?'ataques de oportunidade':'ataque de oportunidade'],
+  [/\bdifficult terrain\b/gi,'terreno difícil'],
+  [/\bhas advantage on\b/gi,'tem vantagem em'],[/\bhas disadvantage on\b/gi,'tem desvantagem em'],
+  [/\badvantage on\b/gi,'vantagem em'],[/\bdisadvantage on\b/gi,'desvantagem em'],
+  [/\bis immune to\b/gi,'é imune a'],[/\bare immune to\b/gi,'são imunes a'],
+  [/\bcan breathe air and water\b/gi,'pode respirar ar e água'],
+  [/\bthe Disengage or Hide action\b/gi,'a ação Desengajar ou Esconder-se'],
+  [/\bDisengage\b/g,'Desengajar'],[/\bDodge\b/g,'Esquivar'],[/\bDash\b/g,'Disparar'],
+  [/\bregains? (\d+) hit points?\b/gi,(_,n)=>`recupera ${n} pontos de vida`],
+  [/\bdoesn't provoke\b/gi,'não provoca'],[/\bcan't be\b/gi,'não pode ser'],
+  [/\bcan see\b/gi,'pode ver'],[/\bcan move\b/gi,'pode se mover'],
 ];
 
 function _srdPt(text) {
@@ -2179,6 +2194,9 @@ async function showMonster(index) {
     srdImage(index),
   ]);
   if (!m) return;
+
+  let ptBlocks = null;   // tradução completa da IA (chega depois, se disponível)
+  let ptLoading = false;
 
   const renderMonster = (lang) => {
     const pt = lang === 'pt';
@@ -2212,10 +2230,16 @@ async function showMonster(index) {
       return pt ? (_srdPt(s)) : s;
     }).join(', ') || '—';
 
-    const block = (title, items) => (items || []).length
-      ? `<h4 class="srd-block-title">${esc(title)}</h4>` +
-        items.map((a) => `<p class="srd-block-item"><b>${esc(Tname(a.name))}.</b> ${esc(T(a.desc))}</p>`).join('')
-      : '';
+    // Prefere a tradução da IA (ptBlocks) quando já chegou; senão, o dicionário regex.
+    const block = (title, key, rawItems) => {
+      const usarIA = pt && ptBlocks && (ptBlocks[key] || []).length;
+      const items = usarIA ? ptBlocks[key] : (rawItems || []);
+      if (!items.length) return '';
+      const nome = usarIA ? (s) => s : Tname;
+      const desc = usarIA ? (s) => s : T;
+      return `<h4 class="srd-block-title">${esc(title)}</h4>` +
+        items.map((a) => `<p class="srd-block-item"><b>${esc(nome(a.name))}.</b> ${esc(desc(a.desc))}</p>`).join('');
+    };
 
     const skillsStr = Object.entries(m.proficiencies?.reduce((acc, p) => {
       if (p.proficiency?.name?.startsWith('Skill:')) {
@@ -2243,9 +2267,12 @@ async function showMonster(index) {
 
     return `
       ${arte ? `<div class="srd-hero"><img src="${esc(arte)}" alt="${esc(m.name)}" onerror="this.closest('.srd-hero').remove()" /></div>` : ''}
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;">
         <i style="font-size:13px;color:var(--muted);">${esc(size)} ${esc(type)}, ${esc(align)}</i>
-        <button class="btn small ghost" id="srd-lang-toggle" style="font-size:11px;">${langToggleLabel}</button>
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+          <span id="srd-ai-status" class="srd-ai-status"></span>
+          <button class="btn small ghost" id="srd-lang-toggle" style="font-size:11px;">${langToggleLabel}</button>
+        </div>
       </div>
       <div class="srd-stat-bar">
         <span><b>CA</b> ${esc(m.armor_class?.[0]?.value ?? '?')}</span>
@@ -2265,10 +2292,25 @@ async function showMonster(index) {
         <div><b>${pt ? 'Idiomas' : 'Languages'}</b> ${esc(m.languages || '—')}</div>
         <div><b>CR</b> ${esc(m.challenge_rating)} (${esc(m.xp)} XP)</div>
       </div>
-      ${block(pt ? 'Habilidades' : 'Traits', m.special_abilities)}
-      ${block(pt ? 'Ações' : 'Actions', m.actions)}
-      ${block(pt ? 'Reações' : 'Reactions', m.reactions)}
-      ${block(pt ? 'Ações Lendárias' : 'Legendary Actions', m.legendary_actions)}`;
+      ${block(pt ? 'Habilidades' : 'Traits', 'special_abilities', m.special_abilities)}
+      ${block(pt ? 'Ações' : 'Actions', 'actions', m.actions)}
+      ${block(pt ? 'Reações' : 'Reactions', 'reactions', m.reactions)}
+      ${block(pt ? 'Ações Lendárias' : 'Legendary Actions', 'legendary_actions', m.legendary_actions)}`;
+  };
+
+  // Busca a tradução completa da IA e, quando chega, re-renderiza a ficha em PT.
+  const ensurePt = async () => {
+    if (_srdLang !== 'pt' || ptBlocks || ptLoading) return;
+    ptLoading = true;
+    const status = $('#srd-ai-status');
+    if (status) status.textContent = '✨ traduzindo…';
+    try {
+      const r = await api(`/srd/monsters/${index}/translate`);
+      if (r?.blocks) { ptBlocks = r.blocks; if (_srdLang === 'pt') buildModal('pt'); }
+    } catch { /* mantém o dicionário */ }
+    ptLoading = false;
+    const s2 = $('#srd-ai-status');
+    if (s2 && !ptBlocks) s2.textContent = '';
   };
 
   const buildModal = (lang) => {
@@ -2285,6 +2327,10 @@ async function showMonster(index) {
     $('#srd-lang-toggle').onclick = () => { _srdLang = _srdLang === 'pt' ? 'en' : 'pt'; buildModal(_srdLang); };
     $('#srd-add-quick').onclick = () => { closeModal(); addMonster(m.index, false); };
     $('#srd-map-quick').onclick = () => { closeModal(); addMonster(m.index, true); };
+    // Marca a tradução da IA quando já está ativa; senão dispara a busca.
+    const status = $('#srd-ai-status');
+    if (status && lang === 'pt' && ptBlocks) status.textContent = '✨ tradução por IA';
+    if (lang === 'pt') ensurePt();
   };
 
   buildModal(_srdLang);

@@ -110,6 +110,39 @@ export async function improviseNpc(npcId, situation) {
   }], 800);
 }
 
+// Traduz os blocos de texto livre de um monstro do SRD (habilidades, ações...) para
+// PT-BR. Recebe [{name, desc}] em inglês e devolve [{name, desc}] na MESMA ordem.
+// Sem contexto de campanha — é tradução pura, para ficar barato e consistente.
+export async function translateMonster(monsterName, blocks) {
+  if (!blocks?.length) return [];
+  const payload = blocks.map((b, i) => `[${i}] ${b.name}\n${b.desc}`).join('\n\n');
+  const resp = await getClient().chat.completions.create({
+    model: MODEL,
+    max_tokens: 3000,
+    temperature: 0.2,
+    messages: [
+      {
+        role: 'system',
+        content: 'Você traduz blocos de ficha de monstro de D&D 5e do inglês para o português brasileiro, ' +
+          'com naturalidade e usando os termos OFICIAIS de D&D em PT-BR. Regras rígidas:\n' +
+          '- Mantenha a notação de dados intacta: 2d6+3, 1d20, 3d8 etc.\n' +
+          '- Converta pés para metros (1 pé ≈ 0,3 m; arredonde para valores redondos: 5 ft→1,5 m, 30 ft→9 m, 60 ft→18 m).\n' +
+          '- Termos: saving throw=teste de resistência, DC=CD, hit points=pontos de vida, ' +
+          'melee weapon attack=ataque de arma corpo a corpo, ranged=à distância, reach=alcance, Hit:=Acerto:, ' +
+          'condições: prone=caído, grappled=agarrado, restrained=contido, poisoned=envenenado, stunned=atordoado, ' +
+          'frightened=amedrontado, charmed=enfeitiçado, blinded=cego, prone=caído, unconscious=inconsciente.\n' +
+          'Responda APENAS com JSON válido: um array na mesma ordem e quantidade da entrada, ' +
+          'no formato [{"name":"...","desc":"..."}]. Sem markdown, sem comentários, sem texto fora do JSON.',
+      },
+      { role: 'user', content: `Monstro: ${monsterName}\n\nTraduza os ${blocks.length} blocos abaixo:\n\n${payload}` },
+    ],
+  });
+  const text = resp.choices[0]?.message?.content?.trim() ?? '[]';
+  const arr = JSON.parse(text.replace(/```json?|```/g, '').trim());
+  if (!Array.isArray(arr)) throw new Error('Tradução da IA em formato inesperado.');
+  return arr;
+}
+
 // Sugere áudios da biblioteca para uma cena.
 export async function suggestSceneAudio(sceneId) {
   const db = getDb();

@@ -7,7 +7,7 @@ import multer from 'multer';
 import { WebSocketServer } from 'ws';
 import {
   getDb, save, listItems, getItem, addItem, updateItem, removeItem, newId,
-  AUDIO_DIR, MAPS_DIR, IMAGES_DIR, SAMPLES_DIR,
+  DATA_DIR, AUDIO_DIR, MAPS_DIR, IMAGES_DIR, SAMPLES_DIR,
 } from './store.js';
 import { importFromVault, exportToVault } from './obsidian.js';
 import * as bot from './bot.js';
@@ -300,6 +300,52 @@ export function startServer() {
     if (!r.ok) return res.json({ url: null });
     fs.writeFileSync(dest, Buffer.from(await r.arrayBuffer()));
     res.json({ url: localUrl });
+  }));
+  // Tradução PT-BR dos textos livres do monstro (habilidades/ações) via IA, cacheada
+  // em disco por monstro. Se a IA não estiver configurada ou falhar, devolve blocks:null
+  // e o cliente cai na tradução por dicionário. Nunca cacheia falha.
+  app.get('/api/srd/monsters/:index/translate', wrap(async (req, res) => {
+    const safe = String(req.params.index).replace(/[^a-z0-9-]/gi, '');
+    if (!safe) return res.json({ blocks: null });
+    const dir = path.join(DATA_DIR, 'srd-pt');
+    fs.mkdirSync(dir, { recursive: true });
+    const cacheFile = path.join(dir, `${safe}.json`);
+    if (fs.existsSync(cacheFile)) return res.json(JSON.parse(fs.readFileSync(cacheFile, 'utf8')));
+
+    const m = await srdFetch(`/api/2014/monsters/${encodeURIComponent(req.params.index)}`);
+    const collect = (arr) => (arr || []).map((a) => ({ name: a.name, desc: a.desc }));
+    const groups = {
+      special_abilities: collect(m.special_abilities),
+      actions: collect(m.actions),
+      reactions: collect(m.reactions),
+      legendary_actions: collect(m.legendary_actions),
+    };
+    // Achata numa lista só para uma única chamada de IA, guardando de que grupo veio.
+    const flat = [];
+    for (const [k, arr] of Object.entries(groups)) arr.forEach((b, i) => flat.push({ k, i, ...b }));
+    if (!flat.length) {
+      const out = { blocks: groups };
+      fs.writeFileSync(cacheFile, JSON.stringify(out));
+      return res.json(out);
+    }
+    let translated;
+    try {
+      translated = await ai.translateMonster(m.name, flat);
+    } catch (e) {
+      return res.json({ blocks: null, error: String(e.message || e) });
+    }
+    flat.forEach((b, idx) => {
+      const t = translated[idx];
+      if (t && groups[b.k][b.i]) {
+        groups[b.k][b.i] = {
+          name: t.name || groups[b.k][b.i].name,
+          desc: t.desc || groups[b.k][b.i].desc,
+        };
+      }
+    });
+    const out = { blocks: groups };
+    fs.writeFileSync(cacheFile, JSON.stringify(out));
+    res.json(out);
   }));
 
   // ---- Retratos (personagens e tokens) ----

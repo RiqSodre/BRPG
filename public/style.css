@@ -322,6 +322,9 @@ textarea { resize: vertical; min-height: 80px; }
 }
 .cp-thumb.placeholder { line-height: 1; }
 
+/* Status da tradução por IA na ficha do monstro */
+.srd-ai-status { font-size: 10px; color: var(--accent2); white-space: nowrap; opacity: 0.85; }
+
 /* Arte oficial do monstro no topo da ficha */
 .srd-hero {
   display: flex; justify-content: center; align-items: center;
