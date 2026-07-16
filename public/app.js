@@ -381,19 +381,73 @@ const RARIDADE_COR = {
 };
 const corDaRaridade = (r) => RARIDADE_COR[r] || '#9d9d9d';
 
-// Quem tem esse item na mochila (para mostrar no catálogo)
+// Quem tem esse item na mochila (para mostrar e permitir tirar direto do catálogo)
 const donosDoItem = (itemId) => state.characters
   .filter((c) => (c.inventory || []).some((l) => l.itemId === itemId))
-  .map((c) => ({ nome: c.name, qty: (c.inventory.find((l) => l.itemId === itemId) || {}).qty }));
+  .map((c) => ({ id: c.id, nome: c.name, qty: (c.inventory.find((l) => l.itemId === itemId) || {}).qty }));
+
+// Chip de vínculo com o ✕ para tirar o item daquele personagem.
+const chipVinculo = (charId, charNome, item, qty) => {
+  const cor = corDaRaridade(item.rarity);
+  return `<span class="inv-chip" style="border-color:${cor}55;">
+    <span style="color:${cor};">${esc(item.name)}</span>
+    <b>${qty}×</b>
+    <button class="inv-chip-x" data-take="${charId}|${item.id}" title="Tirar de ${esc(charNome)}">✕</button>
+  </span>`;
+};
+
+// Tira um item da mochila de um personagem (usado nas duas visões).
+function ligarBotoesTirar(escopo) {
+  $$(`${escopo} [data-take]`).forEach((b) => b.onclick = async () => {
+    const [charId, itemId] = b.dataset.take.split('|');
+    const ch = state.characters.find((c) => c.id === charId);
+    const it = (state.items || []).find((i) => i.id === itemId);
+    if (!confirm(`Tirar "${it?.name}" da mochila de ${ch?.name}?`)) return;
+    await tryApi(() => api(`/characters/${charId}/inventory/${itemId}`, { method: 'DELETE' }),
+      `🗑 ${it?.name} removido de ${ch?.name}.`);
+    refresh();
+  });
+}
 
 function renderItems() {
   const itens = state.items || [];
+  const comMochila = state.characters.filter((c) => (c.inventory || []).some((l) => itens.some((i) => i.id === l.itemId)));
+  const totalEntregue = state.characters.reduce((soma, c) =>
+    soma + (c.inventory || []).reduce((s, l) => s + (itens.some((i) => i.id === l.itemId) ? l.qty : 0), 0), 0);
+
   $('#tab-items').innerHTML = `
     <div class="tab-header">
       <h2>🎒 Itens</h2>
       <div class="actions"><button class="btn gold" id="btn-new-item">+ Novo item</button></div>
     </div>
-    <p class="help-text">Crie o item uma vez aqui e entregue a quantos personagens quiser. Ao entregar, o jogador recebe um card do item por DM no Discord — e pode consultar a mochila a qualquer momento com <code>/inventario</code>.</p><br/>
+    <p class="help-text">Crie o item uma vez aqui e entregue a quantos personagens quiser. Ao entregar, o jogador recebe um card do item por DM no Discord — e pode consultar a mochila a qualquer momento com <code>/inventario</code>.</p>
+
+    <div class="settings-section" style="margin-top:14px;">
+      <h3>🔗 Quem está com o quê</h3>
+      <p class="help-text">Visão de todas as mochilas. Clique no <b>✕</b> de um item para tirá-lo daquele personagem.</p>
+      <div style="margin-top:10px;">
+        ${comMochila.length ? comMochila.map((c) => `
+          <div class="inv-owner-row">
+            <span class="inv-owner-name">
+              ${c.type === 'pc' ? '🎮' : '🎭'} <b>${esc(c.name)}</b>
+              ${c.type === 'pc' ? (c.discordUserId
+                ? `<span class="badge gold" title="Recebe itens por DM e pode usar /inventario">🔗 ${esc(c.discordTag || 'vinculado')}</span>`
+                : '<span class="badge" title="O jogador precisa usar /vincular no Discord">⛓️ sem vínculo</span>') : ''}
+            </span>
+            <div class="inv-chips">
+              ${(c.inventory || []).map((l) => {
+                const it = itens.find((i) => i.id === l.itemId);
+                return it ? chipVinculo(c.id, c.name, it, l.qty) : '';
+              }).join('')}
+            </div>
+            <button class="btn small ghost" data-open-bag="${c.id}" title="Abrir a mochila completa">Abrir</button>
+          </div>`).join('')
+          : '<div class="empty">Ninguém está com itens ainda. Use 🎁 Entregar num item abaixo.</div>'}
+      </div>
+      ${totalEntregue ? `<p class="help-text" style="margin-top:8px;">${totalEntregue} item(ns) entregue(s) entre ${comMochila.length} personagem(ns).</p>` : ''}
+    </div>
+
+    <h2 style="margin:20px 0 10px;color:var(--accent2);font-size:17px;">📦 Catálogo</h2>
     <div class="grid">${itens.map((it) => {
       const cor = corDaRaridade(it.rarity);
       const donos = donosDoItem(it.id);
@@ -406,7 +460,13 @@ function renderItems() {
           ${it.type ? `<span class="badge purple">${esc(it.type)}</span>` : ''}
         </div>
         <div class="desc">${esc(it.description || '')}</div>
-        ${donos.length ? `<div class="meta">🎒 ${donos.map((d) => `${esc(d.nome)} (${d.qty}×)`).join(', ')}</div>` : ''}
+        ${donos.length
+          ? `<div class="inv-chips" style="margin-top:8px;">${donos.map((d) => `
+              <span class="inv-chip" title="${esc(d.nome)} está com ${d.qty}">
+                ${esc(d.nome)} <b>${d.qty}×</b>
+                <button class="inv-chip-x" data-take="${d.id}|${it.id}" title="Tirar de ${esc(d.nome)}">✕</button>
+              </span>`).join('')}</div>`
+          : '<div class="meta" style="opacity:0.55;">Ninguém está com este item.</div>'}
         <div class="row">
           <button class="btn small gold" data-give="${it.id}">🎁 Entregar</button>
           <button class="btn small ghost" data-edit-item="${it.id}">✏️</button>
@@ -418,11 +478,13 @@ function renderItems() {
   $('#btn-new-item').onclick = () => itemModal();
   $$('#tab-items [data-edit-item]').forEach((b) => b.onclick = () => itemModal(itens.find((x) => x.id === b.dataset.editItem)));
   $$('#tab-items [data-del-item]').forEach((b) => b.onclick = async () => {
-    if (!confirm('Excluir este item do catálogo? Ele some das mochilas também.')) return;
+    if (!confirm('Excluir este item do catálogo? Ele some das mochilas de todo mundo também.')) return;
     await tryApi(() => api(`/items/${b.dataset.delItem}`, { method: 'DELETE' }), '🗑 Item excluído.');
     refresh();
   });
   $$('#tab-items [data-give]').forEach((b) => b.onclick = () => giveItemModal(itens.find((x) => x.id === b.dataset.give)));
+  $$('#tab-items [data-open-bag]').forEach((b) => b.onclick = () => inventoryModal(state.characters.find((c) => c.id === b.dataset.openBag)));
+  ligarBotoesTirar('#tab-items');
 }
 
 function itemModal(it = {}) {

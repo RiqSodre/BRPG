@@ -445,6 +445,27 @@ textarea { resize: vertical; min-height: 80px; }
   border-radius: 5px; border: 1px solid var(--border); background: var(--bg3); color: var(--text);
 }
 
+/* Itens: visão de vínculos (quem está com o quê) */
+.inv-owner-row {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 8px 0; border-bottom: 1px solid var(--border);
+}
+.inv-owner-row:last-child { border-bottom: none; }
+.inv-owner-name { display: flex; align-items: center; gap: 6px; min-width: 170px; font-size: 14px; }
+.inv-chips { display: flex; flex-wrap: wrap; gap: 5px; flex: 1; }
+.inv-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 14px; padding: 3px 4px 3px 9px; font-size: 12px;
+}
+.inv-chip b { color: var(--muted); font-size: 11px; }
+.inv-chip-x {
+  background: transparent; border: none; color: var(--muted);
+  cursor: pointer; font-size: 12px; line-height: 1;
+  padding: 2px 4px; border-radius: 50%; transition: background 0.12s, color 0.12s;
+}
+.inv-chip-x:hover { background: var(--danger); color: #fff; }
+
 /* Aviso de imagem detectada no modal de mapa */
 .map-img-info {
   font-size: 12px; color: var(--muted); margin: 6px 0 8px;
