@@ -384,6 +384,10 @@ textarea { resize: vertical; min-height: 80px; }
 .tool-group .btn.tool.active { background: var(--accent); color: #fff; }
 .tool-check { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 5px; }
 .tool-check input { accent-color: var(--accent); }
+.vision-radius-input {
+  width: 46px; padding: 2px 5px; font-size: 12px; text-align: center;
+  border-radius: 5px; border: 1px solid var(--border); background: var(--bg3); color: var(--text);
+}
 
 /* Galeria de mapas de exemplo */
 .sample-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }

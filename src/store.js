@@ -41,7 +41,8 @@ const DEFAULTS = {
   // Mapas de batalha: grid + imagem opcional. cellSize = metros por quadrado.
   maps: [],       // { id, name, cols, rows, cellSize, filename, imageUrl, img: { x, y, scale }, fog: { enabled, revealed: ['c,r'] } }
   // showEnemyHp: quando falso, os jogadores veem só a barra e o estado dos inimigos, não os números.
-  battle: { mapId: null, tokens: [], ping: null, showEnemyHp: false },
+  // vision: campo de visão automático — cada PC revela um raio (em metros) ao redor de si.
+  battle: { mapId: null, tokens: [], ping: null, showEnemyHp: false, vision: { enabled: false, radius: 12 } },
   // tokens: { id, name, kind: 'pc'|'npc'|'enemy', col, row, size, color, imageUrl, hp, maxHp, hidden, charId, combatName }
   activeSceneId: null,
 };

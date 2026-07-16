@@ -4,6 +4,19 @@ const el = (id) => document.getElementById(id);
 
 const bmap = new BattleMap(el('player-canvas'), { isDm: false });
 let firstMapId = null;
+let lastFocusKey = null;
+
+// Centraliza a câmera no combatente do turno, para os jogadores acompanharem a ação.
+function focusCurrentTurn(combat) {
+  if (!combat?.entries?.length) { lastFocusKey = null; return; }
+  const cur = combat.entries[combat.turn];
+  if (!cur) return;
+  const key = `${combat.round}:${combat.turn}`;
+  if (key === lastFocusKey) return; // só reposiciona quando o turno realmente muda
+  lastFocusKey = key;
+  const tok = bmap.battle.tokens.find((t) => (t.combatName || t.name) === cur.name);
+  if (tok) bmap.focusToken(tok, { smooth: true });
+}
 
 function setStatus(ok, msg) {
   el('player-dot').className = `dot ${ok ? 'on' : 'off'}`;
@@ -66,7 +79,11 @@ function connect() {
       // Enquadra sozinho quando o Mestre troca de mapa
       if (msg.map && msg.map.id !== firstMapId) {
         firstMapId = msg.map.id;
+        lastFocusKey = null;
         bmap.fit();
+      } else {
+        // Segue o turno atual conforme o combate avança
+        focusCurrentTurn(msg.combat);
       }
     } else if (msg.type === 'ping') {
       bmap.addPing(msg.col, msg.row);

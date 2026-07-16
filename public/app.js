@@ -766,6 +766,14 @@ function renderMapTab() {
               <button class="btn small ghost" id="btn-map-fit">⤢ Enquadrar</button>
             </div>
             <div class="tool-group">
+              <label class="tool-check" title="Cada personagem dos jogadores revela um raio ao redor de si; o resto fica na névoa — atualiza sozinho quando eles se movem">
+                <input type="checkbox" id="vision-enabled" /> 👁️ Visão dos jogadores
+              </label>
+              <label class="tool-check" title="Raio de visão de cada personagem, em metros">
+                Raio <input type="number" id="vision-radius" min="3" max="60" step="1" class="vision-radius-input" /> m
+              </label>
+            </div>
+            <div class="tool-group">
               <label class="tool-check" title="Desligado, os jogadores veem só a barra e o estado (Ferido, Quase morto...) dos inimigos">
                 <input type="checkbox" id="show-enemy-hp" /> PV dos inimigos aos jogadores
               </label>
@@ -888,6 +896,21 @@ function renderMapTab() {
     $('#btn-fog-all').onclick = () => setFogAll(true);
     $('#btn-fog-none').onclick = () => setFogAll(false);
 
+    $('#vision-enabled').onchange = (e) => {
+      const atual = state.battle.vision || { radius: 12 };
+      state.battle.vision = { ...atual, enabled: e.target.checked };
+      pushBattle();
+      toast(e.target.checked
+        ? '👁️ Visão automática ligada — os jogadores só veem ao redor dos personagens.'
+        : 'Visão automática desligada — os jogadores voltam a ver o mapa todo (ou a névoa manual).');
+    };
+    $('#vision-radius').onchange = (e) => {
+      const r = Math.max(3, Math.min(60, Number(e.target.value) || 12));
+      e.target.value = r;
+      state.battle.vision = { ...(state.battle.vision || { enabled: true }), radius: r };
+      pushBattle();
+    };
+
     $('#show-enemy-hp').onchange = (e) => {
       state.battle.showEnemyHp = e.target.checked;
       pushBattle();
@@ -976,6 +999,8 @@ function renderMapTab() {
   const map = activeMap();
   $('#fog-enabled').checked = Boolean(map?.fog?.enabled);
   $('#show-enemy-hp').checked = Boolean(state.battle.showEnemyHp);
+  $('#vision-enabled').checked = Boolean(state.battle.vision?.enabled);
+  $('#vision-radius').value = state.battle.vision?.radius ?? 12;
   bmap.setData({ map, battle: state.battle, combat: state.combat });
   renderMapSide();
 }

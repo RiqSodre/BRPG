@@ -223,6 +223,44 @@ class BattleMap {
     this.draw();
   }
 
+  // Centraliza a câmera num ponto do grid (px), opcionalmente com deslize suave.
+  focusPx(tx, ty, { smooth = true } = {}) {
+    if (!this.map) return;
+    const dpr = window.devicePixelRatio || 1;
+    const w = this.canvas.width / dpr;
+    const h = this.canvas.height / dpr;
+    const target = { x: w / 2 - tx * this.cam.zoom, y: h / 2 - ty * this.cam.zoom };
+    if (!smooth) { this.cam.x = target.x; this.cam.y = target.y; this.draw(); return; }
+    this._camTarget = target;
+    this._camAnimate();
+  }
+
+  // Centraliza a câmera num token (usa o centro dele, respeitando o tamanho).
+  focusToken(t, opts) {
+    if (!t) return;
+    const size = t.size || 1;
+    this.focusPx(t.col * CELL + size * CELL / 2, t.row * CELL + size * CELL / 2, opts);
+  }
+
+  _camAnimate() {
+    if (this._camAnim) return;
+    const step = () => {
+      const t = this._camTarget;
+      if (!t) { this._camAnim = null; return; }
+      this.cam.x += (t.x - this.cam.x) * 0.2;
+      this.cam.y += (t.y - this.cam.y) * 0.2;
+      if (Math.abs(t.x - this.cam.x) < 0.5 && Math.abs(t.y - this.cam.y) < 0.5) {
+        this.cam.x = t.x; this.cam.y = t.y;
+        this._camTarget = null; this._camAnim = null;
+        this.draw();
+        return;
+      }
+      this.draw();
+      this._camAnim = requestAnimationFrame(step);
+    };
+    this._camAnim = requestAnimationFrame(step);
+  }
+
   select(id) {
     this.selectedId = id;
     this.draw();
@@ -499,6 +537,7 @@ class BattleMap {
     for (let r = 0; r <= this.map.rows; r++) { ctx.moveTo(0, r * CELL); ctx.lineTo(gw, r * CELL); }
     ctx.stroke();
 
+    this._reveal = this._computeReveal(); // reaproveitado por _drawFog e _isVisible
     this._drawFog(gw, gh);
     this._drawAoe();
     this._drawTokens();
@@ -584,13 +623,45 @@ class BattleMap {
     ctx.restore();
   }
 
+  // Conjunto de células reveladas: névoa pintada à mão (map.fog) unida com o campo de
+  // visão automático (raio ao redor de cada PC). Devolve null quando nada esconde nada.
+  _computeReveal() {
+    const visionOn = this.battle?.vision?.enabled;
+    const manualOn = this.map?.fog?.enabled;
+    if (!visionOn && !manualOn) return null;
+    const set = new Set();
+    if (manualOn) for (const cell of this.map.fog.revealed || []) set.add(cell);
+    if (visionOn) {
+      const rCells = Math.max(1, (this.battle.vision.radius || 12) / (this.map.cellSize || 1.5));
+      for (const t of this.battle.tokens) {
+        if (t.kind !== 'pc' || t.hidden) continue; // só personagens dos jogadores enxergam
+        const size = t.size || 1;
+        const cc = t.col + size / 2;
+        const cr = t.row + size / 2;
+        const R = rCells + (size - 1) / 2;
+        const minC = Math.max(0, Math.floor(cc - R));
+        const maxC = Math.min(this.map.cols - 1, Math.ceil(cc + R));
+        const minR = Math.max(0, Math.floor(cr - R));
+        const maxR = Math.min(this.map.rows - 1, Math.ceil(cr + R));
+        for (let c = minC; c <= maxC; c++) {
+          for (let r = minR; r <= maxR; r++) {
+            const dc = (c + 0.5) - cc;
+            const dr = (r + 0.5) - cr;
+            if (Math.hypot(dc, dr) <= R) set.add(`${c},${r}`);
+          }
+        }
+      }
+    }
+    return set;
+  }
+
   _drawFog(gw, gh) {
-    const fog = this.map.fog;
-    if (!fog?.enabled) return;
+    const revealed = this._reveal;
+    if (!revealed) return;
     const { ctx } = this;
-    const revealed = new Set(fog.revealed || []);
-    // Para o Mestre a névoa é translúcida (ele enxerga através); para o jogador é opaca.
-    ctx.fillStyle = this.isDm ? 'rgba(10,8,16,0.6)' : '#0a0810';
+    // Para o Mestre a névoa é translúcida (ele vê tudo e sabe o que os jogadores enxergam);
+    // para o jogador é opaca — só aparece o que está dentro do campo de visão.
+    ctx.fillStyle = this.isDm ? 'rgba(10,8,16,0.55)' : '#0a0810';
     for (let c = 0; c < this.map.cols; c++) {
       for (let r = 0; r < this.map.rows; r++) {
         if (!revealed.has(`${c},${r}`)) ctx.fillRect(c * CELL, r * CELL, CELL, CELL);
@@ -601,9 +672,8 @@ class BattleMap {
   _isVisible(t) {
     // Token em célula não revelada não aparece para o jogador
     if (this.isDm) return true;
-    const fog = this.map.fog;
-    if (!fog?.enabled) return true;
-    const revealed = new Set(fog.revealed || []);
+    const revealed = this._reveal;
+    if (!revealed) return true;
     const size = t.size || 1;
     for (let c = t.col; c < t.col + size; c++) {
       for (let r = t.row; r < t.row + size; r++) {
@@ -635,6 +705,7 @@ class BattleMap {
       const cx = px + d / 2;
       const cy = py + d / 2;
       const radius = d / 2 - 4;
+      const isPlayer = !this.isDm; // na tela dos jogadores, HUD maior e legível
 
       ctx.save();
       if (t.hidden) ctx.globalAlpha = 0.45; // só o Mestre chega aqui com hidden
@@ -684,14 +755,16 @@ class BattleMap {
         ctx.setLineDash([]);
       }
 
-      // Barra de vida
+      // Barra de vida (mais grossa e sempre legível na tela dos jogadores)
       const frac = hpFraction(t);
       if (frac !== null) {
+        const barH = isPlayer ? Math.max(8, 9 / this.cam.zoom) : 6;
         const bw = d - 12;
-        ctx.fillStyle = 'rgba(0,0,0,0.65)';
-        ctx.fillRect(px + 6, py + d - 10, bw, 6);
+        const barY = py + d - barH - 4;
+        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx.fillRect(px + 6, barY, bw, barH);
         ctx.fillStyle = frac > 0.5 ? '#4ade80' : frac > 0.25 ? '#c4a747' : '#e05252';
-        ctx.fillRect(px + 6, py + d - 10, bw * frac, 6);
+        ctx.fillRect(px + 6, barY, bw * frac, barH);
         if (frac === 0) {
           ctx.fillStyle = '#e05252';
           ctx.font = `bold ${Math.round(d * 0.5)}px Segoe UI, sans-serif`;
@@ -709,10 +782,10 @@ class BattleMap {
         ctx.fillText('🧠', px + 3, py + 3);
       }
 
-      // Condições: fileira de ícones logo acima do token
+      // Condições: fileira de ícones logo acima do token (maiores para os jogadores)
       const conds = t.conditions || [];
       if (conds.length) {
-        const s = Math.round(d * 0.26);
+        const s = isPlayer ? Math.max(Math.round(d * 0.26), 20 / this.cam.zoom) : Math.round(d * 0.26);
         ctx.font = `${s}px Segoe UI, sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';
@@ -725,18 +798,22 @@ class BattleMap {
       }
 
       // Nome e vida embaixo: "Theo · 22/30" para os PC, "Goblin · Ferido" para o que os
-      // jogadores só conseguem estimar no olho.
+      // jogadores só conseguem estimar no olho. Na tela dos jogadores fica bem maior.
       const vida = t.hp != null && t.maxHp > 0 ? `${t.hp}/${t.maxHp}`
         : t.hpLabel ? t.hpLabel : '';
       const label = vida ? `${t.name || ''} · ${vida}` : (t.name || '');
-      ctx.font = '12px Segoe UI, sans-serif';
+      const fontPx = isPlayer ? Math.max(16, 14 / this.cam.zoom) : 12;
+      ctx.font = `${isPlayer ? '600 ' : ''}${fontPx}px Segoe UI, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
       const tw = ctx.measureText(label).width;
-      ctx.fillStyle = 'rgba(10,8,16,0.75)';
-      ctx.fillRect(cx - tw / 2 - 4, py + d + 2, tw + 8, 16);
-      ctx.fillStyle = '#e8e2f5';
-      ctx.fillText(label, cx, py + d + 4);
+      const padX = fontPx * 0.45;
+      const boxH = fontPx * 1.3;
+      const ly = py + d + Math.max(2, 4 / this.cam.zoom);
+      ctx.fillStyle = 'rgba(10,8,16,0.82)';
+      ctx.fillRect(cx - tw / 2 - padX, ly, tw + padX * 2, boxH);
+      ctx.fillStyle = '#f0ecff';
+      ctx.fillText(label, cx, ly + boxH * 0.14);
       ctx.restore();
     }
   }
