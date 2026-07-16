@@ -139,6 +139,9 @@ export function createMesaWss() {
       } else if (msg.type === 'fx' && msg.fx) {
         // Efeito de combate efêmero — repassa para as telas dos jogadores.
         broadcastEvent({ type: 'fx', fx: msg.fx });
+      } else if (msg.type === 'aoe') {
+        // Área de efeito (o template) — repassa; null limpa nas telas.
+        broadcastEvent({ type: 'aoe', aoe: msg.aoe || null });
       }
     });
 

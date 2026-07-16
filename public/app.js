@@ -712,6 +712,14 @@ function triggerFx(kind, col, row, opts = {}) {
   if (mesaWs?.readyState === WebSocket.OPEN) mesaWs.send(JSON.stringify({ type: 'fx', fx }));
 }
 
+// Repassa a área de efeito (o template do Mestre) para a tela dos jogadores verem
+// a zona atingida e quem está dentro. null limpa a área nas telas.
+function pushAoe(aoe) {
+  if (mesaWs?.readyState === WebSocket.OPEN) {
+    mesaWs.send(JSON.stringify({ type: 'aoe', aoe: aoe ? { col: aoe.col, row: aoe.row, radius: aoe.radius } : null }));
+  }
+}
+
 function connectMesa() {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   mesaWs = new WebSocket(`${proto}//${location.host}/mesa`);
@@ -822,7 +830,7 @@ function renderMapTab() {
     };
     bmap.onTokenClick = (t) => tokenModal(t);
     bmap.onSelect = () => renderTokenPanel();
-    bmap.onAoe = () => renderAoePanel();
+    bmap.onAoe = () => { renderAoePanel(); pushAoe(bmap.aoe); };
 
     // Atalhos: o Mestre roda o combate sem tirar a mão do mapa
     document.addEventListener('keydown', (e) => {

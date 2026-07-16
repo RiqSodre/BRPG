@@ -482,7 +482,9 @@ class BattleMap {
       this.pings = this.pings.filter((p) => now - p.t < 2000);
       this.fx = this.fx.filter((f) => now - f.t < f.dur);
       this.draw();
-      if (this.pings.length || this.fx.length) {
+      // Mantém o loop enquanto houver ping, efeito ou área com alvos (aro pulsante).
+      const areaComAlvo = this.aoe && this.tokensInAoe().length > 0;
+      if (this.pings.length || this.fx.length || areaComAlvo) {
         this._anim = requestAnimationFrame(frame);
       } else {
         this._anim = null;
@@ -551,7 +553,7 @@ class BattleMap {
 
   // Área de efeito: círculo + os quadrados que ela pega + quem está dentro
   _drawAoe() {
-    if (!this.aoe) return;
+    if (!this.aoe || !this.map) return;
     const { ctx } = this;
     const m = this.map.cellSize || 1.5;
     const rCells = this.aoe.radius / m;
@@ -574,7 +576,26 @@ class BattleMap {
     ctx.lineWidth = 3 / this.cam.zoom;
     ctx.stroke();
 
-    const alvos = this.tokensInAoe().length;
+    // Destaca quem está dentro (os atingidos): aro vermelho pulsante ao redor do token
+    const dentro = this.tokensInAoe();
+    const pulse = 0.55 + 0.45 * Math.abs(Math.sin(performance.now() / 300));
+    for (const t of dentro) {
+      const size = t.size || 1;
+      const tcx = t.col * CELL + size * CELL / 2;
+      const tcy = t.row * CELL + size * CELL / 2;
+      const rr = size * CELL / 2 + 2;
+      ctx.save();
+      ctx.globalAlpha = pulse;
+      ctx.beginPath();
+      ctx.arc(tcx, tcy, rr, 0, Math.PI * 2);
+      ctx.strokeStyle = '#ff4d4d';
+      ctx.lineWidth = 4 / this.cam.zoom;
+      ctx.stroke();
+      ctx.restore();
+    }
+    if (dentro.length) this._animate(); // mantém o pulso vivo enquanto há alvos
+
+    const alvos = dentro.length;
     const text = `${this.aoe.radius.toFixed(1)} m · ${alvos} alvo(s)`;
     ctx.font = `bold ${14 / this.cam.zoom}px Segoe UI, sans-serif`;
     ctx.textAlign = 'center';

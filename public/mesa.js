@@ -89,6 +89,8 @@ function connect() {
       bmap.addPing(msg.col, msg.row);
     } else if (msg.type === 'fx' && msg.fx) {
       bmap.playFx(msg.fx);
+    } else if (msg.type === 'aoe') {
+      bmap.setAoe(msg.aoe || null);
     }
   };
   ws.onclose = () => {
