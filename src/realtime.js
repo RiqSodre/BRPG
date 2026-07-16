@@ -136,6 +136,9 @@ export function createMesaWss() {
         }
       } else if (msg.type === 'ping') {
         broadcastEvent({ type: 'ping', col: msg.col, row: msg.row });
+      } else if (msg.type === 'fx' && msg.fx) {
+        // Efeito de combate efêmero — repassa para as telas dos jogadores.
+        broadcastEvent({ type: 'fx', fx: msg.fx });
       }
     });
 

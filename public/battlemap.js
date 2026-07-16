@@ -16,6 +16,105 @@ function loadImg(src, onLoad) {
 
 const KIND_COLOR = { pc: '#4ade80', npc: '#c4a747', enemy: '#e05252' };
 
+// ---------- Efeitos visuais de combate (elementais) ----------
+// Cada preset define cor, quantas partículas, se sobem (up) ou explodem (burst),
+// o emoji que "estoura" no centro e adornos (anel de choque, raio).
+const FX_PRESETS = {
+  fire:      { emoji: '🔥', color: '#ff6a1a', color2: '#ffd21a', dur: 900,  n: 22, spread: 'up',    ring: false, glow: true },
+  ice:       { emoji: '❄️', color: '#7fd8ff', color2: '#eaffff', dur: 1000, n: 16, spread: 'burst', ring: true },
+  lightning: { emoji: '⚡', color: '#fff45e', color2: '#bcd0ff', dur: 700,  n: 8,  spread: 'burst', bolt: true },
+  holy:      { emoji: '✨', color: '#ffe58a', color2: '#fffbe0', dur: 1100, n: 18, spread: 'up',    ring: true, glow: true },
+  poison:    { emoji: '☠️', color: '#8fd14f', color2: '#d6f5a0', dur: 1100, n: 16, spread: 'up',    glow: true },
+  impact:    { emoji: '💥', color: '#ff5252', color2: '#ffffff', dur: 650,  n: 14, spread: 'burst', ring: true },
+  heal:      { emoji: '💚', color: '#4ade80', color2: '#eaffea', dur: 1000, n: 14, spread: 'up',    ring: true, glow: true },
+};
+
+// Sons sintetizados no navegador (Web Audio) — tocam na tela do Mestre e na dos jogadores,
+// sem precisar de arquivos. O contexto só "acorda" após um gesto do usuário (regra dos browsers).
+const FxAudio = (() => {
+  let ac = null;
+  const ctx = () => {
+    if (!ac) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      try { ac = new AC(); } catch { return null; }
+    }
+    if (ac.state === 'suspended') ac.resume().catch(() => {});
+    return ac;
+  };
+  // Desbloqueia o áudio no primeiro toque/tecla de quem estiver assistindo.
+  const unlock = () => ctx();
+  window.addEventListener('pointerdown', unlock);
+  window.addEventListener('keydown', unlock);
+
+  const tone = (freq, t0, dur, { type = 'sine', gain = 0.2, slideTo = null } = {}) => {
+    const a = ctx(); if (!a) return;
+    const o = a.createOscillator();
+    const g = a.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, t0);
+    if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t0 + dur);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.linearRampToValueAtTime(gain, t0 + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g).connect(a.destination);
+    o.start(t0); o.stop(t0 + dur + 0.03);
+  };
+  const noise = (t0, dur, { gain = 0.2, lp = 2000, hp = 100, slideLp = null } = {}) => {
+    const a = ctx(); if (!a) return;
+    const n = Math.floor(a.sampleRate * dur);
+    const buf = a.createBuffer(1, n, a.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+    const src = a.createBufferSource(); src.buffer = buf;
+    const g = a.createGain();
+    g.gain.setValueAtTime(gain, t0);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    const lpf = a.createBiquadFilter(); lpf.type = 'lowpass'; lpf.frequency.setValueAtTime(lp, t0);
+    if (slideLp) lpf.frequency.exponentialRampToValueAtTime(slideLp, t0 + dur);
+    const hpf = a.createBiquadFilter(); hpf.type = 'highpass'; hpf.frequency.value = hp;
+    src.connect(hpf).connect(lpf).connect(g).connect(a.destination);
+    src.start(t0); src.stop(t0 + dur + 0.03);
+  };
+
+  const play = (kind) => {
+    const a = ctx(); if (!a) return;
+    const t = a.currentTime;
+    switch (kind) {
+      case 'fire':
+        noise(t, 0.5, { gain: 0.16, lp: 1600, slideLp: 380, hp: 150 });
+        tone(180, t, 0.4, { type: 'sawtooth', gain: 0.05, slideTo: 70 });
+        break;
+      case 'ice':
+        tone(1400, t, 0.5, { type: 'triangle', gain: 0.1, slideTo: 2300 });
+        tone(1950, t + 0.05, 0.4, { type: 'sine', gain: 0.07 });
+        noise(t, 0.14, { gain: 0.05, hp: 4200, lp: 9000 });
+        break;
+      case 'lightning':
+        noise(t, 0.18, { gain: 0.24, lp: 9000, hp: 1500, slideLp: 3000 });
+        tone(880, t, 0.12, { type: 'square', gain: 0.07, slideTo: 180 });
+        break;
+      case 'holy':
+        [523, 659, 784, 1046].forEach((f, i) => tone(f, t + i * 0.06, 0.7 - i * 0.05, { type: 'sine', gain: 0.11 }));
+        break;
+      case 'poison':
+        [230, 185, 150].forEach((f, i) => tone(f, t + i * 0.12, 0.2, { type: 'sine', gain: 0.13, slideTo: f * 1.7 }));
+        break;
+      case 'heal':
+        [523, 784].forEach((f, i) => tone(f, t + i * 0.09, 0.6, { type: 'sine', gain: 0.12, slideTo: f * 1.5 }));
+        break;
+      case 'impact':
+      default:
+        noise(t, 0.18, { gain: 0.26, lp: 800, hp: 60 });
+        tone(120, t, 0.22, { type: 'sine', gain: 0.17, slideTo: 45 });
+        break;
+    }
+  };
+  return { play };
+})();
+window.playFxSound = (kind) => FxAudio.play(kind);
+window.FX_KINDS = Object.keys(FX_PRESETS);
+
 // Ícone de cada condição do 5e — aparece no token, na lista e na tela dos jogadores.
 const CONDITION_ICON = {
   Agarrado: '🤼', Amedrontado: '😱', Atordoado: '💫', Caído: '🔻', Cego: '🙈',
@@ -43,6 +142,7 @@ class BattleMap {
     this.cam = { x: 0, y: 0, zoom: 1 };
     this.tool = 'select';
     this.pings = [];
+    this.fx = [];           // efeitos de combate transitórios (fogo, impacto, cura...)
     this.ruler = null;      // { from: {col,row}, to: {col,row} }
     this.drag = null;
     this.selectedId = null; // token em foco no painel de ação
@@ -90,6 +190,25 @@ class BattleMap {
 
   addPing(col, row) {
     this.pings.push({ col, row, t: performance.now() });
+    this._animate();
+  }
+
+  // Dispara um efeito de combate numa célula. Também toca o som correspondente.
+  // { type: 'fire'|'ice'|'lightning'|'holy'|'poison'|'impact'|'heal', col, row, size, text }
+  playFx({ type = 'impact', col = 0, row = 0, size = 1, text = '', textCol = '' } = {}) {
+    const preset = FX_PRESETS[type] || FX_PRESETS.impact;
+    const cx = col * CELL + CELL * size / 2;
+    const cy = row * CELL + CELL * size / 2;
+    const spread = CELL * (0.4 + size * 0.25);
+    const particles = [];
+    for (let i = 0; i < (preset.n || 0); i++) {
+      const up = preset.spread === 'up';
+      const a = up ? (-Math.PI / 2) + (Math.random() - 0.5) * 1.1 : Math.random() * Math.PI * 2;
+      particles.push({ a, sp: (0.5 + Math.random() * 1.0) * spread, r0: 3 + Math.random() * 5, ph: Math.random() });
+    }
+    const bolts = preset.bolt ? [Math.random(), Math.random(), Math.random()] : null;
+    this.fx.push({ type, cx, cy, size, t: performance.now(), dur: preset.dur, preset, particles, bolts, text, textCol });
+    if (window.playFxSound) window.playFxSound(type);
     this._animate();
   }
 
@@ -317,13 +436,15 @@ class BattleMap {
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
-  // Anima só enquanto existe ping na tela; fora disso o canvas fica parado.
+  // Anima só enquanto existe ping ou efeito na tela; fora disso o canvas fica parado.
   _animate() {
     if (this._anim) return;
     const frame = () => {
-      this.pings = this.pings.filter((p) => performance.now() - p.t < 2000);
+      const now = performance.now();
+      this.pings = this.pings.filter((p) => now - p.t < 2000);
+      this.fx = this.fx.filter((f) => now - f.t < f.dur);
       this.draw();
-      if (this.pings.length) {
+      if (this.pings.length || this.fx.length) {
         this._anim = requestAnimationFrame(frame);
       } else {
         this._anim = null;
@@ -384,6 +505,7 @@ class BattleMap {
     this._drawMoveRuler();
     this._drawRuler();
     this._drawPings();
+    this._drawFx();
 
     ctx.restore();
   }
@@ -673,6 +795,104 @@ class BattleMap {
         ctx.arc(cx, cy, CELL * 0.3 + t * CELL * 1.4, 0, Math.PI * 2);
         ctx.stroke();
       }
+      ctx.restore();
+    }
+  }
+
+  _drawFx() {
+    const { ctx } = this;
+    const now = performance.now();
+    const z = this.cam.zoom;
+    for (const fx of this.fx) {
+      const age = (now - fx.t) / fx.dur; // 0 → 1
+      if (age < 0 || age > 1) continue;
+      const p = fx.preset;
+      const fade = 1 - age;
+      ctx.save();
+
+      // Anel de choque
+      if (p.ring) {
+        ctx.globalAlpha = fade * 0.9;
+        ctx.strokeStyle = p.color;
+        ctx.lineWidth = 3.5 / z;
+        ctx.beginPath();
+        ctx.arc(fx.cx, fx.cy, CELL * 0.15 + age * CELL * (0.7 + fx.size * 0.4), 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // Raios (relâmpago): riscos irregulares de cima até a célula, piscando no começo
+      if (fx.bolts && age < 0.5) {
+        ctx.globalAlpha = (1 - age * 2);
+        ctx.strokeStyle = p.color2;
+        ctx.lineWidth = 2.5 / z;
+        for (const seed of fx.bolts) {
+          ctx.beginPath();
+          const x0 = fx.cx + (seed - 0.5) * CELL * 1.2;
+          let y = fx.cy - CELL * 1.8;
+          ctx.moveTo(x0, y);
+          let x = x0;
+          while (y < fx.cy) {
+            y += CELL * 0.3;
+            x += (Math.random() - 0.5) * CELL * 0.5;
+            ctx.lineTo(x, y);
+          }
+          ctx.lineTo(fx.cx, fx.cy);
+          ctx.stroke();
+        }
+      }
+
+      // Brilho central (glow)
+      if (p.glow) {
+        const gr = CELL * (0.2 + age * 0.6) * fx.size;
+        const grd = ctx.createRadialGradient(fx.cx, fx.cy, 0, fx.cx, fx.cy, gr);
+        grd.addColorStop(0, p.color2);
+        grd.addColorStop(1, 'transparent');
+        ctx.globalAlpha = fade * 0.5;
+        ctx.fillStyle = grd;
+        ctx.beginPath();
+        ctx.arc(fx.cx, fx.cy, gr, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Partículas
+      for (const pt of fx.particles) {
+        const dist = pt.sp * age;
+        const gx = fx.cx + Math.cos(pt.a) * dist;
+        // 'up' ganha um empurrãozinho extra pra cima e alarga
+        const gy = fx.cy + Math.sin(pt.a) * dist - (p.spread === 'up' ? age * CELL * 0.3 : 0);
+        const rad = Math.max(0.5, pt.r0 * (1 - age * 0.75)) / z;
+        ctx.globalAlpha = fade * (0.7 + pt.ph * 0.3);
+        ctx.fillStyle = age < 0.45 ? p.color2 : p.color;
+        ctx.beginPath();
+        ctx.arc(gx, gy, rad, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Emoji que "estoura" no centro
+      const pop = age < 0.28 ? age / 0.28 : 1;
+      const scale = 0.55 + pop * 0.75;
+      ctx.globalAlpha = Math.max(0, 1 - Math.max(0, (age - 0.35) / 0.65));
+      ctx.font = `${CELL * 0.62 * scale * fx.size}px serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(p.emoji, fx.cx, fx.cy - age * CELL * 0.15);
+
+      // Número flutuante de dano/cura (tamanho constante na tela)
+      if (fx.text) {
+        const rise = age * CELL * 0.9;
+        ctx.globalAlpha = 1 - age * age;
+        ctx.font = `900 ${22 / z}px Segoe UI, Arial, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const tx = fx.cx;
+        const ty = fx.cy - CELL * 0.35 - rise;
+        ctx.lineWidth = 4 / z;
+        ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+        ctx.strokeText(fx.text, tx, ty);
+        ctx.fillStyle = fx.textCol || p.color2;
+        ctx.fillText(fx.text, tx, ty);
+      }
+
       ctx.restore();
     }
   }

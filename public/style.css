@@ -445,6 +445,21 @@ textarea { resize: vertical; min-height: 80px; }
 }
 .cond-toggle:hover { border-color: var(--accent); }
 .cond-toggle.on { background: var(--accent); border-color: var(--accent); }
+
+/* Paleta de efeitos de combate (fogo, gelo, raio...) */
+.fx-palette {
+  display: flex; gap: 4px; margin: 6px 0 8px;
+  padding: 5px; border-radius: 8px;
+  background: linear-gradient(180deg, rgba(196,167,71,0.07), transparent);
+  border: 1px solid var(--border);
+}
+.fx-btn {
+  flex: 1; background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 6px; padding: 5px 0; font-size: 17px; line-height: 1;
+  cursor: pointer; transition: transform 0.08s, background 0.12s, border-color 0.12s;
+}
+.fx-btn:hover { background: var(--bg2); border-color: var(--accent2); transform: translateY(-1px); }
+.fx-btn:active { transform: scale(0.9); }
 .aoe-targets { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
 
 /* Linha de expressão + dado + resultado */

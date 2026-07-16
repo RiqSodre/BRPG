@@ -695,6 +695,23 @@ function pushMap(map) {
   else api(`/maps/${map.id}`, { method: 'PUT', body: map }).catch(() => {});
 }
 
+// Paleta de efeitos elementais que o Mestre dispara à mão (golpes, magias...).
+const FX_PALETTE = [
+  { kind: 'fire',      emoji: '🔥', label: 'Fogo' },
+  { kind: 'ice',       emoji: '❄️', label: 'Gelo' },
+  { kind: 'lightning', emoji: '⚡', label: 'Raio' },
+  { kind: 'holy',      emoji: '✨', label: 'Sagrado' },
+  { kind: 'poison',    emoji: '☠️', label: 'Veneno' },
+  { kind: 'impact',    emoji: '💥', label: 'Impacto' },
+];
+
+// Dispara um efeito visual+sonoro na tela do Mestre E repassa para a dos jogadores.
+function triggerFx(kind, col, row, opts = {}) {
+  const fx = { type: kind, col, row, ...opts };
+  if (bmap) bmap.playFx(fx);
+  if (mesaWs?.readyState === WebSocket.OPEN) mesaWs.send(JSON.stringify({ type: 'fx', fx }));
+}
+
 function connectMesa() {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   mesaWs = new WebSocket(`${proto}//${location.host}/mesa`);
@@ -1113,6 +1130,9 @@ async function applyHp(tokens, delta) {
     } else {
       mexeuNoToken = true;
     }
+    // Feedback visual + sonoro no token (número flutuante e impacto/cura)
+    if (delta < 0) triggerFx('impact', t.col, t.row, { size: t.size || 1, text: `-${-delta}`, textCol: '#ff6b6b' });
+    else triggerFx('heal', t.col, t.row, { size: t.size || 1, text: `+${delta}`, textCol: '#86efac' });
   }
 
   // pushBattle ANTES do await para capturar o HP mutado antes que um broadcast reverta o state.battle
@@ -1258,6 +1278,9 @@ function renderTokenPanel() {
         <button class="btn small danger" id="act-dmg" title="Enter aplica dano">💥 Dano</button>
         <button class="btn small" id="act-heal">💚 Cura</button>
       </div>
+      <div class="fx-palette" title="Dispara um efeito visual e sonoro no token, na sua tela e na dos jogadores">
+        ${FX_PALETTE.map((f) => `<button class="fx-btn" data-fx="${f.kind}" title="${esc(f.label)}">${f.emoji}</button>`).join('')}
+      </div>
       <div class="act-conds">
         ${CONDITIONS.map((c) => {
           const on = conds.includes(c);
@@ -1286,6 +1309,8 @@ function renderTokenPanel() {
     if (entryOf(t)) await saveCombatState(); else pushBattle();
     renderMapSide();
   };
+  $$('#token-panel [data-fx]').forEach((b) => b.onclick = () =>
+    triggerFx(b.dataset.fx, t.col, t.row, { size: t.size || 1 }));
   $('#act-dup').onclick = () => duplicateToken(t.id);
   $('#act-hide').onclick = () => { t.hidden = !t.hidden; pushBattle(); renderMapSide(); };
   $('#act-edit').onclick = () => tokenModal(t);
@@ -1305,6 +1330,9 @@ function renderAoePanel() {
       ${alvos.length
         ? `<div class="aoe-targets">${alvos.map((t) => `<span class="cond-chip">${t.kind === 'pc' ? '🎮' : '👹'} ${esc(t.name)}</span>`).join('')}</div>`
         : '<div class="help-text">Ninguém dentro da área.</div>'}
+      <div class="fx-palette" title="Dispara o efeito em todos na área — na sua tela e na dos jogadores">
+        ${FX_PALETTE.map((f) => `<button class="fx-btn" data-aoefx="${f.kind}" title="${esc(f.label)} na área">${f.emoji}</button>`).join('')}
+      </div>
       <div class="aoe-roll-row">
         <span class="aoe-roll-label">Dano:</span>
         <input type="text" id="aoe-expr" placeholder="8d6" class="aoe-expr-input" />
@@ -1320,6 +1348,14 @@ function renderAoePanel() {
 
   const alvosIds = new Set(alvos.map((t) => t.id));
   const liveAlvos = () => state.battle.tokens.filter((t) => alvosIds.has(t.id));
+
+  // Paleta de efeitos na área: um estouro em cada alvo, em cascata (ou no centro se vazia).
+  $$('#aoe-panel [data-aoefx]').forEach((b) => b.onclick = () => {
+    const kind = b.dataset.aoefx;
+    const vivos = liveAlvos();
+    if (!vivos.length) { triggerFx(kind, aoe.col, aoe.row, { size: 2 }); return; }
+    vivos.forEach((t, i) => setTimeout(() => triggerFx(kind, t.col, t.row, { size: t.size || 1 }), i * 90));
+  });
 
   let rolledValue = 0;
 

@@ -70,6 +70,8 @@ function connect() {
       }
     } else if (msg.type === 'ping') {
       bmap.addPing(msg.col, msg.row);
+    } else if (msg.type === 'fx' && msg.fx) {
+      bmap.playFx(msg.fx);
     }
   };
   ws.onclose = () => {
