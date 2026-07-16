@@ -516,16 +516,25 @@ function giveItemModal(it) {
   ];
   openModal(`🎁 Entregar ${esc(it.name)}`, `
     ${fieldSelect('Para quem', 'charId', opts, opts[0].value)}
-    ${field('Quantidade', 'qty', 1, 'number')}
+    <div class="field">
+      <label>Quantidade</label>
+      <input name="qty" type="number" min="1" step="1" value="1" />
+    </div>
     <label class="tool-check" style="margin:8px 0;">
       <input type="checkbox" name="notify" checked /> 📨 Avisar o jogador por DM no Discord (card do item)
     </label>
-    <p class="help-text">Sem vínculo no Discord, o item entra na mochila mesmo assim — o jogador só não recebe o aviso. Ele vincula com <code>/vincular</code>.</p>
+    <p class="help-text">Sem vínculo no Discord, o item entra na mochila mesmo assim — o jogador só não recebe o aviso. Ele vincula com <code>/vincular</code>. Para <b>tirar</b> itens, use o ✕ na mochila.</p>
   `, async (data) => {
     const notify = $('#modal-form [name="notify"]').checked;
+    // Lança em vez de "corrigir": o modal fica aberto mostrando o motivo,
+    // e o Mestre não recebe o oposto do que pediu.
+    const qty = Math.floor(Number(data.qty));
+    if (!Number.isFinite(qty) || qty < 1) {
+      throw new Error('A quantidade precisa ser um número inteiro de 1 para cima. Para tirar itens, use o ✕ na mochila.');
+    }
     const r = await api(`/characters/${data.charId}/inventory`, {
       method: 'POST',
-      body: { itemId: it.id, qty: Number(data.qty) || 1, notify },
+      body: { itemId: it.id, qty, notify },
     });
     const quem = state.characters.find((c) => c.id === data.charId)?.name || 'personagem';
     if (r.aviso) toast(`🎒 ${it.name} foi para a mochila de ${quem}, mas o DM falhou: ${r.aviso}`, true);

@@ -100,7 +100,12 @@ export function startServer() {
     const ch = acharPersonagem(req.params.id);
     const item = getItem('items', req.body.itemId);
     if (!item) throw new Error('Item não encontrado no catálogo.');
-    const qty = Math.max(1, Number(req.body.qty) || 1);
+    // Recusa quantidade inválida em vez de "consertar" no silêncio: antes um -1
+    // virava +1 (Math.max) e o Mestre via o oposto do que pediu.
+    const qty = Math.floor(Number(req.body.qty));
+    if (!Number.isFinite(qty) || qty < 1) {
+      throw new Error('A quantidade a entregar precisa ser um número inteiro de 1 para cima. Para tirar itens, use o ✕ na mochila.');
+    }
     const linha = ch.inventory.find((l) => l.itemId === item.id);
     if (linha) linha.qty += qty; else ch.inventory.push({ itemId: item.id, qty });
     save();
@@ -116,9 +121,11 @@ export function startServer() {
   // Ajusta a quantidade (0 ou menos remove o item da mochila).
   app.put('/api/characters/:id/inventory/:itemId', wrap(async (req, res) => {
     const ch = acharPersonagem(req.params.id);
-    const qty = Number(req.body.qty) || 0;
+    const qty = Math.floor(Number(req.body.qty));
+    if (!Number.isFinite(qty)) throw new Error('Quantidade inválida.');
     const i = ch.inventory.findIndex((l) => l.itemId === req.params.itemId);
     if (i === -1) throw new Error('Esse item não está na mochila.');
+    // Aqui a quantidade é absoluta (não um ajuste): zero ou menos tira da mochila.
     if (qty > 0) ch.inventory[i].qty = qty; else ch.inventory.splice(i, 1);
     save();
     res.json({ inventory: ch.inventory });
