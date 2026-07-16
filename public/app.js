@@ -1832,27 +1832,42 @@ async function sampleMapsModal() {
 
 function mapModal(m = {}) {
   const isNew = !m.id;
+  const temImagem = Boolean(m.filename || m.imageUrl);
+  let imgDim = null; // { w, h } — medido da imagem escolhida
+
   openModal(isNew ? 'Novo mapa' : `Editar ${esc(m.name)}`, `
     ${field('Nome', 'name', m.name, 'text', 'Cripta do Rei Esquecido')}
+    ${isNew ? `
+      <div class="field"><label>Imagem do mapa (upload — PNG/JPG/WebP, até 25 MB)</label>
+        <input type="file" name="file" accept=".png,.jpg,.jpeg,.webp,.gif" /></div>
+      ${field('...ou URL da imagem', 'imageUrl', '', 'text', 'https://... (mapa gerado por IA)')}
+    ` : ''}
+    <div id="map-img-info" class="map-img-info"></div>
     <div class="field-row">
       ${field('Colunas (quadrados)', 'cols', m.cols ?? 20, 'number')}
       ${field('Linhas (quadrados)', 'rows', m.rows ?? 15, 'number')}
       ${field('Metros por quadrado', 'cellSize', m.cellSize ?? 1.5, 'number')}
     </div>
-    ${isNew ? `
-      <div class="field"><label>Imagem do mapa (upload — PNG/JPG/WebP, até 25 MB)</label>
-        <input type="file" name="file" accept=".png,.jpg,.jpeg,.webp,.gif" /></div>
-      ${field('...ou URL da imagem', 'imageUrl', '', 'text', 'https://... (mapa gerado por IA)')}
-      <p class="help-text">Sem imagem = grid limpo. Depois, use os botões "Imagem" na barra para encaixar o desenho nos quadrados.</p>
-    ` : '<p class="help-text">O tamanho do grid pode mudar a qualquer momento — os tokens continuam onde estão.</p>'}
+    ${(isNew || temImagem) ? `
+      <label class="tool-check" style="margin-bottom:8px;" title="As linhas seguem a proporção da foto e a imagem é esticada para preencher o grid exatamente">
+        <input type="checkbox" id="map-autofit" checked /> Encaixar a imagem no grid automaticamente
+      </label>` : ''}
+    <p class="help-text">${isNew
+      ? 'Escolha a imagem: o tamanho dela é detectado e as linhas se ajustam sozinhas à proporção. Você só decide quantas colunas. Sem imagem = grid limpo.'
+      : 'Mude as colunas e as linhas acompanham a proporção da foto. Os tokens continuam onde estão.'}</p>
   `, async (data) => {
     data.cols = Number(data.cols);
     data.rows = Number(data.rows);
     data.cellSize = Number(data.cellSize);
+    // Escala que faz a imagem cobrir exatamente a largura do grid.
+    const encaixar = $('#map-autofit')?.checked;
+    const escala = (imgDim && encaixar) ? (data.cols * MAP_CELL) / imgDim.w : null;
+
     if (isNew) {
       const fileInput = $('#modal-form [name="file"]');
       const fd = new FormData();
       for (const [k, v] of Object.entries(data)) if (k !== 'file') fd.append(k, v);
+      if (escala) { fd.append('imgScale', String(escala)); fd.append('imgX', '0'); fd.append('imgY', '0'); }
       if (fileInput?.files[0]) fd.append('file', fileInput.files[0]);
       const map = await api('/maps', { method: 'POST', body: fd });
       await api('/battle', { method: 'PUT', body: { mapId: map.id } });
@@ -1860,6 +1875,7 @@ function mapModal(m = {}) {
       setTimeout(() => bmap.fit(), 100);
     } else {
       delete data.file;
+      if (escala) data.img = { x: 0, y: 0, scale: escala };
       const updated = await api(`/maps/${m.id}`, { method: 'PUT', body: data });
       // Atualiza o mapa em state.maps imediatamente (sem esperar o refresh completo)
       const idx = state.maps.findIndex((x) => x.id === updated.id);
@@ -1872,6 +1888,48 @@ function mapModal(m = {}) {
       toast('🗺️ Grid atualizado!');
     }
   });
+
+  // ---- Detecta o tamanho da imagem e ajusta o grid sozinho ----
+  const info = $('#map-img-info');
+  const colsInput = $('#modal-form [name="cols"]');
+  const rowsInput = $('#modal-form [name="rows"]');
+  const autofit = $('#map-autofit');
+
+  const aplicarProporcao = () => {
+    if (!imgDim || !autofit?.checked) return;
+    const cols = Math.max(1, Math.min(80, Number(colsInput.value) || 20));
+    rowsInput.value = Math.max(1, Math.min(80, Math.round(cols * imgDim.h / imgDim.w)));
+    mostrarInfo();
+  };
+  const mostrarInfo = () => {
+    if (!info) return;
+    if (!imgDim) { info.innerHTML = ''; return; }
+    const cols = Math.max(1, Number(colsInput.value) || 20);
+    const px = Math.round(imgDim.w / cols);
+    info.innerHTML = `🖼️ Imagem detectada: <b>${imgDim.w}×${imgDim.h}px</b>`
+      + `${autofit?.checked ? ` · as linhas seguem a proporção · cada quadrado ≈ <b>${px}px</b> da foto` : ''}`;
+  };
+  const medir = (src) => {
+    const probe = new Image();
+    probe.onload = () => { imgDim = { w: probe.naturalWidth, h: probe.naturalHeight }; aplicarProporcao(); mostrarInfo(); };
+    probe.onerror = () => { imgDim = null; mostrarInfo(); };
+    probe.src = src;
+  };
+
+  if (isNew) {
+    $('#modal-form [name="file"]').onchange = (e) => {
+      const f = e.target.files?.[0];
+      if (f) medir(URL.createObjectURL(f));
+    };
+    $('#modal-form [name="imageUrl"]').onchange = (e) => {
+      const u = e.target.value.trim();
+      if (u) medir(u);
+    };
+  } else if (temImagem) {
+    medir(m.filename ? `/map-files/${m.filename}` : m.imageUrl);
+  }
+  colsInput.oninput = aplicarProporcao;
+  if (autofit) autofit.onchange = () => { aplicarProporcao(); mostrarInfo(); };
 }
 
 function tokenModal(t = null) {

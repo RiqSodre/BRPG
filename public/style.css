@@ -409,6 +409,15 @@ textarea { resize: vertical; min-height: 80px; }
   border-radius: 5px; border: 1px solid var(--border); background: var(--bg3); color: var(--text);
 }
 
+/* Aviso de imagem detectada no modal de mapa */
+.map-img-info {
+  font-size: 12px; color: var(--muted); margin: 6px 0 8px;
+  padding: 6px 9px; border-radius: 7px;
+  background: rgba(196,167,71,0.08); border: 1px dashed rgba(196,167,71,0.35);
+}
+.map-img-info:empty { display: none; }
+.map-img-info b { color: var(--accent2); }
+
 /* Galeria de mapas de exemplo */
 .sample-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
 .sample-card {

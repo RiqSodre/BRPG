@@ -407,6 +407,9 @@ export function startServer() {
   app.get('/api/maps', wrap(async (req, res) => res.json(listItems('maps'))));
   app.post('/api/maps', mapUpload.single('file'), wrap(async (req, res) => {
     const b = req.body;
+    // O cliente mede a imagem e manda a escala que a encaixa exatamente no grid.
+    // Sem isso, a imagem entraria em escala 1 (1px da foto = 1px do grid) e estouraria.
+    const scale = Number(b.imgScale) > 0 ? Number(b.imgScale) : 1;
     const map = addItem('maps', {
       name: b.name || 'Mapa sem nome',
       cols: Math.max(1, Math.min(80, Number(b.cols) || 20)),
@@ -414,7 +417,7 @@ export function startServer() {
       cellSize: Number(b.cellSize) || 1.5, // metros por quadrado (5 pés = 1,5 m)
       filename: req.file?.filename || '',
       imageUrl: req.file ? '' : (b.imageUrl || ''),
-      img: { x: 0, y: 0, scale: 1 },
+      img: { x: Number(b.imgX) || 0, y: Number(b.imgY) || 0, scale },
       fog: { enabled: false, revealed: [] },
     });
     res.json(map);
@@ -428,8 +431,10 @@ export function startServer() {
   app.delete('/api/maps/:id', wrap(async (req, res) => {
     removeItem('maps', req.params.id);
     const db = getDb();
+    // Apagar o mapa em jogo só tira o mapa de cena — os tokens, a névoa e as
+    // configurações da mesa continuam (antes isso zerava a batalha inteira).
     if (db.battle.mapId === req.params.id) {
-      db.battle = { mapId: null, tokens: [], ping: null };
+      db.battle.mapId = null;
       save();
     }
     broadcastTable();
