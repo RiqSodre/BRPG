@@ -159,7 +159,10 @@ export function startServer() {
     res.json({ ok: true });
   }));
   app.post('/api/discord/post', wrap(async (req, res) => {
+    const reason = bot.postBlockedReason();
+    if (reason) throw new Error(reason);
     const ok = await bot.postMessage(req.body.content);
+    if (!ok) throw new Error('Não foi possível postar no Discord. Confira o canal de texto em ⚙️ Config.');
     res.json({ ok });
   }));
 
@@ -450,7 +453,10 @@ export function startServer() {
     res.json(getDb().combat);
   }));
   app.post('/api/combat/announce', wrap(async (req, res) => {
+    const reason = bot.postBlockedReason();
+    if (reason) throw new Error(reason);
     const { combat } = getDb();
+    if (!combat.entries.length) throw new Error('Não há combatentes na iniciativa para postar.');
     const lines = combat.entries
       .map((e, i) => {
         const conds = (e.conditions || []).length ? ` · _${e.conditions.join(', ')}_` : '';
@@ -459,6 +465,7 @@ export function startServer() {
       })
       .join('\n');
     const ok = await bot.postMessage(`⚔️ **Iniciativa — Rodada ${combat.round}**\n${lines}`);
+    if (!ok) throw new Error('Não foi possível postar a iniciativa no Discord.');
     res.json({ ok });
   }));
 

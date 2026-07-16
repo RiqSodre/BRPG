@@ -264,6 +264,15 @@ export async function postScene(scene) {
   return true;
 }
 
+// Explica por que uma postagem no Discord não sairia (bot desligado ou canal não
+// definido). Devolve null quando está tudo pronto para postar.
+export function postBlockedReason() {
+  const db = getDb();
+  if (!client) return 'O bot do Discord está desconectado — confira o DISCORD_TOKEN no arquivo .env e reinicie o servidor.';
+  if (!db.settings.textChannelId) return 'Nenhum canal de texto definido. Vá em ⚙️ Config → "Canal de texto para cenas e recaps", escolha um canal e clique em Salvar.';
+  return null;
+}
+
 export async function postMessage(content) {
   const db = getDb();
   if (!client || !db.settings.textChannelId) return false;
