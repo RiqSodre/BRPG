@@ -303,10 +303,24 @@ textarea { resize: vertical; min-height: 80px; }
 .death-saves { display: flex; align-items: center; gap: 4px; font-size: 11px; margin-top: 4px; flex-wrap: wrap; }
 .death-saves .btn { padding: 0 5px; font-size: 10px; }
 
-/* Modal do Bestiário */
+/* Modal do Bestiário / Seletor de personagens */
 .srd-result-row { display: flex; align-items: center; gap: 6px; padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
 .srd-result-row:last-child { border-bottom: none; }
 .srd-result-row span { flex: 1; }
+
+/* Seletor de personagens para a batalha */
+.cp-section-label {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.05em;
+  color: var(--accent2); text-transform: uppercase;
+  margin: 12px 0 4px; padding-bottom: 3px; border-bottom: 1px solid var(--border);
+}
+.cp-section-label:first-child { margin-top: 0; }
+.cp-thumb {
+  width: 30px; height: 30px; border-radius: 50%; object-fit: cover; flex: 0 0 auto;
+  border: 2px solid var(--border); background: var(--bg3);
+  display: flex; align-items: center; justify-content: center; font-size: 15px;
+}
+.cp-thumb.placeholder { line-height: 1; }
 
 /* Arte oficial do monstro no topo da ficha */
 .srd-hero {

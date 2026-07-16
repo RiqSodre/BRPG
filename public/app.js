@@ -988,25 +988,37 @@ function retratoDe(entry, tok) {
   return tok?.imageUrl || entry?.imageUrl || state.characters.find((c) => c.name === entry?.name)?.imageUrl || '';
 }
 
+// Personagem vinculado a um entry (por id, ou pelo nome como fallback).
+const charDoEntry = (e) => (e?.charId && state.characters.find((c) => c.id === e.charId))
+  || state.characters.find((c) => c.name === e?.name)
+  || null;
+
+// A partir de um entry da iniciativa, monta os campos do token (tipo, retrato...).
+async function tokenSeed(e) {
+  const ch = charDoEntry(e);
+  let kind = 'enemy';
+  if (e.isPc) kind = 'pc';
+  else if (ch) kind = kindDoPersonagem(ch);
+  const imageUrl = ch?.imageUrl || e.imageUrl || await srdImage(e.srdIndex);
+  return { kind, imageUrl, charId: e.charId };
+}
+
 // Coloca no mapa o token de um combatente da iniciativa (se ainda não estiver lá).
 async function placeOnMap(entry) {
   const map = activeMap();
   if (!map) return toast('Coloque um mapa em jogo primeiro.', true);
   if (tokenOf(entry.name)) return; // já está no mapa
-  const imageUrl = state.characters.find((c) => c.name === entry.name)?.imageUrl
-    || entry.imageUrl
-    || await srdImage(entry.srdIndex);
+  const seed = await tokenSeed(entry);
   const i = state.battle.tokens.length;
   state.battle.tokens.push({
     id: Math.random().toString(16).slice(2, 10),
     name: entry.name,
-    kind: entry.isPc ? 'pc' : 'enemy',
     combatName: entry.name,
     col: i % map.cols,
     row: Math.min(map.rows - 1, Math.floor(i / map.cols)),
     size: 1, hidden: false, color: '',
     hp: entry.hp, maxHp: entry.maxHp,
-    imageUrl,
+    ...seed,
   });
   pushBattle();
   renderMapSide();
@@ -1020,10 +1032,9 @@ async function placeAllOnMap() {
   if (!faltando.length) return;
   const defs = await Promise.all(faltando.map(async (e) => ({
     name: e.name,
-    kind: e.isPc ? 'pc' : 'enemy',
     hp: e.hp, maxHp: e.maxHp,
     combatName: e.name,
-    imageUrl: state.characters.find((c) => c.name === e.name)?.imageUrl || e.imageUrl || await srdImage(e.srdIndex),
+    ...(await tokenSeed(e)),
   })));
   addTokens(defs);
 }
@@ -1383,8 +1394,8 @@ function renderCombatOrder() {
     <div class="co-header">
       <span class="co-label-text">⚔️ COMBATENTES · R.${c.round}</span>
       <div class="co-controls">
-        <button class="btn small ghost co-btn" id="co-add" title="Adicionar combatente">+</button>
-        <button class="btn small ghost co-btn" id="co-pcs" title="Adicionar jogadores à iniciativa">👥</button>
+        <button class="btn small ghost co-btn" id="co-add" title="Combatente em branco">+</button>
+        <button class="btn small ghost co-btn" id="co-pcs" title="Adicionar personagens (jogadores e NPCs)">🧙</button>
         <button class="btn small ghost co-btn" id="co-sort" title="Ordenar por iniciativa">⇅</button>
         <button class="btn small ghost co-btn" id="co-srd" title="Bestiário SRD">📖</button>
       </div>
@@ -1448,7 +1459,7 @@ function renderCombatOrder() {
           </div>`;
       }).join('')}
     </div>
-    ${!c.entries.length ? '<div class="empty" style="font-size:12px;padding:8px 4px;">Use + para adicionar, 👥 para trazer os jogadores ou 📖 para buscar no bestiário.</div>' : ''}`;
+    ${!c.entries.length ? '<div class="empty" style="font-size:12px;padding:8px 4px;">🧙 traz seus jogadores e NPCs · 📖 busca no bestiário · + cria um combatente em branco.</div>' : ''}`;
 
   $$('#co-list .init-entry').forEach((row) => {
     row.onclick = (e) => {
@@ -1571,14 +1582,7 @@ function renderCombatOrder() {
     c.entries.push({ name: 'Monstro', init: 10, hp: 10, maxHp: 10, conditions: [], deathSaves: { s: 0, f: 0 } });
     saveCombat();
   };
-  if (coPcs) coPcs.onclick = () => {
-    for (const pc of state.characters.filter((x) => x.type === 'pc')) {
-      if (!c.entries.some((e) => e.name === pc.name)) {
-        c.entries.push({ name: pc.name, init: 10, hp: pc.hp ?? 0, maxHp: pc.maxHp ?? 0, conditions: [], deathSaves: { s: 0, f: 0 }, isPc: true });
-      }
-    }
-    saveCombat();
-  };
+  if (coPcs) coPcs.onclick = () => charPickerModal();
   if (coSort) coSort.onclick = () => { c.entries.sort((a, b) => b.init - a.init); c.turn = 0; saveCombat(); };
   if (coSrd) coSrd.onclick = () => srdModal();
   if (coNext) coNext.onclick = () => {
@@ -1972,6 +1976,111 @@ async function addMonster(index, aoMapa) {
     toast(`➕ ${nome} entrou na iniciativa (d20${mod >= 0 ? '+' : ''}${mod}).`);
   }
   refresh();
+}
+
+// A que "espécie" de token um personagem vira no mapa (cor/ícone).
+function kindDoPersonagem(ch) {
+  if (!ch) return 'enemy';
+  if (ch.type === 'pc') return 'pc';
+  return ch.npcType === 'inimigo' ? 'enemy' : 'npc';
+}
+
+// Traz um personagem criado (jogador ou NPC) para a batalha e, se pedido, já pro mapa.
+// É o elo que faltava: antes só PCs (em bloco) e monstros do SRD entravam no combate.
+async function addCharacter(charId, aoMapa) {
+  const ch = state.characters.find((c) => c.id === charId);
+  if (!ch) return;
+  const c = state.combat;
+  const iguais = c.entries.filter((e) => e.name === ch.name || e.name.startsWith(`${ch.name} `)).length;
+  const nome = iguais ? `${ch.name} ${iguais + 1}` : ch.name;
+  const isPc = ch.type === 'pc';
+
+  c.entries.push({
+    name: nome,
+    init: 10,
+    hp: Number(ch.hp) || 0, maxHp: Number(ch.maxHp) || 0,
+    conditions: [], deathSaves: { s: 0, f: 0 },
+    isPc,
+    charId: ch.id,
+    imageUrl: ch.imageUrl || '',
+  });
+  await tryApi(() => api('/combat', { method: 'PUT', body: c }));
+
+  if (aoMapa) {
+    const map = activeMap();
+    if (!map) { toast('➕ Entrou na batalha, mas não há mapa em jogo para receber o token.', true); return refresh(); }
+    const i = state.battle.tokens.length;
+    state.battle.tokens.push({
+      id: Math.random().toString(16).slice(2, 10),
+      name: nome, kind: kindDoPersonagem(ch), combatName: nome,
+      col: Math.min(map.cols - 1, i % map.cols),
+      row: Math.min(map.rows - 1, Math.floor(i / map.cols)),
+      size: 1, speed: 9,
+      hp: Number(ch.hp) || 0, maxHp: Number(ch.maxHp) || 0,
+      hidden: false, color: '', imageUrl: ch.imageUrl || '', charId: ch.id,
+    });
+    pushBattle();
+    toast(`🗺️ ${nome} entrou na batalha e está no mapa.`);
+  } else {
+    toast(`➕ ${nome} entrou na batalha.`);
+  }
+  refresh();
+}
+
+// Seletor dos personagens do Mestre (jogadores e NPCs) para jogar na batalha.
+function charPickerModal() {
+  const chars = state.characters || [];
+  const pcs = chars.filter((c) => c.type === 'pc');
+  const npcs = chars.filter((c) => c.type === 'npc');
+  const NPC_ICON = { inimigo: '👹', quest: '📜', aleatorio: '🎲', npc: '🎭' };
+
+  const row = (ch) => {
+    const isPc = ch.type === 'pc';
+    const icon = isPc ? '🎮' : (NPC_ICON[ch.npcType] || '🎭');
+    const hpTxt = ch.maxHp ? ` · ${ch.hp ?? ch.maxHp}/${ch.maxHp} PV` : '';
+    return `
+      <div class="srd-result-row">
+        ${ch.imageUrl
+          ? `<img class="cp-thumb" src="${esc(ch.imageUrl)}" alt="" onerror="this.replaceWith(document.createTextNode('${icon}'))" />`
+          : `<span class="cp-thumb placeholder">${icon}</span>`}
+        <span>${esc(ch.name)}<small style="color:var(--muted);">${esc(hpTxt)}</small></span>
+        <button class="btn small" data-cp-add="${ch.id}" title="Só na iniciativa">➕ Iniciativa</button>
+        <button class="btn small gold" data-cp-map="${ch.id}" title="Iniciativa + token no mapa">🗺️</button>
+      </div>`;
+  };
+  const section = (titulo, arr) => arr.length
+    ? `<div class="cp-section-label">${titulo}</div>${arr.map(row).join('')}` : '';
+
+  $('#modal').innerHTML = `
+    <h3>🧙 Adicionar à batalha</h3>
+    ${pcs.length ? '<button class="btn small ghost" id="cp-all-pcs" style="margin-bottom:8px;">👥 Todos os jogadores de uma vez</button>' : ''}
+    <div id="cp-list" style="max-height:360px;overflow-y:auto;">
+      ${chars.length
+        ? section('🎮 Jogadores', pcs) + section('🎭 NPCs', npcs)
+        : '<div class="help-text">Nenhum personagem criado ainda. Crie na aba 🧙 Personagens.</div>'}
+    </div>
+    <div class="modal-actions"><button class="btn ghost" id="modal-cancel">Fechar</button></div>`;
+  $('#modal-backdrop').classList.remove('hidden');
+  $('#modal-cancel').onclick = closeModal;
+
+  const allPcs = $('#cp-all-pcs');
+  if (allPcs) allPcs.onclick = async () => {
+    const c = state.combat;
+    for (const pc of pcs) {
+      if (!c.entries.some((e) => e.name === pc.name)) {
+        c.entries.push({
+          name: pc.name, init: 10, hp: pc.hp ?? 0, maxHp: pc.maxHp ?? 0,
+          conditions: [], deathSaves: { s: 0, f: 0 }, isPc: true,
+          charId: pc.id, imageUrl: pc.imageUrl || '',
+        });
+      }
+    }
+    await tryApi(() => api('/combat', { method: 'PUT', body: c }));
+    closeModal();
+    refresh();
+  };
+  $$('#cp-list [data-cp-add]').forEach((b) => b.onclick = () => { closeModal(); addCharacter(b.dataset.cpAdd, false); });
+  $$('#cp-list [data-cp-map]').forEach((b) => b.onclick = () => { closeModal(); addCharacter(b.dataset.cpMap, true); });
 }
 
 // ---------- Glossário PT-BR do Bestiário SRD ----------
