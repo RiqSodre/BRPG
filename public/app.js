@@ -117,6 +117,10 @@ $$('.nav-btn').forEach((btn) => {
       bmap.resize();
       if (!bmap.cam.fitted && bmap.map) { bmap.fit(); bmap.cam.fitted = true; }
     }
+    // Inicializa o bestiário quando a aba é ativada
+    if (btn.dataset.tab === 'bestiario') {
+      initBestiario();
+    }
   };
 });
 
