@@ -744,62 +744,58 @@ function renderMapTab() {
   if (!mapRendered) {
     mapRendered = true;
     $('#tab-map').innerHTML = `
-      <div class="tab-header">
-        <h2>🗺️ Mapa de Batalha</h2>
-        <div class="actions">
-          <select id="map-select" title="Mapa em jogo"></select>
-          <button class="btn small gold" id="btn-map-activate">▶ Colocar em jogo</button>
-          <button class="btn small" id="btn-sample-maps" title="Mapas prontos da sua pasta data/sample-maps">📚 Exemplos</button>
-          <button class="btn small" id="btn-new-map">+ Novo mapa</button>
-          <button class="btn small ghost" id="btn-edit-map">Editar grid</button>
-          <button class="btn small danger" id="btn-del-map">🗑</button>
-          <a class="btn small ghost" href="/mesa.html" target="_blank" title="Abra numa segunda tela ou compartilhe pelo Discord">🖥️ Tela dos jogadores</a>
-        </div>
-      </div>
       <div class="map-layout">
         <div class="map-stage">
-          <div class="map-toolbar">
-            <div class="tool-group">
-              <button class="btn small tool active" data-tool="select" title="Arrastar tokens">✋ Mover</button>
-              <button class="btn small tool" data-tool="ruler" title="Medir distância (regra da diagonal 5e)">📏 Medir</button>
-              <button class="btn small tool" data-tool="ping" title="Piscar um ponto na tela dos jogadores">📍 Ping</button>
-              <button class="btn small tool" data-tool="aoe" title="Área de efeito: arraste do centro para fora (bola de fogo, explosão...)">🎯 Área</button>
-              <button class="btn small tool" data-tool="reveal" title="Pincel: revelar área">🔦 Revelar</button>
-              <button class="btn small tool" data-tool="hide" title="Pincel: cobrir de névoa">🌫️ Cobrir</button>
+          <canvas id="map-canvas"></canvas>
+
+          <!-- Barra de ferramentas flutuante no topo (quebra linha em telas estreitas) -->
+          <div class="map-overlay ov-top">
+            <div class="ov-panel">
+              <button class="ov-btn tool active" data-tool="select" title="Mover / arrastar tokens">✋</button>
+              <button class="ov-btn tool" data-tool="ruler" title="Medir distância (diagonal 5e)">📏</button>
+              <button class="ov-btn tool" data-tool="ping" title="Ping na tela dos jogadores">📍</button>
+              <button class="ov-btn tool" data-tool="aoe" title="Área de efeito (arraste do centro)">🎯</button>
+              <button class="ov-btn tool" data-tool="reveal" title="Pincel: revelar névoa">🔦</button>
+              <button class="ov-btn tool" data-tool="hide" title="Pincel: cobrir de névoa">🌫️</button>
+              <span class="ov-sep"></span>
+              <button class="ov-btn" id="btn-map-fit" title="Enquadrar o mapa na tela">⤢</button>
+              <button class="ov-btn" id="ov-help" title="Clique num token para agir sobre ele · arraste para mover (mostra o deslocamento) · Espaço passa o turno · setas movem o selecionado · Del remove · Esc limpa a seleção">❔</button>
             </div>
-            <div class="tool-group">
-              <label class="tool-check"><input type="checkbox" id="fog-enabled" /> Névoa de guerra</label>
-              <button class="btn small ghost" id="btn-fog-all">Revelar tudo</button>
-              <button class="btn small ghost" id="btn-fog-none">Cobrir tudo</button>
-              <button class="btn small ghost" id="btn-map-fit">⤢ Enquadrar</button>
+            <div class="ov-panel">
+              <select id="map-select" title="Mapa em jogo"></select>
+              <button class="ov-btn gold" id="btn-map-activate" title="Colocar este mapa em jogo">▶</button>
+              <button class="ov-btn" id="btn-new-map" title="Novo mapa">＋</button>
+              <button class="ov-btn" id="btn-sample-maps" title="Mapas de exemplo">📚</button>
+              <button class="ov-btn" id="btn-edit-map" title="Editar grid">▦</button>
+              <button class="ov-btn danger" id="btn-del-map" title="Excluir mapa">🗑</button>
+              <a class="ov-btn" href="/mesa.html" target="_blank" title="Abrir a tela dos jogadores (segunda tela / Discord)">🖥️</a>
             </div>
-            <div class="tool-group">
-              <label class="tool-check" title="Cada personagem dos jogadores revela um raio ao redor de si; o resto fica na névoa — atualiza sozinho quando eles se movem">
-                <input type="checkbox" id="vision-enabled" /> 👁️ Visão dos jogadores
-              </label>
-              <label class="tool-check" title="Raio de visão de cada personagem, em metros">
-                Raio <input type="number" id="vision-radius" min="3" max="60" step="1" class="vision-radius-input" /> m
-              </label>
+            <div class="ov-panel">
+              <label class="tool-check" title="Névoa de guerra pintada à mão"><input type="checkbox" id="fog-enabled" /> 🌫️</label>
+              <button class="ov-btn" id="btn-fog-all" title="Revelar tudo">☀️</button>
+              <button class="ov-btn" id="btn-fog-none" title="Cobrir tudo">🌑</button>
+              <span class="ov-sep"></span>
+              <label class="tool-check" title="Cada personagem revela um raio ao redor de si; o resto fica na névoa"><input type="checkbox" id="vision-enabled" /> 👁️</label>
+              <input type="number" id="vision-radius" min="3" max="60" step="1" class="vision-radius-input" title="Raio de visão dos personagens (metros)" />
+              <span class="ov-sep"></span>
+              <label class="tool-check" title="Mostrar os números de PV dos inimigos aos jogadores"><input type="checkbox" id="show-enemy-hp" /> ❤️</label>
+              <span class="ov-sep"></span>
+              <button class="ov-btn" id="btn-img-toggle" title="Ajustar a imagem do mapa ao grid">🖼️</button>
             </div>
-            <div class="tool-group">
-              <label class="tool-check" title="Desligado, os jogadores veem só a barra e o estado (Ferido, Quase morto...) dos inimigos">
-                <input type="checkbox" id="show-enemy-hp" /> PV dos inimigos aos jogadores
-              </label>
-            </div>
-            <div class="tool-group" id="img-align">
-              <span class="help-text">Imagem:</span>
-              <button class="btn small ghost" data-img="left">◀</button>
-              <button class="btn small ghost" data-img="right">▶</button>
-              <button class="btn small ghost" data-img="up">▲</button>
-              <button class="btn small ghost" data-img="down">▼</button>
-              <button class="btn small ghost" data-img="out">➖</button>
-              <button class="btn small ghost" data-img="in">➕</button>
-              <button class="btn small ghost" data-img="auto" title="Esticar a imagem para preencher o grid">⤢ Encaixar</button>
+            <div class="ov-panel ov-img hidden" id="img-align">
+              <span class="ov-label">Imagem</span>
+              <button class="ov-btn" data-img="left" title="Mover à esquerda">◀</button>
+              <button class="ov-btn" data-img="right" title="Mover à direita">▶</button>
+              <button class="ov-btn" data-img="up" title="Mover para cima">▲</button>
+              <button class="ov-btn" data-img="down" title="Mover para baixo">▼</button>
+              <button class="ov-btn" data-img="out" title="Diminuir">➖</button>
+              <button class="ov-btn" data-img="in" title="Aumentar">➕</button>
+              <button class="ov-btn" data-img="auto" title="Esticar para preencher o grid">⤢</button>
             </div>
           </div>
+
+          <!-- HUD de turno (compacto, flutuando embaixo) -->
           <div id="combat-hud" class="combat-hud"></div>
-          <canvas id="map-canvas"></canvas>
-          <p class="help-text">Clique num token para agir sobre ele · arraste para mover (mostra o deslocamento) · <b>Espaço</b> passa o turno · <b>setas</b> movem o selecionado · <b>Del</b> remove · <b>Esc</b> limpa a seleção.</p>
         </div>
         <div class="map-resize-handle" id="map-resize-handle"></div>
         <aside class="map-side" id="map-side">
@@ -925,6 +921,13 @@ function renderMapTab() {
       toast(e.target.checked
         ? '👁️ Os jogadores agora veem os PV exatos dos inimigos.'
         : '🎭 Os jogadores voltam a ver só o estado dos inimigos (Ferido, Quase morto...).');
+    };
+
+    // Botão 🖼️ mostra/esconde os controles de alinhar a imagem do mapa
+    $('#btn-img-toggle').onclick = () => {
+      const p = $('#img-align');
+      p.classList.toggle('hidden');
+      $('#btn-img-toggle').classList.toggle('active', !p.classList.contains('hidden'));
     };
 
     // Alinhar a imagem ao grid (mapas gerados por IA quase nunca vêm no encaixe exato)
@@ -1223,6 +1226,8 @@ function renderCombatHud() {
   const el = $('#combat-hud');
   if (!el) return;
   const c = state.combat;
+  // Sem combate, o HUD some do mapa (:empty) — só aparece quando há iniciativa rolando.
+  if (!c.entries.length) { el.innerHTML = ''; return; }
   const atual = c.entries[c.turn];
   const proximo = c.entries.length > 1 ? c.entries[(c.turn + 1) % c.entries.length] : null;
   const t = atual ? tokenOf(atual.name) : null;
@@ -1234,34 +1239,29 @@ function renderCombatHud() {
   const conds = (atual?.conditions || []);
 
   el.innerHTML = `
-    <div class="hud-left">
-      <div class="hud-turn">
-        ${atual ? `
-          ${retrato ? `<img class="hud-avatar" src="${esc(retrato)}" alt="" onerror="this.style.display='none'" />` : '<span class="hud-avatar placeholder"></span>'}
-          <div class="hud-turn-info">
-            <small>Rodada ${c.round} &nbsp;·&nbsp; vez de</small>
-            <b>${esc(atual.name)}</b>
-            ${hpFrac !== null ? `
-              <div class="hud-hp-bar"><span style="width:${hpFrac*100}%;background:${hpCor}"></span></div>
-              <span class="hud-hp-text">${esc(atual.hp)}/${esc(atual.maxHp)} PV</span>` : ''}
-            ${conds.length ? `<div class="hud-conds">${conds.map((cd) => `<span class="cond-chip">${condIcon(cd)} ${esc(cd)}</span>`).join('')}</div>` : ''}
-          </div>` : '<div class="hud-turn-info"><small>Sem combate</small><b>Traga a iniciativa para começar</b></div>'}
-      </div>
-      ${proximo ? `
-        <div class="hud-next-up">
-          ${retratoProx ? `<img class="hud-next-avatar" src="${esc(retratoProx)}" alt="" onerror="this.style.display='none'" />` : ''}
-          <div>
-            <small>A SEGUIR</small>
-            <span>${esc(proximo.name)}${proximo.maxHp ? ` · ${esc(proximo.hp)}/${esc(proximo.maxHp)} PV` : ''}</span>
-          </div>
+    <div class="hud-turn">
+      ${retrato ? `<img class="hud-avatar" src="${esc(retrato)}" alt="" onerror="this.style.display='none'" />` : '<span class="hud-avatar placeholder"></span>'}
+      <div class="hud-info">
+        <span class="hud-top">Rodada ${c.round} · vez de</span>
+        <b>${esc(atual.name)}</b>
+        ${hpFrac !== null ? `<div class="hud-hp-bar"><span style="width:${hpFrac*100}%;background:${hpCor}"></span></div>` : ''}
+        ${(hpFrac !== null || conds.length) ? `<div class="hud-meta">
+          ${hpFrac !== null ? `<span class="hud-hp-text">${esc(atual.hp)}/${esc(atual.maxHp)} PV</span>` : ''}
+          ${conds.length ? `<div class="hud-conds">${conds.map((cd) => `<span class="cond-chip" title="${esc(cd)}">${condIcon(cd)}</span>`).join('')}</div>` : ''}
         </div>` : ''}
+      </div>
     </div>
+    ${proximo ? `
+      <div class="hud-next">
+        ${retratoProx ? `<img class="hud-next-avatar" src="${esc(retratoProx)}" alt="" onerror="this.style.display='none'" />` : ''}
+        <div><small>A seguir</small><span>${esc(proximo.name)}</span></div>
+      </div>` : ''}
     <div class="hud-actions">
       <button class="btn small ghost" id="hud-prev" title="Voltar um turno">◀</button>
       <button class="btn gold" id="hud-next" title="Próximo turno (Espaço)">▶ Próximo</button>
-      <button class="btn small" id="hud-roll" title="Rola a iniciativa dos inimigos e reordena">🎲 Rolar init</button>
+      <button class="btn small ghost" id="hud-roll" title="Rolar a iniciativa dos inimigos e reordenar">🎲</button>
       <button class="btn small ghost" id="hud-announce" title="Postar a ordem no Discord">📤</button>
-      <button class="btn small danger" id="hud-end" title="Encerrar o combate">⏹</button>
+      <button class="btn small ghost danger" id="hud-end" title="Encerrar o combate">⏹</button>
     </div>`;
 
   $('#hud-next').onclick = () => nextTurn(1);
