@@ -43,6 +43,17 @@ function portraitOf(name, db) {
   return t?.imageUrl || c?.imageUrl || '';
 }
 
+// Combatente escondido (token com 👁️ desligado) não deve nem aparecer na lista de
+// iniciativa dos jogadores — hoje ele só era filtrado do mapa. Vira um "???" sem PV,
+// retrato ou condições em vez de sumir da lista: sumir mudaria a posição de todo mundo
+// depois dele e desalinharia o índice do turno, que aponta pra posição no array.
+function redactEntry(e) {
+  return {
+    name: '???', init: e.init,
+    hpPct: null, hpLabel: '', conditions: [], concentration: false, imageUrl: '',
+  };
+}
+
 function views() {
   const db = getDb();
   const map = db.battle.mapId ? getItem('maps', db.battle.mapId) : null;
@@ -50,6 +61,7 @@ function views() {
   const full = db.battle.tokens.map((t) => enrichToken(t, db));
   const isPc = (name) => full.some((t) => t.kind === 'pc' && (t.combatName || t.name) === name)
     || db.characters.some((c) => c.type === 'pc' && c.name === name);
+  const tokenFor = (name) => full.find((t) => (t.combatName || t.name) === name);
 
   const dm = {
     map,
@@ -72,6 +84,7 @@ function views() {
     combat: {
       ...db.combat,
       entries: db.combat.entries.map((e) => {
+        if (tokenFor(e.name)?.hidden) return redactEntry(e);
         const base = { ...e, imageUrl: portraitOf(e.name, db) };
         return isPc(e.name) || showEnemyHp ? base : censorHp(base);
       }),
