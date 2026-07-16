@@ -237,12 +237,40 @@ textarea { resize: vertical; min-height: 80px; }
 .init-entry.is-turn .ie-avatar { border-color: var(--accent2); }
 
 .ie-main { grid-column: 4; min-width: 0; }
+.ie-name-row { display: flex; align-items: center; gap: 3px; margin-bottom: 3px; }
 .ie-name {
-  width: 100% !important; padding: 3px 5px !important;
+  flex: 1; min-width: 0; padding: 3px 5px !important;
   font-size: 12px !important; font-weight: 500;
-  border-radius: 5px !important; margin-bottom: 3px;
+  border-radius: 5px !important;
 }
 .init-entry.is-turn .ie-name { border-color: rgba(196,167,71,0.4); }
+
+/* Controles de presença no mapa embutidos em cada combatente */
+.ie-mapbtn {
+  flex: 0 0 auto; background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 5px; padding: 2px 5px; cursor: pointer;
+  font-size: 12px; line-height: 1.2; color: var(--text, #e2e0d8);
+  transition: background 0.12s, border-color 0.12s, opacity 0.12s;
+}
+.ie-mapbtn:hover { background: var(--bg2); border-color: var(--accent); }
+.ie-mapbtn.place { border-color: rgba(196,167,71,0.45); color: var(--accent2); }
+.ie-mapbtn.place:hover { background: var(--accent2); border-color: var(--accent2); color: #1a1a1a; }
+.ie-mapbtn.on { border-color: rgba(74,222,128,0.4); }
+.ie-mapbtn.del:hover { background: var(--danger); border-color: var(--danger); color: #fff; }
+
+/* Combatente fora do mapa: retrato apagado sinaliza "ainda não colocado" */
+.init-entry.offmap .ie-avatar { opacity: 0.4; filter: grayscale(0.6); }
+
+/* Barra contextual "N fora do mapa · Colocar todos" */
+.co-place-all {
+  display: block; width: 100%; text-align: left;
+  background: rgba(196,167,71,0.08); border: 1px dashed rgba(196,167,71,0.4);
+  border-radius: 6px; padding: 5px 8px; margin-bottom: 6px;
+  font-size: 11px; color: var(--muted); cursor: pointer;
+  transition: background 0.12s;
+}
+.co-place-all:hover { background: rgba(196,167,71,0.16); }
+.co-place-all b { color: var(--accent2); }
 
 .ie-row2 {
   display: flex; align-items: center; gap: 2px;
@@ -269,7 +297,6 @@ textarea { resize: vertical; min-height: 80px; }
   padding: 1px 2px !important; font-size: 10px !important;
   border-radius: 4px !important; width: 28px !important; min-width: 0; cursor: pointer;
 }
-.ie-del { padding: 1px 5px !important; font-size: 10px !important; border-radius: 4px !important; margin-left: auto; }
 .ie-conds { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 3px; }
 .ie-conds .cond-chip { cursor: pointer; }
 .ie-conds .cond-chip:hover { background: var(--danger); border-color: var(--danger); color: #fff; }

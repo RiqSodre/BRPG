@@ -773,17 +773,7 @@ function renderMapTab() {
           <div id="token-panel"></div>
           <div id="aoe-panel"></div>
           <div id="combat-order"></div>
-          <div class="side-section">
-            <div class="side-section-label">
-              <span>TOKENS NO MAPA</span>
-            </div>
-            <div class="row" style="margin-bottom:8px;gap:4px;">
-              <button class="btn small gold" id="btn-tokens-init" title="Traz todo mundo que está na aba Iniciativa">⚔️ Iniciativa</button>
-              <button class="btn small" id="btn-tokens-pcs">🎮 Jogadores</button>
-              <button class="btn small ghost" id="btn-token-new">+ Avulso</button>
-            </div>
-            <div id="token-list"></div>
-          </div>
+          <div id="loose-tokens"></div>
         </aside>
       </div>`;
 
@@ -924,24 +914,6 @@ function renderMapTab() {
       pushMap(map);
     });
 
-    $('#btn-token-new').onclick = () => tokenModal();
-    $('#btn-tokens-pcs').onclick = () => {
-      const pcs = state.characters.filter((c) => c.type === 'pc');
-      addTokens(pcs.map((c) => ({
-        name: c.name, kind: 'pc', imageUrl: c.imageUrl || '',
-        hp: Number(c.hp) || 0, maxHp: Number(c.maxHp) || 0, charId: c.id, combatName: c.name,
-      })));
-    };
-    $('#btn-tokens-init').onclick = () => {
-      addTokens(state.combat.entries.map((e) => ({
-        name: e.name,
-        kind: e.isPc ? 'pc' : 'enemy',
-        hp: e.hp, maxHp: e.maxHp,
-        combatName: e.name,
-        imageUrl: state.characters.find((c) => c.name === e.name)?.imageUrl || '',
-      })));
-    };
-
     // Resize da sidebar arrastando a alça
     (() => {
       const handle = $('#map-resize-handle');
@@ -997,11 +969,47 @@ function renderMapSide() {
   renderTokenPanel();
   renderAoePanel();
   renderCombatOrder();
-  renderTokenList();
+  renderLooseTokens();
 }
 
 const tokenOf = (name) => state.battle.tokens.find((t) => (t.combatName || t.name) === name);
 const entryOf = (t) => state.combat.entries.find((e) => e.name === (t.combatName || t.name));
+
+// Coloca no mapa o token de um combatente da iniciativa (se ainda não estiver lá).
+function placeOnMap(entry) {
+  const map = activeMap();
+  if (!map) return toast('Coloque um mapa em jogo primeiro.', true);
+  if (tokenOf(entry.name)) return; // já está no mapa
+  const i = state.battle.tokens.length;
+  state.battle.tokens.push({
+    id: Math.random().toString(16).slice(2, 10),
+    name: entry.name,
+    kind: entry.isPc ? 'pc' : 'enemy',
+    combatName: entry.name,
+    col: i % map.cols,
+    row: Math.min(map.rows - 1, Math.floor(i / map.cols)),
+    size: 1, hidden: false, color: '',
+    hp: entry.hp, maxHp: entry.maxHp,
+    imageUrl: state.characters.find((c) => c.name === entry.name)?.imageUrl || '',
+  });
+  pushBattle();
+  renderMapSide();
+}
+
+// Coloca no mapa todos os combatentes que ainda não têm token.
+function placeAllOnMap() {
+  const map = activeMap();
+  if (!map) return toast('Coloque um mapa em jogo primeiro.', true);
+  const faltando = state.combat.entries.filter((e) => !tokenOf(e.name));
+  if (!faltando.length) return;
+  addTokens(faltando.map((e) => ({
+    name: e.name,
+    kind: e.isPc ? 'pc' : 'enemy',
+    hp: e.hp, maxHp: e.maxHp,
+    combatName: e.name,
+    imageUrl: state.characters.find((c) => c.name === e.name)?.imageUrl || '',
+  })));
+}
 
 async function saveCombatState() {
   await tryApi(() => api('/combat', { method: 'PUT', body: state.combat }));
@@ -1341,7 +1349,9 @@ function addTokens(defs) {
   renderMapSide();
 }
 
-// Painel de ordem de iniciativa na sidebar do mapa — exibido quando o combate está ativo.
+// Roster unificado: a lista de iniciativa É o elenco de combatentes, e cada linha
+// carrega a presença no mapa (colocar / localizar / esconder). Assim mapa e combate
+// deixam de ser duas listas paralelas.
 function renderCombatOrder() {
   const el = $('#combat-order');
   if (!el) return;
@@ -1349,12 +1359,15 @@ function renderCombatOrder() {
 
   const saveCombat = async () => { await tryApi(() => api('/combat', { method: 'PUT', body: c })); refresh(); };
 
+  const temMapa = !!activeMap();
+  const foraDoMapa = c.entries.filter((e) => !tokenOf(e.name)).length;
+
   el.innerHTML = `
     <div class="co-header">
-      <span class="co-label-text">⚔️ INICIATIVA · R.${c.round}</span>
+      <span class="co-label-text">⚔️ COMBATENTES · R.${c.round}</span>
       <div class="co-controls">
         <button class="btn small ghost co-btn" id="co-add" title="Adicionar combatente">+</button>
-        <button class="btn small ghost co-btn" id="co-pcs" title="Adicionar jogadores">👥</button>
+        <button class="btn small ghost co-btn" id="co-pcs" title="Adicionar jogadores à iniciativa">👥</button>
         <button class="btn small ghost co-btn" id="co-sort" title="Ordenar por iniciativa">⇅</button>
         <button class="btn small ghost co-btn" id="co-srd" title="Bestiário SRD">📖</button>
       </div>
@@ -1363,26 +1376,38 @@ function renderCombatOrder() {
     <div class="co-turn-bar">
       <button class="btn small co-btn" id="co-next">▶ Próximo</button>
       <button class="btn small ghost co-btn" id="co-announce" title="Postar no Discord">📤</button>
-      <button class="btn small danger co-btn" id="co-end">✕ Fim</button>
+      <button class="btn small danger co-btn" id="co-end" title="Encerrar combate">✕ Fim</button>
     </div>` : ''}
+    ${c.entries.length && temMapa && foraDoMapa ? `
+    <button class="co-place-all" id="co-place-all" title="Coloca no mapa todos que ainda não têm token">
+      🗺️ ${foraDoMapa} fora do mapa · <b>Colocar todos</b>
+    </button>` : ''}
     <div id="co-list">
       ${c.entries.map((e, i) => {
         const isTurn = i === c.turn;
         const downed = e.maxHp > 0 && (e.hp ?? 0) <= 0;
         const tok = tokenOf(e.name);
+        const onMap = !!tok;
         const retrato = tok?.imageUrl || state.characters.find((x) => x.name === e.name)?.imageUrl || '';
         const conds = (e.conditions || []).map((cd) =>
           `<span class="cond-chip ie-cond" data-rm-cond="${i}|${esc(cd)}" title="Remover ${esc(cd)}">${condIcon(cd)}</span>`
         ).join('');
         return `
-          <div class="init-entry ${isTurn ? 'is-turn' : ''} ${downed ? 'downed' : ''}" data-ie-i="${i}">
+          <div class="init-entry ${isTurn ? 'is-turn' : ''} ${downed ? 'downed' : ''} ${onMap ? '' : 'offmap'}" data-ie-i="${i}">
             <span class="ie-arrow">${isTurn ? '▶' : ''}</span>
             <input class="input ie-init" type="number" value="${esc(e.init)}" data-ci="${i}" data-cf="init" title="Iniciativa" />
             ${retrato
               ? `<img class="ie-avatar" src="${esc(retrato)}" alt="" onerror="this.src=''" />`
               : `<span class="ie-avatar placeholder" style="font-size:12px;display:flex;align-items:center;justify-content:center;">${e.isPc ? '🎮' : '👹'}</span>`}
             <div class="ie-main">
-              <input class="input ie-name" value="${esc(e.name)}" data-ci="${i}" data-cf="name" title="Nome" />
+              <div class="ie-name-row">
+                <input class="input ie-name" value="${esc(e.name)}" data-ci="${i}" data-cf="name" title="Nome" />
+                ${onMap
+                  ? `<button class="ie-mapbtn on" data-locate="${i}" title="Localizar no mapa">📍</button>
+                     <button class="ie-mapbtn" data-hide="${i}" title="${tok.hidden ? 'Mostrar aos jogadores' : 'Esconder dos jogadores'}">${tok.hidden ? '🙈' : '👁️'}</button>`
+                  : `<button class="ie-mapbtn place" data-place="${i}" title="Colocar no mapa">🗺️</button>`}
+                <button class="ie-mapbtn del" data-remove-combatant="${i}" title="Remover do combate e do mapa">🗑</button>
+              </div>
               <div class="ie-row2">
                 <input class="input ie-hp" type="number" value="${esc(e.hp ?? '')}" data-ci="${i}" data-cf="hp" title="PV atual" />
                 <span class="ie-sep">/</span>
@@ -1393,7 +1418,6 @@ function renderCombatOrder() {
                   <option value="">+</option>
                   ${CONDITIONS.filter((x) => !(e.conditions || []).includes(x)).map((x) => `<option value="${esc(x)}">${esc(x)}</option>`).join('')}
                 </select>
-                <button class="btn small danger ie-del" data-remove-combatant="${i}" title="Remover">🗑</button>
               </div>
               ${conds ? `<div class="ie-conds">${conds}</div>` : ''}
               ${downed && e.maxHp ? `
@@ -1407,7 +1431,7 @@ function renderCombatOrder() {
           </div>`;
       }).join('')}
     </div>
-    ${!c.entries.length ? '<div class="empty" style="font-size:12px;padding:8px 4px;">Use + para adicionar ou 📖 para buscar no bestiário.</div>' : ''}`;
+    ${!c.entries.length ? '<div class="empty" style="font-size:12px;padding:8px 4px;">Use + para adicionar, 👥 para trazer os jogadores ou 📖 para buscar no bestiário.</div>' : ''}`;
 
   $$('#co-list .init-entry').forEach((row) => {
     row.onclick = (e) => {
@@ -1427,11 +1451,13 @@ function renderCombatOrder() {
       if (dmg > 0 && e.concentration) toast(`🧠 ${e.name} tomou ${dmg} de dano concentrando: CD ${Math.max(10, Math.floor(dmg / 2))}!`);
       if (val <= 0 && e.hp > 0) e.deathSaves = { s: 0, f: 0 };
     }
+    const nomeAntigo = e.name;
     e[fn] = val;
-    // Sincroniza HP/maxHp de volta para o token do mapa
-    if (fn === 'hp' || fn === 'maxHp') {
-      const tok = tokenOf(e.name);
-      if (tok) { tok[fn] = val; pushBattle(); }
+    // Sincroniza de volta para o token do mapa: HP/maxHp sempre; nome mantém o vínculo.
+    const tok = tokenOf(nomeAntigo);
+    if (tok) {
+      if (fn === 'hp' || fn === 'maxHp') { tok[fn] = val; pushBattle(); }
+      else if (fn === 'name') { tok.name = val; if (tok.combatName) tok.combatName = val; pushBattle(); }
     }
     saveCombat();
   });
@@ -1459,9 +1485,38 @@ function renderCombatOrder() {
     saveCombat();
   });
 
+  // Colocar um combatente no mapa
+  $$('#co-list [data-place]').forEach((b) => b.onclick = (ev) => {
+    ev.stopPropagation();
+    placeOnMap(c.entries[Number(b.dataset.place)]);
+  });
+
+  // Localizar (centraliza a câmera e seleciona o token)
+  $$('#co-list [data-locate]').forEach((b) => b.onclick = (ev) => {
+    ev.stopPropagation();
+    const t = tokenOf(c.entries[Number(b.dataset.locate)]?.name);
+    if (t) { bmap.select(t.id); bmap.centerOn(t.col, t.row); }
+  });
+
+  // Esconder/mostrar o token aos jogadores
+  $$('#co-list [data-hide]').forEach((b) => b.onclick = (ev) => {
+    ev.stopPropagation();
+    const t = tokenOf(c.entries[Number(b.dataset.hide)]?.name);
+    if (t) { t.hidden = !t.hidden; pushBattle(); renderMapSide(); }
+  });
+
+  // Remover do combate — e também o token do mapa (um combatente é uma coisa só)
   $$('#co-list [data-remove-combatant]').forEach((b) => b.onclick = (ev) => {
     ev.stopPropagation();
-    c.entries.splice(Number(b.dataset.removeCombatant), 1);
+    const i = Number(b.dataset.removeCombatant);
+    const e = c.entries[i];
+    const tok = e && tokenOf(e.name);
+    if (tok) {
+      state.battle.tokens = state.battle.tokens.filter((t) => t.id !== tok.id);
+      if (bmap.selectedId === tok.id) bmap.select(null);
+      pushBattle();
+    }
+    c.entries.splice(i, 1);
     if (c.turn >= c.entries.length) c.turn = 0;
     saveCombat();
   });
@@ -1483,6 +1538,9 @@ function renderCombatOrder() {
     if (e.deathSaves.f >= 3) toast(`💀 ${e.name} morreu...`);
     saveCombat();
   });
+
+  const coPlaceAll = $('#co-place-all');
+  if (coPlaceAll) coPlaceAll.onclick = () => placeAllOnMap();
 
   const coAdd = $('#co-add');
   const coPcs = $('#co-pcs');
@@ -1520,50 +1578,58 @@ function renderCombatOrder() {
   };
 }
 
-function renderTokenList() {
-  const el = $('#token-list');
+// Seção subordinada: tokens no mapa que NÃO estão na iniciativa (objetos, NPCs de cenário,
+// coisas ainda não reveladas). Fica escondida quando não há nenhum.
+function renderLooseTokens() {
+  const el = $('#loose-tokens');
   if (!el) return;
-  const tokens = state.battle.tokens || [];
+  const soltos = (state.battle.tokens || []).filter((t) => !entryOf(t));
   const icon = { pc: '🎮', npc: '🎭', enemy: '👹' };
   const kindColor = { pc: '#4ade80', npc: '#c4a747', enemy: '#e05252' };
-  const currentName = state.combat.entries[state.combat.turn]?.name;
-  el.innerHTML = tokens.length ? tokens.map((t) => {
-    const cor = t.color || kindColor[t.kind] || '#8b5cf6';
-    const frac = t.maxHp > 0 ? Math.max(0, Math.min(1, (t.hp ?? 0) / t.maxHp)) : null;
-    const conds = (t.conditions || []).map((c) => `<span class="cond-chip" title="${esc(c)}">${condIcon(c)}</span>`).join('');
-    const isTurn = currentName && (t.combatName || t.name) === currentName;
-    return `
-    <div class="token-row ${t.hidden ? 'hidden-token' : ''} ${isTurn ? 'is-turn' : ''}">
-      ${t.imageUrl
-        ? `<img class="token-avatar" style="border-color:${esc(cor)}" src="${esc(t.imageUrl)}" alt="" onerror="this.remove()" />`
-        : `<span class="token-dot" style="background:${esc(cor)}"></span>`}
-      <span class="name">
-        ${isTurn ? '⚔️ ' : (icon[t.kind] || '⚪ ')}${esc(t.name)}${t.concentration ? ' 🧠' : ''}
-        ${frac !== null ? `<small>${esc(t.hp)}/${esc(t.maxHp)} PV</small>` : ''}
-        ${conds ? `<div class="cond-list">${conds}</div>` : ''}
-      </span>
-      <button class="btn small ghost" data-tok-dup="${t.id}" title="Duplicar este token com PV cheios">📋</button>
-      <button class="btn small ghost" data-tok-hide="${t.id}" title="${t.hidden ? 'Mostrar aos jogadores' : 'Esconder dos jogadores'}">${t.hidden ? '🙈' : '👁️'}</button>
-      <button class="btn small ghost" data-tok-edit="${t.id}">✏️</button>
-      <button class="btn small danger" data-tok-del="${t.id}">🗑</button>
-    </div>`;
-  }).join('') : '<div class="empty">Nenhum token. Traga a iniciativa ou os jogadores.</div>';
 
-  $$('#token-list [data-tok-dup]').forEach((b) => b.onclick = (e) => { e.stopPropagation(); duplicateToken(b.dataset.tokDup); });
-  $$('#token-list [data-tok-hide]').forEach((b) => b.onclick = () => {
+  el.innerHTML = `
+    <div class="side-section">
+      <div class="side-section-label">
+        <span>OUTROS NO MAPA</span>
+        <button class="btn small ghost" id="btn-token-new" title="Criar um token avulso (objeto, NPC de cenário...)">+ Avulso</button>
+      </div>
+      ${soltos.length ? `<div id="loose-list">${soltos.map((t) => {
+        const cor = t.color || kindColor[t.kind] || '#8b5cf6';
+        const frac = t.maxHp > 0 ? Math.max(0, Math.min(1, (t.hp ?? 0) / t.maxHp)) : null;
+        const conds = (t.conditions || []).map((cd) => `<span class="cond-chip" title="${esc(cd)}">${condIcon(cd)}</span>`).join('');
+        return `
+        <div class="token-row ${t.hidden ? 'hidden-token' : ''}" data-tok-id="${t.id}">
+          ${t.imageUrl
+            ? `<img class="token-avatar" style="border-color:${esc(cor)}" src="${esc(t.imageUrl)}" alt="" onerror="this.remove()" />`
+            : `<span class="token-dot" style="background:${esc(cor)}"></span>`}
+          <span class="name">
+            ${icon[t.kind] || '⚪ '}${esc(t.name)}${t.concentration ? ' 🧠' : ''}
+            ${frac !== null ? `<small>${esc(t.hp)}/${esc(t.maxHp)} PV</small>` : ''}
+            ${conds ? `<div class="cond-list">${conds}</div>` : ''}
+          </span>
+          <button class="btn small ghost" data-tok-dup="${t.id}" title="Duplicar este token com PV cheios">📋</button>
+          <button class="btn small ghost" data-tok-hide="${t.id}" title="${t.hidden ? 'Mostrar aos jogadores' : 'Esconder dos jogadores'}">${t.hidden ? '🙈' : '👁️'}</button>
+          <button class="btn small ghost" data-tok-edit="${t.id}">✏️</button>
+          <button class="btn small danger" data-tok-del="${t.id}">🗑</button>
+        </div>`;
+      }).join('')}</div>` : '<div class="empty" style="font-size:12px;padding:6px 4px;">Nenhum token avulso. Os combatentes ficam na lista acima.</div>'}
+    </div>`;
+
+  $('#btn-token-new').onclick = () => tokenModal();
+  $$('#loose-tokens [data-tok-dup]').forEach((b) => b.onclick = (e) => { e.stopPropagation(); duplicateToken(b.dataset.tokDup); });
+  $$('#loose-tokens [data-tok-hide]').forEach((b) => b.onclick = () => {
     const t = state.battle.tokens.find((x) => x.id === b.dataset.tokHide);
     t.hidden = !t.hidden;
     pushBattle();
     renderMapSide();
   });
-  $$('#token-list [data-tok-edit]').forEach((b) => b.onclick = () =>
+  $$('#loose-tokens [data-tok-edit]').forEach((b) => b.onclick = () =>
     tokenModal(state.battle.tokens.find((x) => x.id === b.dataset.tokEdit)));
-  $$('#token-list [data-tok-del]').forEach((b) => b.onclick = () => removeToken(b.dataset.tokDel));
-  $$('#token-list .token-row').forEach((row, i) => row.onclick = (e) => {
+  $$('#loose-tokens [data-tok-del]').forEach((b) => b.onclick = () => removeToken(b.dataset.tokDel));
+  $$('#loose-tokens .token-row').forEach((row) => row.onclick = (e) => {
     if (e.target.closest('button')) return;
-    const t = tokens[i];
-    bmap.select(t.id);
-    bmap.centerOn(t.col, t.row);
+    const t = state.battle.tokens.find((x) => x.id === row.dataset.tokId);
+    if (t) { bmap.select(t.id); bmap.centerOn(t.col, t.row); }
   });
 }
 
