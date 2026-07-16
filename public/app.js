@@ -1670,6 +1670,27 @@ function renderCombatOrder() {
 
 // Seção subordinada: tokens no mapa que NÃO estão na iniciativa (objetos, NPCs de cenário,
 // coisas ainda não reveladas). Fica escondida quando não há nenhum.
+// Promove um token avulso a combatente: cria a entry ligada (por nome) e ele sobe
+// automaticamente da seção "OUTROS NO MAPA" para a lista de combatentes.
+function looseToCombat(tokenId) {
+  const t = state.battle.tokens.find((x) => x.id === tokenId);
+  if (!t) return;
+  const c = state.combat;
+  const nome = t.combatName || t.name;
+  if (c.entries.some((e) => e.name === nome)) return toast(`${nome} já está no combate.`, true);
+  c.entries.push({
+    name: nome, init: 10,
+    hp: t.hp ?? 0, maxHp: t.maxHp ?? 0,
+    conditions: [], deathSaves: { s: 0, f: 0 },
+    isPc: t.kind === 'pc',
+    imageUrl: t.imageUrl || '',
+  });
+  // Garante o vínculo pelo combatName, mesmo que o token seja renomeado depois.
+  if (!t.combatName) { t.combatName = nome; pushBattle(); }
+  tryApi(() => api('/combat', { method: 'PUT', body: c })).then(() => renderMapSide());
+  toast(`⚔️ ${nome} entrou no combate.`);
+}
+
 function renderLooseTokens() {
   const el = $('#loose-tokens');
   if (!el) return;
@@ -1681,7 +1702,7 @@ function renderLooseTokens() {
     <div class="side-section">
       <div class="side-section-label">
         <span>OUTROS NO MAPA</span>
-        <button class="btn small ghost" id="btn-token-new" title="Criar um token avulso (objeto, NPC de cenário...)">+ Avulso</button>
+        <button class="btn small gold" id="btn-loose-add" title="Adicionar personagem cadastrado ou um token avulso">＋ Adicionar</button>
       </div>
       ${soltos.length ? `<div id="loose-list">${soltos.map((t) => {
         const cor = t.color || kindColor[t.kind] || '#8b5cf6';
@@ -1697,6 +1718,7 @@ function renderLooseTokens() {
             ${frac !== null ? `<small>${esc(t.hp)}/${esc(t.maxHp)} PV</small>` : ''}
             ${conds ? `<div class="cond-list">${conds}</div>` : ''}
           </span>
+          <button class="btn small gold" data-tok-combat="${t.id}" title="Adicionar ao combate (entra na iniciativa)">⚔️</button>
           <button class="btn small ghost" data-tok-dup="${t.id}" title="Duplicar este token com PV cheios">📋</button>
           <button class="btn small ghost" data-tok-hide="${t.id}" title="${t.hidden ? 'Mostrar aos jogadores' : 'Esconder dos jogadores'}">${t.hidden ? '🙈' : '👁️'}</button>
           <button class="btn small ghost" data-tok-edit="${t.id}">✏️</button>
@@ -1705,7 +1727,8 @@ function renderLooseTokens() {
       }).join('')}</div>` : '<div class="empty" style="font-size:12px;padding:6px 4px;">Nenhum token avulso. Os combatentes ficam na lista acima.</div>'}
     </div>`;
 
-  $('#btn-token-new').onclick = () => tokenModal();
+  $('#btn-loose-add').onclick = () => charPickerModal();
+  $$('#loose-tokens [data-tok-combat]').forEach((b) => b.onclick = (e) => { e.stopPropagation(); looseToCombat(b.dataset.tokCombat); });
   $$('#loose-tokens [data-tok-dup]').forEach((b) => b.onclick = (e) => { e.stopPropagation(); duplicateToken(b.dataset.tokDup); });
   $$('#loose-tokens [data-tok-hide]').forEach((b) => b.onclick = () => {
     const t = state.battle.tokens.find((x) => x.id === b.dataset.tokHide);
@@ -2096,6 +2119,28 @@ async function addCharacter(charId, aoMapa) {
   refresh();
 }
 
+// Coloca o token de um personagem cadastrado no mapa, SEM entrar no combate (fica em
+// "OUTROS NO MAPA"). Útil para NPCs de cenário, figurantes, etc.
+function placeCharacterToken(charId) {
+  const ch = state.characters.find((c) => c.id === charId);
+  if (!ch) return;
+  const map = activeMap();
+  if (!map) return toast('Coloque um mapa em jogo primeiro.', true);
+  const i = state.battle.tokens.length;
+  state.battle.tokens.push({
+    id: Math.random().toString(16).slice(2, 10),
+    name: ch.name, kind: kindDoPersonagem(ch), combatName: '',
+    col: Math.min(map.cols - 1, i % map.cols),
+    row: Math.min(map.rows - 1, Math.floor(i / map.cols)),
+    size: 1, speed: 9,
+    hp: Number(ch.hp) || 0, maxHp: Number(ch.maxHp) || 0,
+    hidden: false, color: '', imageUrl: ch.imageUrl || '', charId: ch.id,
+  });
+  pushBattle();
+  renderMapSide();
+  toast(`📍 ${ch.name} colocado no mapa.`);
+}
+
 // Seletor dos personagens do Mestre (jogadores e NPCs) para jogar na batalha.
 function charPickerModal() {
   const chars = state.characters || [];
@@ -2113,24 +2158,29 @@ function charPickerModal() {
           ? `<img class="cp-thumb" src="${esc(ch.imageUrl)}" alt="" onerror="this.replaceWith(document.createTextNode('${icon}'))" />`
           : `<span class="cp-thumb placeholder">${icon}</span>`}
         <span>${esc(ch.name)}<small style="color:var(--muted);">${esc(hpTxt)}</small></span>
-        <button class="btn small" data-cp-add="${ch.id}" title="Só na iniciativa">➕ Iniciativa</button>
-        <button class="btn small gold" data-cp-map="${ch.id}" title="Iniciativa + token no mapa">🗺️</button>
+        <button class="btn small" data-cp-add="${ch.id}" title="Entra só na iniciativa (sem token no mapa)">⚔️ Combate</button>
+        <button class="btn small gold" data-cp-map="${ch.id}" title="Entra na iniciativa E vira token no mapa">🗺️ Combate + mapa</button>
+        <button class="btn small ghost" data-cp-token="${ch.id}" title="Só coloca o token no mapa, sem entrar no combate">📍 Só mapa</button>
       </div>`;
   };
   const section = (titulo, arr) => arr.length
     ? `<div class="cp-section-label">${titulo}</div>${arr.map(row).join('')}` : '';
 
   $('#modal').innerHTML = `
-    <h3>🧙 Adicionar à batalha</h3>
-    ${pcs.length ? '<button class="btn small ghost" id="cp-all-pcs" style="margin-bottom:8px;">👥 Todos os jogadores de uma vez</button>' : ''}
+    <h3>🧙 Adicionar personagem</h3>
+    <div class="row" style="gap:6px;margin-bottom:10px;flex-wrap:wrap;">
+      ${pcs.length ? '<button class="btn small ghost" id="cp-all-pcs">👥 Todos os jogadores</button>' : ''}
+      <button class="btn small ghost" id="cp-blank">⬜ Token em branco</button>
+    </div>
     <div id="cp-list" style="max-height:360px;overflow-y:auto;">
       ${chars.length
         ? section('🎮 Jogadores', pcs) + section('🎭 NPCs', npcs)
-        : '<div class="help-text">Nenhum personagem criado ainda. Crie na aba 🧙 Personagens.</div>'}
+        : '<div class="help-text">Nenhum personagem cadastrado ainda. Crie na aba 🧙 Personagens.</div>'}
     </div>
     <div class="modal-actions"><button class="btn ghost" id="modal-cancel">Fechar</button></div>`;
   $('#modal-backdrop').classList.remove('hidden');
   $('#modal-cancel').onclick = closeModal;
+  $('#cp-blank').onclick = () => { closeModal(); tokenModal(); };
 
   const allPcs = $('#cp-all-pcs');
   if (allPcs) allPcs.onclick = async () => {
@@ -2150,6 +2200,7 @@ function charPickerModal() {
   };
   $$('#cp-list [data-cp-add]').forEach((b) => b.onclick = () => { closeModal(); addCharacter(b.dataset.cpAdd, false); });
   $$('#cp-list [data-cp-map]').forEach((b) => b.onclick = () => { closeModal(); addCharacter(b.dataset.cpMap, true); });
+  $$('#cp-list [data-cp-token]').forEach((b) => b.onclick = () => { closeModal(); placeCharacterToken(b.dataset.cpToken); });
 }
 
 // ---------- Glossário PT-BR do Bestiário SRD ----------
