@@ -65,7 +65,10 @@ export async function startBot() {
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates],
   });
 
-  client.on('interactionCreate', onInteraction);
+  // onInteraction é async: sem este .catch, qualquer erro dela viraria uma
+  // promise rejeitada sem dono — que no Node derruba o processo inteiro.
+  client.on('interactionCreate', (i) => onInteraction(i).catch((err) =>
+    console.error('[bot] Falha não tratada na interação:', err)));
 
   await client.login(process.env.DISCORD_TOKEN);
   await new Promise((res) => client.once('clientReady', res));
@@ -93,9 +96,13 @@ async function registerCommands() {
 
 async function onInteraction(interaction) {
   if (interaction.isAutocomplete() && interaction.commandName === 'vincular') {
-    const typed = interaction.options.getFocused().toLowerCase();
-    const pcs = getDb().characters.filter((c) => c.type === 'pc' && c.name.toLowerCase().includes(typed));
-    await interaction.respond(pcs.slice(0, 25).map((c) => ({ name: c.name, value: c.id }))).catch(() => {});
+    try {
+      const typed = interaction.options.getFocused().toLowerCase();
+      const pcs = getDb().characters.filter((c) => c.type === 'pc' && c.name.toLowerCase().includes(typed));
+      await interaction.respond(pcs.slice(0, 25).map((c) => ({ name: c.name, value: c.id })));
+    } catch (err) {
+      console.error('[bot] Falha no autocomplete de /vincular:', err.message);
+    }
     return;
   }
   if (!interaction.isChatInputCommand()) return;
@@ -106,8 +113,11 @@ async function onInteraction(interaction) {
         await interaction.reply({ content: 'Entre em um canal de voz primeiro!', ephemeral: true });
         return;
       }
+      // Conectar na voz pode levar até 15s, mas o Discord invalida a interação
+      // em 3s. Avisa que estamos processando antes de tentar entrar.
+      await interaction.deferReply();
       await joinChannel(channel.id);
-      await interaction.reply(`🎵 Entrei em **${channel.name}**. A trilha da campanha está nas mãos do Mestre...`);
+      await interaction.editReply(`🎵 Entrei em **${channel.name}**. A trilha da campanha está nas mãos do Mestre...`);
     } else if (interaction.commandName === 'sair') {
       leaveVoice();
       await interaction.reply('👋 Saí do canal de voz.');
@@ -154,7 +164,13 @@ async function onInteraction(interaction) {
     }
   } catch (err) {
     console.error('[bot] Erro na interação:', err);
-    if (!interaction.replied) await interaction.reply({ content: 'Algo deu errado.', ephemeral: true }).catch(() => {});
+    // Mostra o motivo real ao jogador, respeitando o estado da interação:
+    // se já foi adiada (deferReply), reply() falharia com "already acknowledged".
+    const texto = `❌ ${err.message || 'Algo deu errado.'}`;
+    try {
+      if (interaction.deferred) await interaction.editReply({ content: texto });
+      else if (!interaction.replied) await interaction.reply({ content: texto, ephemeral: true });
+    } catch { /* a interação expirou (>3s) — não há o que responder */ }
   }
 }
 

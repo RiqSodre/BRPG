@@ -11,6 +11,14 @@ if (ffmpegPath) {
   process.env.FFMPEG_PATH = ffmpegPath;
 }
 
+// Rede de segurança: uma promise rejeitada sem dono (ex: a API do Discord
+// recusando uma resposta atrasada) derrubaria o processo inteiro no Node —
+// e com ele o painel, a tela dos jogadores e o bot, no meio da sessão.
+// Aqui a falha é registrada e a mesa continua de pé.
+process.on('unhandledRejection', (err) => {
+  console.error('[aviso] Promise rejeitada sem tratamento:', err?.message || err);
+});
+
 initStore();
 startServer();
 startBot().catch((err) => {
