@@ -1428,6 +1428,11 @@ function renderCombatOrder() {
       if (val <= 0 && e.hp > 0) e.deathSaves = { s: 0, f: 0 };
     }
     e[fn] = val;
+    // Sincroniza HP/maxHp de volta para o token do mapa
+    if (fn === 'hp' || fn === 'maxHp') {
+      const tok = tokenOf(e.name);
+      if (tok) { tok[fn] = val; pushBattle(); }
+    }
     saveCombat();
   });
 
