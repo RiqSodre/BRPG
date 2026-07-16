@@ -2680,7 +2680,7 @@ function charPickerModal() {
     return `
       <div class="srd-result-row">
         ${ch.imageUrl
-          ? `<img class="cp-thumb" src="${esc(ch.imageUrl)}" alt="" onerror="this.replaceWith(document.createTextNode('${icon}'))" />`
+          ? `<img class="cp-thumb" src="${esc(ch.imageUrl)}" alt="" data-fallback-icon="${icon}" />`
           : `<span class="cp-thumb placeholder">${icon}</span>`}
         <span>${esc(ch.name)}<small style="color:var(--muted);">${esc(hpTxt)}</small></span>
         <button class="btn small" data-cp-add="${ch.id}" title="Entra só na iniciativa (sem token no mapa)">⚔️ Combate</button>
@@ -2706,6 +2706,22 @@ function charPickerModal() {
   $('#modal-backdrop').classList.remove('hidden');
   $('#modal-cancel').onclick = closeModal;
   $('#cp-blank').onclick = () => { closeModal(); tokenModal(); };
+
+  // Retrato que falha ao carregar (rede) ou "carrega" corrompido/vazio (naturalWidth 0,
+  // sem disparar erro) vira o mesmo placeholder redondo com o ícone — nunca fica em branco.
+  $$('#cp-list img.cp-thumb').forEach((img) => {
+    const swap = () => {
+      if (!img.isConnected) return;
+      const span = document.createElement('span');
+      span.className = 'cp-thumb placeholder';
+      span.textContent = img.dataset.fallbackIcon || '🎭';
+      img.replaceWith(span);
+    };
+    img.addEventListener('error', swap, { once: true });
+    const checkDecoded = () => { if (img.naturalWidth === 0) swap(); };
+    if (img.complete) checkDecoded();
+    else img.addEventListener('load', checkDecoded, { once: true });
+  });
 
   const allPcs = $('#cp-all-pcs');
   if (allPcs) allPcs.onclick = async () => {
