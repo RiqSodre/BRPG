@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import express from 'express';
+import session from 'express-session';
 import multer from 'multer';
 import { WebSocketServer } from 'ws';
 import {
@@ -14,6 +15,7 @@ import * as bot from './bot.js';
 import * as ai from './ai.js';
 import * as tts from './tts.js';
 import { createMesaWss, broadcastTable } from './realtime.js';
+import * as auth from './auth.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -36,6 +38,15 @@ const imageUpload = diskUpload(IMAGES_DIR, /\.(png|jpe?g|webp|gif)$/i, 10);
 export function startServer() {
   const app = express();
   app.use(express.json({ limit: '2mb' }));
+  // Sessão do PORTAL DO JOGADOR (login com Discord). O painel do Mestre não usa
+  // sessão nem cookie — continua acessado direto, sem login, como sempre foi.
+  app.use(session({
+    name: 'brpg.sid',
+    secret: process.env.SESSION_SECRET || 'dev-only-troque-no-.env',
+    resave: false,
+    saveUninitialized: false,
+    cookie: { httpOnly: true, sameSite: 'lax', maxAge: 30 * 24 * 60 * 60 * 1000 },
+  }));
   app.use(express.static(path.join(__dirname, '..', 'public')));
   app.use('/audio-files', express.static(AUDIO_DIR));
   app.use('/tts-files', express.static(tts.TTS_DIR));
@@ -49,6 +60,43 @@ export function startServer() {
       res.status(400).json({ error: err.message });
     });
   };
+
+  // ---- Login do jogador (Discord OAuth2) ----
+  app.get('/api/auth-status', (req, res) => {
+    const session_ = req.session?.discordUser;
+    res.json({
+      configured: auth.oauthConfigured(),
+      loggedIn: Boolean(session_),
+      discordUser: session_ || null,
+      ...(session_ ? auth.resolveRole(session_.id) : {}),
+    });
+  });
+
+  app.get('/auth/discord', (req, res) => {
+    if (!auth.oauthConfigured()) {
+      return res.status(500).send('Login com Discord ainda não configurado pelo Mestre (faltam DISCORD_CLIENT_ID/SECRET no .env).');
+    }
+    res.redirect(auth.buildAuthUrl(req));
+  });
+
+  app.get('/auth/discord/callback', wrap(async (req, res) => {
+    if (req.query.error) return res.redirect('/jogador.html?erro=acesso_negado');
+    const { access_token } = await auth.exchangeCode(req, req.query.code);
+    const discordUser = await auth.fetchDiscordUser(access_token);
+    req.session.discordUser = discordUser;
+    res.redirect('/jogador.html');
+  }));
+
+  app.post('/api/auth/logout', (req, res) => {
+    req.session.destroy(() => res.json({ ok: true }));
+  });
+
+  // Identidade do jogador logado + o papel resolvido. Ainda não devolve dados
+  // da campanha (isso é a Fase 1) — só prova que login + papel funcionam.
+  app.get('/api/me', auth.requireAuth, (req, res) => {
+    const { role, character } = auth.resolveRole(req.session.discordUser.id);
+    res.json({ discordUser: req.session.discordUser, role, character });
+  });
 
   // ---- Estado geral ----
   app.get('/api/state', wrap(async (req, res) => {

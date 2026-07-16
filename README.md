@@ -44,6 +44,17 @@ Edite o `.env` e preencha:
 - `ANTHROPIC_API_KEY` — chave criada em https://console.anthropic.com (a IA é paga por uso; uma sessão de jogo típica custa centavos)
 - `FREESOUND_API_KEY` — opcional, para buscar sons pelo painel (grátis em https://freesound.org/apiv2/apply)
 
+#### Portal do jogador (em construção, opcional)
+
+Um portal onde cada jogador loga com o Discord e acompanha a própria ficha em tempo real está sendo construído na branch `feat/player-portal`. Para testar o login enquanto isso evolui, preencha também:
+
+- `DISCORD_CLIENT_ID` e `DISCORD_CLIENT_SECRET` — na mesma aplicação do bot (passo 2), aba **OAuth2**
+- Em **OAuth2 → Redirects**, cadastre `http://localhost:3000/auth/discord/callback`
+- `GM_DISCORD_ID` — seu ID de usuário do Discord (não o do servidor), para o portal te reconhecer como Mestre
+- `SESSION_SECRET` — qualquer texto longo e aleatório
+
+Sem essas variáveis, tudo continua funcionando exatamente como hoje — o portal (`/jogador.html`) só fica indisponível até serem configuradas.
+
 ### 4. Rodar
 
 ```powershell
