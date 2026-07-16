@@ -1024,9 +1024,10 @@ function renderMapTab() {
       if (!naAba || digitando || $('#modal-backdrop').classList.contains('hidden') === false) return;
 
       const sel = bmap.tokenById(bmap.selectedId);
-      // 1-9 soltam os efeitos do soundboard na voz, sem tirar a mão do mapa
+      // 1-9 soltam os efeitos do soundboard na voz, seguindo a lista visível
+      // (filtrou "sword" e apertou 1 = primeiro resultado do filtro)
       if (/^[1-9]$/.test(e.key)) {
-        const sfx = sfxDaBatalha()[Number(e.key) - 1];
+        const sfx = sbVisiveis()[Number(e.key) - 1];
         if (sfx) { e.preventDefault(); tocarSfx(sfx); }
         return;
       }
@@ -1220,9 +1221,19 @@ function renderMapTab() {
 }
 
 // ---------- Soundboard de batalha ----------
-// Efeitos one-shot no canal de voz, sem sair do mapa. Os 9 primeiros ganham
-// atalho numérico para o Mestre soltar o golpe sem tirar a mão do mapa.
-const sfxDaBatalha = () => (state.audio || []).filter((a) => a.type === 'sfx');
+// Efeitos one-shot no canal de voz, sem sair do mapa. O filtro busca na biblioteca
+// e, se não achar, o mesmo termo vai ao Freesound: importa e já toca. Os 9 primeiros
+// da lista visível ganham atalho numérico — filtrar e apertar 1 é o caminho rápido.
+let sbFiltro = '';
+let sbPreview = null;
+
+const sbVisiveis = () => {
+  const todos = (state.audio || []).filter((a) => a.type === 'sfx');
+  const q = sbFiltro.trim().toLowerCase();
+  if (!q) return todos;
+  return todos.filter((a) => a.name.toLowerCase().includes(q)
+    || (a.tags || []).some((t) => t.toLowerCase().includes(q)));
+};
 
 function tocarSfx(audio) {
   if (!audio) return;
@@ -1230,23 +1241,92 @@ function tocarSfx(audio) {
   tryApi(() => api(`/sound/play/${audio.id}`, { method: 'POST' }), `🔊 ${audio.name}`);
 }
 
+// Busca no Freesound o que está no filtro e deixa importar na hora.
+async function sbBuscarFreesound() {
+  const q = sbFiltro.trim();
+  const box = $('#sb-fs-results');
+  if (!box) return;
+  if (!q) return toast('Digite o que procura — ex: sword, thunder, scream (em inglês acha mais).', true);
+  box.innerHTML = '<span class="ov-label">🔎 Buscando no Freesound…</span>';
+  const results = await tryApi(() => api(`/freesound/search?q=${encodeURIComponent(q)}`));
+  if (!results) { box.innerHTML = ''; return; }
+  if (!results.length) { box.innerHTML = '<span class="ov-label">Nada encontrado no Freesound.</span>'; return; }
+
+  box.innerHTML = results.slice(0, 6).map((s, i) => `
+    <div class="sb-fs-row">
+      <button class="ov-btn" data-fs-prev="${i}" title="Ouvir só na sua máquina (a mesa não escuta)">▶</button>
+      <span class="sb-fs-name" title="${esc(s.name)} · ${Math.round(s.duration)}s · por ${esc(s.username)}">
+        ${esc(s.name.replace(/_/g, ' ').slice(0, 30))}${s.name.length > 30 ? '…' : ''}
+        <small>${Math.round(s.duration)}s</small>
+      </span>
+      <button class="ov-btn gold" data-fs-use="${i}" title="Baixar para a biblioteca e já usar">⬇ Usar</button>
+    </div>`).join('')
+    + '<button class="ov-btn" id="sb-fs-close" title="Fechar os resultados">✕ Fechar busca</button>';
+
+  $$('#sb-fs-results [data-fs-prev]').forEach((b) => b.onclick = () => {
+    const s = results[Number(b.dataset.fsPrev)];
+    if (sbPreview) sbPreview.pause();
+    sbPreview = new Audio(s.previewUrl);
+    sbPreview.play().catch(() => toast('Não consegui tocar a prévia.', true));
+  });
+
+  $$('#sb-fs-results [data-fs-use]').forEach((b) => b.onclick = async () => {
+    const s = results[Number(b.dataset.fsUse)];
+    b.disabled = true; b.textContent = '⬇ Baixando…';
+    const r = await tryApi(() => api('/freesound/import', {
+      method: 'POST',
+      body: { name: s.name, previewUrl: s.previewUrl, type: 'sfx', tags: s.tags },
+    }));
+    if (!r) { b.disabled = false; b.textContent = '⬇ Usar'; return; }
+    if (sbPreview) { sbPreview.pause(); sbPreview = null; }
+    box.innerHTML = '';
+    await refresh(); // a biblioteca recarrega e o som já aparece no soundboard
+    toast(`🎵 "${s.name}" está no soundboard — aperte a tecla dele para tocar!`);
+  });
+
+  $('#sb-fs-close').onclick = () => { box.innerHTML = ''; };
+}
+
 function renderSoundboard() {
   const el = $('#soundboard-panel');
   if (!el) return;
-  const sfx = sfxDaBatalha();
-  el.innerHTML = `
-    <span class="ov-label">🔊 Efeitos</span>
-    ${sfx.length ? sfx.map((a, i) => `
+  // A estrutura é montada uma vez só: assim o campo de busca não perde o texto
+  // nem o foco a cada atualização da mesa. Depois só a lista é redesenhada.
+  if (!el.dataset.built) {
+    el.dataset.built = '1';
+    el.innerHTML = `
+      <div class="sb-head">
+        <span class="ov-label">🔊 Efeitos</span>
+        <input id="sb-search" class="sb-search" placeholder="filtrar ou buscar som novo…" />
+        <button class="ov-btn" id="sb-fs" title="Buscar este termo no Freesound e usar na hora">🔎 Freesound</button>
+        <button class="ov-btn danger" id="sb-stop" title="Parar tudo que está tocando">⏹</button>
+      </div>
+      <div class="sb-list" id="sb-list"></div>
+      <div class="sb-fs-results" id="sb-fs-results"></div>`;
+    $('#sb-search').oninput = (e) => { sbFiltro = e.target.value; renderSbList(); };
+    $('#sb-search').onkeydown = (e) => { if (e.key === 'Enter') sbBuscarFreesound(); };
+    $('#sb-fs').onclick = () => sbBuscarFreesound();
+    $('#sb-stop').onclick = () => tryApi(() => api('/sound/stop', { method: 'POST' }), '⏹ Som parado.');
+  }
+  renderSbList();
+}
+
+function renderSbList() {
+  const box = $('#sb-list');
+  if (!box) return;
+  const sfx = sbVisiveis();
+  const total = (state.audio || []).filter((a) => a.type === 'sfx').length;
+  box.innerHTML = sfx.length
+    ? sfx.map((a, i) => `
       <button class="ov-btn sfx-btn" data-sfx-play="${a.id}" title="${esc(a.name)}${(a.tags || []).length ? ` · ${esc(a.tags.join(', '))}` : ''}">
         ${i < 9 ? `<kbd class="sfx-key">${i + 1}</kbd>` : ''}${esc(a.name.replace(/_/g, ' ').slice(0, 22))}${a.name.length > 22 ? '…' : ''}
       </button>`).join('')
-      : '<span class="ov-label">Nenhum efeito na biblioteca — suba sons na aba 🎵 Áudio.</span>'}
-    ${sfx.length ? '<span class="ov-sep"></span><button class="ov-btn danger" id="sfx-stop" title="Parar tudo que está tocando">⏹ Parar</button>' : ''}`;
+    : `<span class="ov-label">${total
+        ? `Nenhum som com “${esc(sbFiltro)}” — use o 🔎 Freesound para achar um novo.`
+        : 'Biblioteca vazia — busque um som no 🔎 Freesound.'}</span>`;
 
-  $$('#soundboard-panel [data-sfx-play]').forEach((b) => b.onclick = () =>
+  $$('#sb-list [data-sfx-play]').forEach((b) => b.onclick = () =>
     tocarSfx(sfx.find((a) => a.id === b.dataset.sfxPlay)));
-  const stop = $('#sfx-stop');
-  if (stop) stop.onclick = () => tryApi(() => api('/sound/stop', { method: 'POST' }), '⏹ Som parado.');
 }
 
 // ---------- Gerenciamento do combate pelo mapa ----------
