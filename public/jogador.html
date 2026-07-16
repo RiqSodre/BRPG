@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Portal do Jogador — Mesa do Mestre</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    .portal-wrap {
+      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      background: var(--bg); padding: 24px;
+    }
+    .portal-card {
+      max-width: 420px; width: 100%; background: var(--bg2);
+      border: 1px solid var(--border); border-radius: 16px; padding: 28px;
+      text-align: center;
+    }
+    .portal-card h1 { font-size: 20px; color: var(--accent2); margin-bottom: 6px; }
+    .portal-card p { color: var(--muted); font-size: 14px; line-height: 1.5; margin-bottom: 18px; }
+    .portal-avatar { width: 72px; height: 72px; border-radius: 50%; border: 2px solid var(--accent2); margin-bottom: 10px; }
+    .portal-btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: #5865F2; color: #fff; border: none; border-radius: 10px;
+      padding: 11px 20px; font-size: 14px; font-weight: 600; cursor: pointer;
+      text-decoration: none;
+    }
+    .portal-btn:hover { filter: brightness(1.1); }
+    .portal-badge {
+      display: inline-block; font-size: 12px; padding: 4px 10px; border-radius: 20px;
+      background: rgba(139,92,246,0.15); color: var(--accent); margin-bottom: 14px;
+    }
+    .portal-logout { margin-top: 16px; background: none; border: none; color: var(--muted); font-size: 13px; cursor: pointer; text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="portal-wrap">
+    <div class="portal-card" id="portal-card">
+      <p>Carregando...</p>
+    </div>
+  </div>
+  <script src="jogador.js"></script>
+</body>
+</html>
