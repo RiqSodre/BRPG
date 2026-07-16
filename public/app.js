@@ -980,13 +980,11 @@ function renderMapTab() {
             </div>
           </div>
 
-          <!-- Soundboard: efeitos no canal de voz sem sair do mapa (canto inferior esquerdo) -->
-          <div class="map-overlay ov-bl hidden" id="soundboard">
-            <div class="ov-panel ov-sounds" id="soundboard-panel"></div>
+          <!-- Rodapé flutuante: soundboard empilhado ACIMA do HUD, nunca se sobrepõem -->
+          <div class="map-overlay ov-bottom">
+            <div class="ov-panel ov-sounds hidden" id="soundboard-panel"></div>
+            <div id="combat-hud" class="combat-hud"></div>
           </div>
-
-          <!-- HUD de turno (compacto, flutuando embaixo) -->
-          <div id="combat-hud" class="combat-hud"></div>
         </div>
         <div class="map-resize-handle" id="map-resize-handle"></div>
         <aside class="map-side" id="map-side">
@@ -1122,7 +1120,7 @@ function renderMapTab() {
 
     // Botão 🔊 mostra/esconde o soundboard de batalha
     $('#btn-sound-toggle').onclick = () => {
-      const p = $('#soundboard');
+      const p = $('#soundboard-panel');
       p.classList.toggle('hidden');
       $('#btn-sound-toggle').classList.toggle('active', !p.classList.contains('hidden'));
     };

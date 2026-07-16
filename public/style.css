@@ -382,9 +382,16 @@ textarea { resize: vertical; min-height: 80px; }
 .map-overlay .ov-panel { pointer-events: auto; }
 .ov-top { top: 10px; left: 10px; right: 10px; flex-wrap: wrap; align-items: flex-start; }
 .ov-img.hidden { display: none; }
-/* Soundboard flutuante, canto inferior esquerdo (o HUD fica no centro) */
-.ov-bl { bottom: 10px; left: 10px; max-width: 46%; }
-.ov-sounds { max-width: 100%; }
+
+/* Rodapé flutuante: empilha o soundboard ACIMA do HUD de turno.
+   Como é uma coluna flex, os dois nunca se sobrepõem, por mais que cresçam. */
+.ov-bottom {
+  left: 10px; right: 10px; bottom: 10px;
+  flex-direction: column; align-items: center; gap: 8px; z-index: 6;
+}
+.ov-bottom > * { pointer-events: auto; }
+.ov-sounds { align-self: flex-start; max-width: 100%; }
+.ov-sounds.hidden { display: none; }
 .sfx-btn { gap: 5px; }
 .sfx-key {
   background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
@@ -439,13 +446,12 @@ textarea { resize: vertical; min-height: 80px; }
 .sample-controls input { width: 58px; padding: 3px 6px; font-size: 12px; }
 .sample-rows { white-space: nowrap; color: var(--accent2); }
 
-/* HUD de turno — compacto, flutuando sobre o mapa (embaixo, centralizado) */
+/* HUD de turno — compacto, no rodapé flutuante (posicionado pelo .ov-bottom) */
 .combat-hud {
-  position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); z-index: 6;
   display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap;
   background: rgba(20,17,28,0.9); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
   border: 1px solid var(--accent); border-radius: 12px; padding: 6px 10px;
-  box-shadow: 0 6px 22px rgba(0,0,0,0.45); max-width: calc(100% - 20px);
+  box-shadow: 0 6px 22px rgba(0,0,0,0.45); max-width: 100%;
 }
 .combat-hud:empty { display: none; }
 .hud-turn { display: flex; align-items: center; gap: 8px; min-width: 0; }
