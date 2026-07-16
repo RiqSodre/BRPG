@@ -131,6 +131,7 @@ function renderAll() {
   renderAudio();
   renderBoothTab();
   renderMapTab();
+  renderBestiarioTab();
   renderSessions();
   renderAiTab();
   renderSettings();
@@ -2424,6 +2425,87 @@ function sessionModal(s = {}) {
 const CONDITIONS = ['Agarrado', 'Amedrontado', 'Atordoado', 'Caído', 'Cego', 'Contido', 'Enfeitiçado', 'Envenenado', 'Exausto', 'Incapacitado', 'Inconsciente', 'Invisível', 'Paralisado', 'Petrificado', 'Surdo'];
 const d20 = () => 1 + Math.floor(Math.random() * 20);
 const abilityMod = (score) => Math.floor((Number(score) - 10) / 2);
+
+// ---------- Bestiário (aba dedicada — mesma ficha/ações do modal SRD da Batalha) ----------
+let bestiarioMonsters = null; // cache: null = ainda não carregado
+let bestiarioFiltered = [];
+let bestiarioPage = 1;
+let bestiarioQuery = '';
+let bestiarioShellRendered = false;
+const BESTIARIO_PAGE_SIZE = 12;
+
+async function renderBestiarioTab() {
+  if (!$('#tab-bestiario')) return;
+
+  if (!bestiarioShellRendered) {
+    bestiarioShellRendered = true;
+    $('#tab-bestiario').innerHTML = `
+      <div class="tab-header">
+        <h2>📖 Bestiário SRD</h2>
+        <div class="actions">
+          <input id="bestiario-query" placeholder="Filtrar por nome ou tipo (inglês)..." style="min-width:240px;" />
+        </div>
+      </div>
+      <p class="help-text">Todos os monstros do SRD, com ficha completa, tradução por IA e envio direto para a iniciativa/mapa — a mesma busca da aba ⚔️ Batalha, agora navegável por página.</p>
+      <div id="bestiario-results"></div>
+      <div id="bestiario-pagination" style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:14px;flex-wrap:wrap;"></div>`;
+
+    $('#bestiario-query').addEventListener('input', (e) => {
+      bestiarioQuery = e.target.value.trim().toLowerCase();
+      applyBestiarioFilter();
+    });
+  }
+
+  if (bestiarioMonsters === null) {
+    $('#bestiario-results').innerHTML = '<p class="help-text">Carregando bestiário...</p>';
+    bestiarioMonsters = (await tryApi(() => api('/srd/monsters'))) || [];
+    bestiarioMonsters.sort((a, b) => a.name.localeCompare(b.name));
+    applyBestiarioFilter();
+  }
+}
+
+function applyBestiarioFilter() {
+  bestiarioFiltered = bestiarioQuery
+    ? bestiarioMonsters.filter((m) =>
+        m.name.toLowerCase().includes(bestiarioQuery) ||
+        (m.type || '').toLowerCase().includes(bestiarioQuery))
+    : bestiarioMonsters;
+  bestiarioPage = 1;
+  renderBestiarioList();
+}
+
+function renderBestiarioList() {
+  const totalPages = Math.max(1, Math.ceil(bestiarioFiltered.length / BESTIARIO_PAGE_SIZE));
+  bestiarioPage = Math.min(Math.max(1, bestiarioPage), totalPages);
+  const start = (bestiarioPage - 1) * BESTIARIO_PAGE_SIZE;
+  const pageItems = bestiarioFiltered.slice(start, start + BESTIARIO_PAGE_SIZE);
+
+  $('#bestiario-results').innerHTML = pageItems.length
+    ? pageItems.map((m) => `
+        <div class="srd-result-row">
+          <span>${esc(m.name)}</span>
+          <button class="btn small ghost" data-srd-view="${esc(m.index)}">📋 Ficha</button>
+          <button class="btn small" data-srd-add="${esc(m.index)}">➕ Iniciativa</button>
+          <button class="btn small gold" data-srd-map="${esc(m.index)}" title="Iniciativa + mapa">🗺️</button>
+        </div>`).join('')
+    : '<div class="help-text">Nada encontrado.</div>';
+
+  $$('#bestiario-results [data-srd-view]').forEach((b) => b.onclick = () => showMonster(b.dataset.srdView));
+  $$('#bestiario-results [data-srd-add]').forEach((b) => b.onclick = () => addMonster(b.dataset.srdAdd, false));
+  $$('#bestiario-results [data-srd-map]').forEach((b) => b.onclick = () => addMonster(b.dataset.srdMap, true));
+
+  $('#bestiario-pagination').innerHTML = `
+    <button class="btn small ghost" id="best-first" ${bestiarioPage === 1 ? 'disabled' : ''}>« Primeira</button>
+    <button class="btn small ghost" id="best-prev" ${bestiarioPage === 1 ? 'disabled' : ''}>‹ Anterior</button>
+    <span class="help-text">Página ${bestiarioPage} de ${totalPages} · ${bestiarioFiltered.length} monstro(s)</span>
+    <button class="btn small ghost" id="best-next" ${bestiarioPage === totalPages ? 'disabled' : ''}>Próxima ›</button>
+    <button class="btn small ghost" id="best-last" ${bestiarioPage === totalPages ? 'disabled' : ''}>Última »</button>`;
+
+  $('#best-first').onclick = () => { bestiarioPage = 1; renderBestiarioList(); };
+  $('#best-prev').onclick = () => { bestiarioPage -= 1; renderBestiarioList(); };
+  $('#best-next').onclick = () => { bestiarioPage += 1; renderBestiarioList(); };
+  $('#best-last').onclick = () => { bestiarioPage = totalPages; renderBestiarioList(); };
+}
 
 function srdModal() {
   $('#modal').innerHTML = `
