@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bestiário - D&D 5e</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    .bestiario-container {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      height: 100%;
+    }
+
+    .bestiario-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .bestiario-search {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex: 1;
+      min-width: 250px;
+    }
+
+    .bestiario-search input {
+      flex: 1;
+      padding: 8px 12px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 14px;
+    }
+
+    .bestiario-search input::placeholder {
+      color: var(--muted);
+    }
+
+    .bestiario-search input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2);
+    }
+
+    .bestiario-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 16px;
+      flex: 1;
+      overflow-y: auto;
+      padding-right: 8px;
+    }
+
+    .monster-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .monster-card:hover {
+      border-color: var(--accent);
+      background: var(--bg3);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(139, 92, 246, 0.2);
+    }
+
+    .monster-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: start;
+      gap: 8px;
+    }
+
+    .monster-name {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--accent2);
+      flex: 1;
+    }
+
+    .monster-size {
+      font-size: 12px;
+      color: var(--muted);
+      background: var(--bg3);
+      padding: 2px 8px;
+      border-radius: 4px;
+      white-space: nowrap;
+    }
+
+    .monster-type {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .monster-ac-hp {
+      display: flex;
+      gap: 16px;
+      font-size: 13px;
+    }
+
+    .monster-stat {
+      display: flex;
+      gap: 4px;
+    }
+
+    .monster-stat-label {
+      color: var(--muted);
+    }
+
+    .monster-stat-value {
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .monster-alignment {
+      font-size: 12px;
+      color: var(--muted);
+      padding-top: 8px;
+      border-top: 1px solid var(--border);
+    }
+
+    .bestiario-pagination {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .pagination-btn {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.2s;
+    }
+
+    .pagination-btn:hover:not(:disabled) {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .pagination-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .pagination-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+      font-weight: 600;
+    }
+
+    .pagination-info {
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: var(--muted);
+    }
+
+    .loading-spinner {
+      display: inline-block;
+      width: 24px;
+      height: 24px;
+      border: 2px solid var(--border);
+      border-top: 2px solid var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .error {
+      background: var(--bg2);
+      border: 1px solid var(--danger);
+      border-radius: 8px;
+      padding: 16px;
+      color: var(--danger);
+      text-align: center;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 40px;
+      color: var(--muted);
+    }
+
+    .monster-modal {
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+
+    .monster-detail-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: start;
+      gap: 16px;
+      margin-bottom: 16px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .monster-detail-name {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--accent2);
+    }
+
+    .monster-detail-type {
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    .monster-stats-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 12px;
+      margin: 16px 0;
+    }
+
+    .monster-ability {
+      background: var(--bg3);
+      padding: 8px 12px;
+      border-radius: 6px;
+      text-align: center;
+    }
+
+    .monster-ability-value {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    .monster-ability-label {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .monster-section {
+      margin: 16px 0;
+    }
+
+    .monster-section-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--accent2);
+      margin-bottom: 8px;
+    }
+
+    .monster-section-content {
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--text);
+    }
+
+    .monster-trait {
+      margin-bottom: 8px;
+    }
+
+    .monster-trait-name {
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .pagination-container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+  </style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-icon">🐉</span>
+      <div>
+        <h1>Bestiário</h1>
+        <small>D&D 5e SRD</small>
+      </div>
+    </div>
+    <nav>
+      <a class="nav-btn" href="index.html" title="Voltar ao painel">← Painel do Mestre</a>
+    </nav>
+  </aside>
+
+  <main class="content">
+    <section class="tab active" style="display: flex; flex-direction: column; padding: 20px 24px;">
+      <div class="bestiario-container">
+        <div class="bestiario-header">
+          <h2 style="font-size: 20px; color: var(--accent2);">Bestiário D&D 5e</h2>
+          <div class="bestiario-search">
+            <input
+              type="text"
+              id="search-input"
+              placeholder="Procurar monstro... (ex: dragon, goblin)"
+              autocomplete="off"
+            />
+            <button id="btn-search" class="btn small">🔍 Buscar</button>
+          </div>
+        </div>
+
+        <div id="bestiario-content">
+          <div class="loading">
+            <div class="loading-spinner"></div>
+            <p style="margin-top: 12px;">Carregando bestiário...</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="modal-backdrop" class="modal-backdrop hidden">
+    <div class="modal" id="modal"></div>
+  </div>
+
+  <script src="bestiario.js"></script>
+</body>
+</html>
