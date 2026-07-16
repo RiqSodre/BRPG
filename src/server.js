@@ -61,8 +61,19 @@ export function startServer() {
     res.json(getDb().settings);
   }));
 
+  // Excluir um item do catálogo também o tira das mochilas.
+  // Registrado ANTES do CRUD genérico para ter precedência na mesma rota.
+  app.delete('/api/items/:id', wrap(async (req, res) => {
+    removeItem('items', req.params.id);
+    for (const ch of getDb().characters) {
+      if (Array.isArray(ch.inventory)) ch.inventory = ch.inventory.filter((l) => l.itemId !== req.params.id);
+    }
+    save();
+    res.json({ ok: true });
+  }));
+
   // ---- CRUD das coleções ----
-  for (const col of ['story', 'characters', 'scenes', 'sessions']) {
+  for (const col of ['story', 'characters', 'scenes', 'sessions', 'items']) {
     app.get(`/api/${col}`, wrap(async (req, res) => res.json(listItems(col))));
     app.post(`/api/${col}`, wrap(async (req, res) => res.json(addItem(col, req.body))));
     app.put(`/api/${col}/:id`, wrap(async (req, res) => {
@@ -75,6 +86,60 @@ export function startServer() {
       res.json({ ok: true });
     }));
   }
+
+  // ---- Mochila dos personagens (aponta para o catálogo de itens) ----
+  const acharPersonagem = (id) => {
+    const ch = getItem('characters', id);
+    if (!ch) throw new Error('Personagem não encontrado.');
+    if (!Array.isArray(ch.inventory)) ch.inventory = [];
+    return ch;
+  };
+
+  // Entrega um item (soma na quantidade se já tiver) e, se pedido, avisa o jogador por DM.
+  app.post('/api/characters/:id/inventory', wrap(async (req, res) => {
+    const ch = acharPersonagem(req.params.id);
+    const item = getItem('items', req.body.itemId);
+    if (!item) throw new Error('Item não encontrado no catálogo.');
+    const qty = Math.max(1, Number(req.body.qty) || 1);
+    const linha = ch.inventory.find((l) => l.itemId === item.id);
+    if (linha) linha.qty += qty; else ch.inventory.push({ itemId: item.id, qty });
+    save();
+
+    let aviso = null;
+    if (req.body.notify) {
+      try { await bot.sendItemToPlayer(ch, item, qty); }
+      catch (e) { aviso = e.message; }
+    }
+    res.json({ inventory: ch.inventory, aviso });
+  }));
+
+  // Ajusta a quantidade (0 ou menos remove o item da mochila).
+  app.put('/api/characters/:id/inventory/:itemId', wrap(async (req, res) => {
+    const ch = acharPersonagem(req.params.id);
+    const qty = Number(req.body.qty) || 0;
+    const i = ch.inventory.findIndex((l) => l.itemId === req.params.itemId);
+    if (i === -1) throw new Error('Esse item não está na mochila.');
+    if (qty > 0) ch.inventory[i].qty = qty; else ch.inventory.splice(i, 1);
+    save();
+    res.json({ inventory: ch.inventory });
+  }));
+
+  app.delete('/api/characters/:id/inventory/:itemId', wrap(async (req, res) => {
+    const ch = acharPersonagem(req.params.id);
+    ch.inventory = ch.inventory.filter((l) => l.itemId !== req.params.itemId);
+    save();
+    res.json({ inventory: ch.inventory });
+  }));
+
+  // Reenvia o item por DM, sem mexer na quantidade.
+  app.post('/api/characters/:id/inventory/:itemId/notify', wrap(async (req, res) => {
+    const ch = acharPersonagem(req.params.id);
+    const item = getItem('items', req.params.itemId);
+    if (!item) throw new Error('Item não encontrado no catálogo.');
+    const linha = ch.inventory.find((l) => l.itemId === item.id);
+    await bot.sendItemToPlayer(ch, item, linha?.qty ?? 1);
+    res.json({ ok: true });
+  }));
 
   // ---- Biblioteca de áudio ----
   app.get('/api/audio', wrap(async (req, res) => res.json(listItems('audio'))));

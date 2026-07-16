@@ -1,8 +1,9 @@
 // Bot do Discord: presença no canal de voz, reprodução automática de áudio
 // das cenas (ambiente em loop), soundboard de efeitos e postagem de cenas.
+import fs from 'fs';
 import path from 'path';
 import {
-  Client, GatewayIntentBits, EmbedBuilder, ChannelType,
+  Client, GatewayIntentBits, EmbedBuilder, ChannelType, AttachmentBuilder,
   REST, Routes, SlashCommandBuilder,
 } from 'discord.js';
 import {
@@ -10,7 +11,17 @@ import {
   AudioPlayerStatus, NoSubscriberBehavior, StreamType, VoiceConnectionStatus, entersState,
 } from '@discordjs/voice';
 import { Mixer } from './mixer.js';
-import { getDb, getItem, updateItem, save, AUDIO_DIR } from './store.js';
+import { getDb, getItem, updateItem, save, AUDIO_DIR, IMAGES_DIR } from './store.js';
+
+// Cores de raridade no embed — a mesma linguagem visual de loot que os jogadores conhecem.
+const RARITY_COLOR = {
+  'Comum': 0x9d9d9d,
+  'Incomum': 0x1eff00,
+  'Raro': 0x0070dd,
+  'Muito raro': 0xa335ee,
+  'Lendário': 0xff8000,
+  'Artefato': 0xe6cc80,
+};
 
 const GUILD_ID = process.env.DISCORD_GUILD_ID;
 
@@ -73,10 +84,11 @@ async function registerCommands() {
       .addStringOption((o) => o.setName('dados').setDescription('Expressão, ex: 1d20+5').setRequired(true)),
     new SlashCommandBuilder().setName('vincular').setDescription('Vincula seu usuário do Discord ao seu personagem da campanha')
       .addStringOption((o) => o.setName('personagem').setDescription('Seu personagem').setRequired(true).setAutocomplete(true)),
+    new SlashCommandBuilder().setName('inventario').setDescription('Abre a mochila do seu personagem'),
   ].map((c) => c.toJSON());
   const rest = new REST().setToken(process.env.DISCORD_TOKEN);
   await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), { body: commands });
-  console.log('[bot] Comandos /entrar, /sair e /rolar registrados.');
+  console.log('[bot] Comandos /entrar, /sair, /rolar, /vincular e /inventario registrados.');
 }
 
 async function onInteraction(interaction) {
@@ -114,6 +126,31 @@ async function onInteraction(interaction) {
       await interaction.reply(result.error
         ? `❌ ${result.error}`
         : `🎲 **${interaction.member?.displayName ?? interaction.user.username}** rolou \`${expr}\`:\n${result.detail} = **${result.total}**`);
+    } else if (interaction.commandName === 'inventario') {
+      const db = getDb();
+      const ch = db.characters.find((c) => c.discordUserId === interaction.user.id);
+      if (!ch) {
+        await interaction.reply({ content: 'Você ainda não vinculou seu personagem. Use `/vincular` primeiro.', ephemeral: true });
+        return;
+      }
+      const inv = (ch.inventory || []).filter((l) => getItem('items', l.itemId));
+      if (!inv.length) {
+        await interaction.reply({ content: `🎒 A mochila de **${ch.name}** está vazia.`, ephemeral: true });
+        return;
+      }
+      const linhas = inv.map((l) => {
+        const it = getItem('items', l.itemId);
+        const meta = [it.type, it.rarity].filter(Boolean).join(' · ');
+        const desc = it.description ? `\n${it.description.slice(0, 140)}${it.description.length > 140 ? '…' : ''}` : '';
+        return `**${l.qty}× ${it.name}**${meta ? ` — _${meta}_` : ''}${desc}`;
+      });
+      const embed = new EmbedBuilder()
+        .setTitle(`🎒 Mochila de ${ch.name}`)
+        .setColor(0xc4a747)
+        .setDescription(linhas.join('\n\n').slice(0, 4000))
+        .setFooter({ text: `${inv.length} item(ns) · ${db.settings.campaignName}` });
+      if (/^https?:\/\//i.test(ch.imageUrl || '')) embed.setThumbnail(ch.imageUrl);
+      await interaction.reply({ embeds: [embed], ephemeral: true });
     }
   } catch (err) {
     console.error('[bot] Erro na interação:', err);
@@ -280,6 +317,49 @@ export async function postMessage(content) {
   const channel = await guild.channels.fetch(db.settings.textChannelId);
   if (!channel) return false;
   await channel.send(content);
+  return true;
+}
+
+// Monta o embed de um item. Imagens locais (upload) o Discord não consegue baixar,
+// então o arquivo vai anexado e o embed aponta para o anexo.
+function itemEmbed(item, qty = 1, header = '🎒 Você recebeu um item') {
+  const meta = [item.type, item.rarity].filter(Boolean).join(' · ');
+  const embed = new EmbedBuilder()
+    .setAuthor({ name: header })
+    .setTitle(`${qty > 1 ? `${qty}× ` : ''}${item.name}`)
+    .setColor(RARITY_COLOR[item.rarity] ?? 0x9d9d9d)
+    .setFooter({ text: getDb().settings.campaignName });
+  const desc = [meta ? `_${meta}_` : '', item.description || ''].filter(Boolean).join('\n\n');
+  if (desc) embed.setDescription(desc);
+
+  const files = [];
+  const url = item.imageUrl || '';
+  if (url.startsWith('/images/')) {
+    const p = path.join(IMAGES_DIR, path.basename(url));
+    if (fs.existsSync(p)) {
+      const nome = path.basename(p);
+      files.push(new AttachmentBuilder(p, { name: nome }));
+      embed.setThumbnail(`attachment://${nome}`);
+    }
+  } else if (/^https?:\/\//i.test(url)) {
+    embed.setThumbnail(url);
+  }
+  return { embed, files };
+}
+
+// Entrega um item ao jogador vinculado ao personagem, por DM.
+export async function sendItemToPlayer(character, item, qty = 1) {
+  if (!client) throw new Error('O bot do Discord está desconectado — confira o DISCORD_TOKEN no .env.');
+  if (!character?.discordUserId) {
+    throw new Error(`${character?.name ?? 'Esse personagem'} não está vinculado a um jogador. Peça para ele usar /vincular no Discord.`);
+  }
+  const { embed, files } = itemEmbed(item, qty);
+  try {
+    const user = await client.users.fetch(character.discordUserId);
+    await user.send({ embeds: [embed], files });
+  } catch {
+    throw new Error(`Não consegui mandar DM para ${character.name} — o jogador precisa aceitar mensagens diretas do servidor.`);
+  }
   return true;
 }
 

@@ -127,6 +127,7 @@ function renderAll() {
   renderScenes();
   renderStory();
   renderCharacters();
+  renderItems();
   renderAudio();
   renderBoothTab();
   renderMapTab();
@@ -280,6 +281,7 @@ function renderCharacters() {
           <button class="btn small gold" data-improv="${c.id}">🎭 Improvisar</button>
           <button class="btn small" data-speak="${c.id}">🗣️ Falar</button>
           <button class="btn small ghost" data-embody="${c.id}">🎙️ Encarnar</button>
+          <button class="btn small ghost" data-inv="${c.id}" title="Mochila deste NPC">🎒${(c.inventory || []).length ? ` ${c.inventory.length}` : ''}</button>
           <button class="btn small ghost" data-edit-char="${c.id}">✏️</button>
           <button class="btn small danger" data-del-char="${c.id}">🗑</button>
         </div>
@@ -297,6 +299,7 @@ function renderCharacters() {
       ${c.ac || c.maxHp ? `<div class="meta">🛡️ CA ${esc(c.ac ?? '?')} · ❤️ ${esc(c.hp ?? '?')}/${esc(c.maxHp ?? '?')} PV</div>` : ''}
       <div class="desc">${esc(c.description || '')}</div>
       <div class="row">
+        <button class="btn small gold" data-inv="${c.id}" title="Abrir a mochila e entregar itens">🎒 Mochila${(c.inventory || []).length ? ` (${c.inventory.length})` : ''}</button>
         <button class="btn small ghost" data-edit-char="${c.id}">✏️ Editar</button>
         <button class="btn small danger" data-del-char="${c.id}">🗑</button>
       </div>
@@ -357,6 +360,7 @@ function renderCharacters() {
   $$('#tab-characters [data-del-char]').forEach((b) => b.onclick = async () => {
     if (confirm('Excluir este personagem?')) { await api(`/characters/${b.dataset.delChar}`, { method: 'DELETE' }); refresh(); }
   });
+  $$('#tab-characters [data-inv]').forEach((b) => b.onclick = () => inventoryModal(chars.find((c) => c.id === b.dataset.inv)));
   $$('#tab-characters [data-improv]').forEach((b) => b.onclick = () => improvModal(chars.find((c) => c.id === b.dataset.improv)));
   $$('#tab-characters [data-speak]').forEach((b) => b.onclick = () => speakModal(chars.find((c) => c.id === b.dataset.speak)));
   $$('#tab-characters [data-embody]').forEach((b) => b.onclick = () => {
@@ -364,6 +368,188 @@ function renderCharacters() {
     $('.nav-btn[data-tab="booth"]').click();
     $('#booth-npc').value = npc.id;
     boothLoadPreset(npc);
+  });
+}
+
+// ---------- Itens: catálogo + mochila ----------
+const RARIDADES = ['Comum', 'Incomum', 'Raro', 'Muito raro', 'Lendário', 'Artefato'];
+const TIPOS_ITEM = ['Arma', 'Armadura', 'Poção', 'Pergaminho', 'Anel', 'Varinha', 'Maravilhoso', 'Tesouro', 'Equipamento', 'Outro'];
+// Mesmas cores do embed do Discord — a linguagem de loot que os jogadores já conhecem.
+const RARIDADE_COR = {
+  'Comum': '#9d9d9d', 'Incomum': '#1eff00', 'Raro': '#0070dd',
+  'Muito raro': '#a335ee', 'Lendário': '#ff8000', 'Artefato': '#e6cc80',
+};
+const corDaRaridade = (r) => RARIDADE_COR[r] || '#9d9d9d';
+
+// Quem tem esse item na mochila (para mostrar no catálogo)
+const donosDoItem = (itemId) => state.characters
+  .filter((c) => (c.inventory || []).some((l) => l.itemId === itemId))
+  .map((c) => ({ nome: c.name, qty: (c.inventory.find((l) => l.itemId === itemId) || {}).qty }));
+
+function renderItems() {
+  const itens = state.items || [];
+  $('#tab-items').innerHTML = `
+    <div class="tab-header">
+      <h2>🎒 Itens</h2>
+      <div class="actions"><button class="btn gold" id="btn-new-item">+ Novo item</button></div>
+    </div>
+    <p class="help-text">Crie o item uma vez aqui e entregue a quantos personagens quiser. Ao entregar, o jogador recebe um card do item por DM no Discord — e pode consultar a mochila a qualquer momento com <code>/inventario</code>.</p><br/>
+    <div class="grid">${itens.map((it) => {
+      const cor = corDaRaridade(it.rarity);
+      const donos = donosDoItem(it.id);
+      return `
+      <div class="card item-card" style="border-left:3px solid ${cor};">
+        ${it.imageUrl ? `<img class="thumb" src="${esc(it.imageUrl)}" alt="" onerror="this.remove()" />` : ''}
+        <h3>${esc(it.name)}</h3>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+          ${it.rarity ? `<span class="badge" style="color:${cor};border-color:${cor}40;">${esc(it.rarity)}</span>` : ''}
+          ${it.type ? `<span class="badge purple">${esc(it.type)}</span>` : ''}
+        </div>
+        <div class="desc">${esc(it.description || '')}</div>
+        ${donos.length ? `<div class="meta">🎒 ${donos.map((d) => `${esc(d.nome)} (${d.qty}×)`).join(', ')}</div>` : ''}
+        <div class="row">
+          <button class="btn small gold" data-give="${it.id}">🎁 Entregar</button>
+          <button class="btn small ghost" data-edit-item="${it.id}">✏️</button>
+          <button class="btn small danger" data-del-item="${it.id}">🗑</button>
+        </div>
+      </div>`;
+    }).join('') || '<div class="empty">Nenhum item ainda. Crie o primeiro — uma poção, uma espada, um bilhete...</div>'}</div>`;
+
+  $('#btn-new-item').onclick = () => itemModal();
+  $$('#tab-items [data-edit-item]').forEach((b) => b.onclick = () => itemModal(itens.find((x) => x.id === b.dataset.editItem)));
+  $$('#tab-items [data-del-item]').forEach((b) => b.onclick = async () => {
+    if (!confirm('Excluir este item do catálogo? Ele some das mochilas também.')) return;
+    await tryApi(() => api(`/items/${b.dataset.delItem}`, { method: 'DELETE' }), '🗑 Item excluído.');
+    refresh();
+  });
+  $$('#tab-items [data-give]').forEach((b) => b.onclick = () => giveItemModal(itens.find((x) => x.id === b.dataset.give)));
+}
+
+function itemModal(it = {}) {
+  openModal(it.id ? `Editar ${esc(it.name)}` : 'Novo item', `
+    ${field('Nome', 'name', it.name, 'text', 'Poção de Cura Maior')}
+    <div class="field-row">
+      ${fieldSelect('Raridade', 'rarity', RARIDADES.map((r) => ({ value: r, label: r })), it.rarity || 'Comum')}
+      ${fieldSelect('Tipo', 'type', TIPOS_ITEM.map((t) => ({ value: t, label: t })), it.type || 'Outro')}
+    </div>
+    ${fieldArea('Descrição (o jogador vê isso no Discord)', 'description', it.description, 'Recupera 4d4+4 pontos de vida ao beber...')}
+    ${fieldImage('Imagem do item', 'imageUrl', it.imageUrl ?? '')}
+  `, async (data) => {
+    data.imageUrl = await resolveImage('imageUrl', data);
+    if (it.id) await api(`/items/${it.id}`, { method: 'PUT', body: data });
+    else await api('/items', { method: 'POST', body: data });
+    toast(it.id ? '✏️ Item atualizado.' : '🎒 Item criado no catálogo.');
+  });
+}
+
+// Entrega um item a um personagem, avisando o jogador por DM se estiver vinculado.
+function giveItemModal(it) {
+  if (!it) return;
+  const pcs = state.characters.filter((c) => c.type === 'pc');
+  const npcs = state.characters.filter((c) => c.type === 'npc');
+  if (!pcs.length && !npcs.length) return toast('Crie um personagem primeiro.', true);
+  const opts = [
+    ...pcs.map((c) => ({ value: c.id, label: `🎮 ${c.name}${c.discordUserId ? '' : ' (sem vínculo no Discord)'}` })),
+    ...npcs.map((c) => ({ value: c.id, label: `🎭 ${c.name}` })),
+  ];
+  openModal(`🎁 Entregar ${esc(it.name)}`, `
+    ${fieldSelect('Para quem', 'charId', opts, opts[0].value)}
+    ${field('Quantidade', 'qty', 1, 'number')}
+    <label class="tool-check" style="margin:8px 0;">
+      <input type="checkbox" name="notify" checked /> 📨 Avisar o jogador por DM no Discord (card do item)
+    </label>
+    <p class="help-text">Sem vínculo no Discord, o item entra na mochila mesmo assim — o jogador só não recebe o aviso. Ele vincula com <code>/vincular</code>.</p>
+  `, async (data) => {
+    const notify = $('#modal-form [name="notify"]').checked;
+    const r = await api(`/characters/${data.charId}/inventory`, {
+      method: 'POST',
+      body: { itemId: it.id, qty: Number(data.qty) || 1, notify },
+    });
+    const quem = state.characters.find((c) => c.id === data.charId)?.name || 'personagem';
+    if (r.aviso) toast(`🎒 ${it.name} foi para a mochila de ${quem}, mas o DM falhou: ${r.aviso}`, true);
+    else toast(`🎁 ${it.name} entregue a ${quem}${notify ? ' e avisado no Discord!' : '.'}`);
+  }, 'Entregar');
+}
+
+// Mochila de um personagem: quantidades, reenvio do card e remoção.
+function inventoryModal(ch) {
+  const inv = (ch.inventory || []).map((l) => ({ ...l, item: (state.items || []).find((i) => i.id === l.itemId) }))
+    .filter((l) => l.item);
+
+  $('#modal').innerHTML = `
+    <h3>🎒 Mochila de ${esc(ch.name)}</h3>
+    ${ch.discordUserId
+      ? `<p class="help-text">🔗 Vinculado a <b>${esc(ch.discordTag || 'jogador')}</b> — ele pode ver isso com <code>/inventario</code>.</p>`
+      : '<p class="help-text">⛓️ Sem vínculo no Discord — o jogador precisa usar <code>/vincular</code> para receber itens e consultar a mochila.</p>'}
+    <div id="inv-list" style="max-height:340px;overflow-y:auto;margin:10px 0;">
+      ${inv.length ? inv.map((l) => {
+        const cor = corDaRaridade(l.item.rarity);
+        return `
+        <div class="srd-result-row" style="border-left:3px solid ${cor};padding-left:8px;">
+          ${l.item.imageUrl
+            ? `<img class="cp-thumb" src="${esc(l.item.imageUrl)}" alt="" onerror="this.remove()" />`
+            : '<span class="cp-thumb placeholder">🎒</span>'}
+          <span>
+            ${esc(l.item.name)}
+            <small style="color:${cor};"> ${esc(l.item.rarity || '')}</small>
+          </span>
+          <input class="input inv-qty" type="number" min="0" value="${l.qty}" data-inv-qty="${l.itemId}" style="width:56px;text-align:center;" title="Quantidade (0 remove)" />
+          <button class="btn small ghost" data-inv-send="${l.itemId}" title="Reenviar o card deste item por DM">📨</button>
+          <button class="btn small danger" data-inv-del="${l.itemId}" title="Tirar da mochila">🗑</button>
+        </div>`;
+      }).join('') : '<div class="empty" style="font-size:13px;">Mochila vazia.</div>'}
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" id="modal-cancel">Fechar</button>
+      <button class="btn gold" id="inv-add">➕ Dar um item</button>
+    </div>`;
+  $('#modal-backdrop').classList.remove('hidden');
+  $('#modal-cancel').onclick = closeModal;
+
+  $('#inv-add').onclick = () => {
+    closeModal();
+    catalogPickerModal(ch);
+  };
+  $$('#inv-list [data-inv-qty]').forEach((inp) => inp.onchange = async () => {
+    await tryApi(() => api(`/characters/${ch.id}/inventory/${inp.dataset.invQty}`, {
+      method: 'PUT', body: { qty: Number(inp.value) || 0 },
+    }));
+    await refresh();
+    inventoryModal(state.characters.find((c) => c.id === ch.id));
+  });
+  $$('#inv-list [data-inv-del]').forEach((b) => b.onclick = async () => {
+    await tryApi(() => api(`/characters/${ch.id}/inventory/${b.dataset.invDel}`, { method: 'DELETE' }));
+    await refresh();
+    inventoryModal(state.characters.find((c) => c.id === ch.id));
+  });
+  $$('#inv-list [data-inv-send]').forEach((b) => b.onclick = () =>
+    tryApi(() => api(`/characters/${ch.id}/inventory/${b.dataset.invSend}/notify`, { method: 'POST' }), '📨 Card reenviado no Discord!'));
+}
+
+// Escolhe um item do catálogo para dar a um personagem específico.
+function catalogPickerModal(ch) {
+  const itens = state.items || [];
+  $('#modal').innerHTML = `
+    <h3>➕ Dar um item a ${esc(ch.name)}</h3>
+    <div id="cat-list" style="max-height:360px;overflow-y:auto;">
+      ${itens.length ? itens.map((it) => {
+        const cor = corDaRaridade(it.rarity);
+        return `
+        <div class="srd-result-row" style="border-left:3px solid ${cor};padding-left:8px;">
+          ${it.imageUrl
+            ? `<img class="cp-thumb" src="${esc(it.imageUrl)}" alt="" onerror="this.remove()" />`
+            : '<span class="cp-thumb placeholder">🎒</span>'}
+          <span>${esc(it.name)}<small style="color:${cor};"> ${esc(it.rarity || '')}</small></span>
+          <button class="btn small gold" data-cat-give="${it.id}">🎁 Entregar</button>
+        </div>`;
+      }).join('') : '<div class="help-text">Nenhum item no catálogo. Crie um na aba 🎒 Itens.</div>'}
+    </div>
+    <div class="modal-actions"><button class="btn ghost" id="modal-cancel">Fechar</button></div>`;
+  $('#modal-backdrop').classList.remove('hidden');
+  $('#modal-cancel').onclick = closeModal;
+  $$('#cat-list [data-cat-give]').forEach((b) => b.onclick = () => {
+    closeModal();
+    giveItemModal(itens.find((x) => x.id === b.dataset.catGive));
   });
 }
 

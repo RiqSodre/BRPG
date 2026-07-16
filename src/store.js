@@ -33,7 +33,10 @@ const DEFAULTS = {
     },
   },
   story: [],      // { id, title, category, content, updatedAt }
-  characters: [], // { id, name, type: 'pc'|'npc', player, race, klass, level, ac, hp, maxHp, stats, description, secrets, voice, imageUrl }
+  // Catálogo de itens: criado uma vez, entregue a quantos personagens quiser.
+  items: [],      // { id, name, description, rarity, type, imageUrl, updatedAt }
+  // characters[].inventory = [{ itemId, qty }] — a mochila aponta para o catálogo
+  characters: [], // { id, name, type: 'pc'|'npc', player, race, klass, level, ac, hp, maxHp, stats, description, secrets, voice, imageUrl, inventory }
   scenes: [],     // { id, title, readAloud, gmNotes, imageUrl, ambientAudioId, musicAudioId, sfxIds, npcIds }
   audio: [],      // { id, name, filename, type: 'ambient'|'music'|'sfx', tags, volume }
   sessions: [],   // { id, date, title, notes, recap }
