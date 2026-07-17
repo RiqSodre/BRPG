@@ -164,19 +164,19 @@ function renderScenes() {
       return `
       <div class="card ${s.id === state.activeSceneId ? 'active-scene' : ''}">
         ${s.imageUrl ? `<img class="thumb" src="${esc(s.imageUrl)}" alt="" onerror="this.remove()" />` : ''}
-        <h3>${s.id === state.activeSceneId ? '⭐ ' : ''}${esc(s.title)}</h3>
+        <h3>${s.id === state.activeSceneId ? '<svg class="icon" style="color:var(--accent2)"><use href="#i-star"/></svg> ' : ''}${esc(s.title)}</h3>
         <div class="desc">${esc(s.readAloud || '')}</div>
         <div>
-          ${amb ? `<span class="badge gold">🌫️ ${esc(amb.name)}</span>` : ''}
-          ${mus ? `<span class="badge gold">🎶 ${esc(mus.name)}</span>` : ''}
+          ${amb ? `<span class="badge gold"><svg class="icon"><use href="#i-cloud-fog"/></svg>${esc(amb.name)}</span>` : ''}
+          ${mus ? `<span class="badge gold"><svg class="icon"><use href="#i-music-notes"/></svg>${esc(mus.name)}</span>` : ''}
         </div>
         ${sfx.length ? `<div class="row">${sfx.map((a) =>
-          `<button class="btn small ghost" data-sfx="${a.id}" title="Tocar efeito no Discord">💥 ${esc(a.name)}</button>`).join('')}</div>` : ''}
+          `<button class="btn small ghost" data-sfx="${a.id}" title="Tocar efeito no Discord"><svg class="icon"><use href="#i-waveform"/></svg>${esc(a.name)}</button>`).join('')}</div>` : ''}
         <div class="row">
           <button class="btn small gold" data-activate="${s.id}">▶ Ativar cena</button>
           <button class="btn small ghost" data-edit-scene="${s.id}">Editar</button>
-          <button class="btn small ghost" data-suggest="${s.id}" title="A IA escolhe os sons da biblioteca para esta cena">✨ Sons IA</button>
-          <button class="btn small danger" data-del-scene="${s.id}">🗑</button>
+          <button class="btn small ghost" data-suggest="${s.id}" title="A IA escolhe os sons da biblioteca para esta cena"><svg class="icon"><use href="#i-sparkle"/></svg>Sons IA</button>
+          <button class="btn small danger" data-del-scene="${s.id}"><svg class="icon"><use href="#i-trash"/></svg></button>
         </div>
       </div>`;
     }).join('') || '<div class="empty">Nenhuma cena ainda. Crie a primeira!</div>'}</div>`;
@@ -189,20 +189,20 @@ function renderScenes() {
   $$('#tab-scenes [data-activate]').forEach((b) => b.onclick = async () => {
     const r = await tryApi(() => api(`/scenes/${b.dataset.activate}/activate`, { method: 'POST' }));
     if (r) {
-      let msg = '🎭 Cena ativada!';
+      let msg = 'Cena ativada!';
       if (r.audio) msg += ` Tocando "${r.audio}".`;
-      if (r.warnings?.length) msg += ` ⚠️ ${r.warnings.join(' ')}`;
+      if (r.warnings?.length) msg += ` ${r.warnings.join(' ')}`;
       toast(msg, r.warnings?.length > 0 && !r.posted);
       refresh();
     }
   });
   $$('#tab-scenes [data-sfx]').forEach((b) => b.onclick = () =>
-    tryApi(() => api(`/sound/play/${b.dataset.sfx}`, { method: 'POST' }), '💥 Efeito tocado!'));
+    tryApi(() => api(`/sound/play/${b.dataset.sfx}`, { method: 'POST' }), 'Efeito tocado!'));
   $$('#tab-scenes [data-suggest]').forEach((b) => b.onclick = async () => {
-    b.disabled = true; b.textContent = '✨ Pensando...';
+    b.disabled = true; b.textContent = 'Pensando...';
     const r = await tryApi(() => api(`/ai/suggest-audio/${b.dataset.suggest}`, { method: 'POST', body: { apply: true } }));
-    if (r) { toast(`✨ Sons aplicados à cena. ${r.reasoning || ''}`); refresh(); }
-    else { b.disabled = false; b.textContent = '✨ Sons IA'; }
+    if (r) { toast(`Sons aplicados à cena. ${r.reasoning || ''}`); refresh(); }
+    else { b.disabled = false; b.textContent = 'Sons IA'; }
   });
 }
 
@@ -236,7 +236,7 @@ function renderStory() {
         <div class="desc">${esc(s.content || '')}</div>
         <div class="row">
           <button class="btn small ghost" data-edit-story="${s.id}">Editar</button>
-          <button class="btn small danger" data-del-story="${s.id}">🗑</button>
+          <button class="btn small danger" data-del-story="${s.id}"><svg class="icon"><use href="#i-trash"/></svg></button>
         </div>
       </div>`).join('') || '<div class="empty">Escreva aqui o mundo, as facções, os planos do vilão... A IA usa tudo isso como contexto.</div>'}</div>`;
 
@@ -262,11 +262,12 @@ function storyModal(s = {}) {
 function renderCharacters() {
   const chars = state.characters;
   const NPC_TYPES = {
-    inimigo:   { label: '👹 Inimigo',   color: 'var(--danger)' },
-    quest:     { label: '📜 Quest',     color: 'var(--accent2)' },
-    aleatorio: { label: '🎲 Aleatório', color: 'var(--muted)' },
-    npc:       { label: '🎭 NPC',       color: '#b79cff' },
+    inimigo:   { icon: 'skull',      text: 'Inimigo',   color: 'var(--danger)' },
+    quest:     { icon: 'scroll',     text: 'Quest',      color: 'var(--accent2)' },
+    aleatorio: { icon: 'dice-six',   text: 'Aleatório',  color: 'var(--muted)' },
+    npc:       { icon: 'mask-happy', text: 'NPC',        color: '#b79cff' },
   };
+  const npcLabel = (tipo) => `<svg class="icon"><use href="#i-${tipo.icon}"/></svg>${tipo.text}`;
 
   const npcCard = (c) => {
     const tipo = NPC_TYPES[c.npcType] || NPC_TYPES.npc;
@@ -275,18 +276,18 @@ function renderCharacters() {
         ${c.imageUrl ? `<img class="thumb" src="${esc(c.imageUrl)}" alt="" onerror="this.remove()" />` : ''}
         <h3>${esc(c.name)}</h3>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-          <span class="badge" style="color:${tipo.color};border-color:${tipo.color}20;">${tipo.label}</span>
+          <span class="badge" style="color:${tipo.color};border-color:${tipo.color}20;">${npcLabel(tipo)}</span>
           <span class="badge purple">${esc([c.race, c.klass, c.level ? `nv.${c.level}` : ''].filter(Boolean).join(' · '))}</span>
         </div>
-        ${c.ac || c.maxHp ? `<div class="meta">🛡️ CA ${esc(c.ac ?? '?')} · ❤️ ${esc(c.hp ?? '?')}/${esc(c.maxHp ?? '?')} PV</div>` : ''}
+        ${c.ac || c.maxHp ? `<div class="meta"><svg class="icon"><use href="#i-shield"/></svg> CA ${esc(c.ac ?? '?')} · <svg class="icon"><use href="#i-heart-straight"/></svg> ${esc(c.hp ?? '?')}/${esc(c.maxHp ?? '?')} PV</div>` : ''}
         <div class="desc">${esc(c.description || '')}</div>
         <div class="row">
-          <button class="btn small gold" data-improv="${c.id}">🎭 Improvisar</button>
-          <button class="btn small" data-speak="${c.id}">🗣️ Falar</button>
-          <button class="btn small ghost" data-embody="${c.id}">🎙️ Encarnar</button>
-          <button class="btn small ghost" data-inv="${c.id}" title="Mochila deste NPC">🎒${(c.inventory || []).length ? ` ${c.inventory.length}` : ''}</button>
-          <button class="btn small ghost" data-edit-char="${c.id}">✏️</button>
-          <button class="btn small danger" data-del-char="${c.id}">🗑</button>
+          <button class="btn small gold" data-improv="${c.id}"><svg class="icon"><use href="#i-mask-happy"/></svg>Improvisar</button>
+          <button class="btn small" data-speak="${c.id}"><svg class="icon"><use href="#i-chat-circle-text"/></svg>Falar</button>
+          <button class="btn small ghost" data-embody="${c.id}"><svg class="icon"><use href="#i-microphone"/></svg>Encarnar</button>
+          <button class="btn small ghost" data-inv="${c.id}" title="Mochila deste NPC"><svg class="icon"><use href="#i-backpack"/></svg>${(c.inventory || []).length ? ` ${c.inventory.length}` : ''}</button>
+          <button class="btn small ghost" data-edit-char="${c.id}"><svg class="icon"><use href="#i-pencil-simple"/></svg></button>
+          <button class="btn small danger" data-del-char="${c.id}"><svg class="icon"><use href="#i-trash"/></svg></button>
         </div>
       </div>`;
   };
@@ -295,16 +296,16 @@ function renderCharacters() {
     <div class="card">
       ${c.imageUrl ? `<img class="thumb" src="${esc(c.imageUrl)}" alt="" onerror="this.remove()" />` : ''}
       <h3>${esc(c.name)}</h3>
-      <div class="meta">${esc([c.race, c.klass, c.level ? `nível ${c.level}` : '', c.player ? `🎮 ${c.player}` : ''].filter(Boolean).join(' · '))}</div>
+      <div class="meta">${[esc([c.race, c.klass, c.level ? `nível ${c.level}` : ''].filter(Boolean).join(' · ')), c.player ? `<svg class="icon"><use href="#i-game-controller"/></svg>${esc(c.player)}` : ''].filter(Boolean).join(' · ')}</div>
       ${c.discordUserId
-        ? `<span class="badge gold">🔗 Discord: ${esc(c.discordTag || 'vinculado')}</span>`
-        : '<span class="badge" title="O jogador usa /vincular no Discord">⛓️ sem vínculo</span>'}
-      ${c.ac || c.maxHp ? `<div class="meta">🛡️ CA ${esc(c.ac ?? '?')} · ❤️ ${esc(c.hp ?? '?')}/${esc(c.maxHp ?? '?')} PV</div>` : ''}
+        ? `<span class="badge gold"><svg class="icon"><use href="#i-link"/></svg>Discord: ${esc(c.discordTag || 'vinculado')}</span>`
+        : '<span class="badge" title="O jogador usa /vincular no Discord"><svg class="icon"><use href="#i-link-break"/></svg>sem vínculo</span>'}
+      ${c.ac || c.maxHp ? `<div class="meta"><svg class="icon"><use href="#i-shield"/></svg> CA ${esc(c.ac ?? '?')} · <svg class="icon"><use href="#i-heart-straight"/></svg> ${esc(c.hp ?? '?')}/${esc(c.maxHp ?? '?')} PV</div>` : ''}
       <div class="desc">${esc(c.description || '')}</div>
       <div class="row">
-        <button class="btn small gold" data-inv="${c.id}" title="Abrir a mochila e entregar itens">🎒 Mochila${(c.inventory || []).length ? ` (${c.inventory.length})` : ''}</button>
-        <button class="btn small ghost" data-edit-char="${c.id}">✏️ Editar</button>
-        <button class="btn small danger" data-del-char="${c.id}">🗑</button>
+        <button class="btn small gold" data-inv="${c.id}" title="Abrir a mochila e entregar itens"><svg class="icon"><use href="#i-backpack"/></svg>Mochila${(c.inventory || []).length ? ` (${c.inventory.length})` : ''}</button>
+        <button class="btn small ghost" data-edit-char="${c.id}"><svg class="icon"><use href="#i-pencil-simple"/></svg>Editar</button>
+        <button class="btn small danger" data-del-char="${c.id}"><svg class="icon"><use href="#i-trash"/></svg></button>
       </div>
     </div>`;
 
@@ -324,24 +325,24 @@ function renderCharacters() {
     <div class="tab-header">
       <h2><svg class="icon"><use href="#i-users"/></svg>Personagens</h2>
       <div class="actions">
-        <button class="btn ghost" id="btn-handout">📨 Handout</button>
+        <button class="btn ghost" id="btn-handout"><svg class="icon"><use href="#i-envelope-simple"/></svg>Handout</button>
         <button class="btn" id="btn-new-pc">+ Jogador</button>
         <button class="btn gold" id="btn-new-npc">+ NPC</button>
       </div>
     </div>
-    <h2 style="margin:14px 0 10px;color:var(--accent2);font-size:17px;">🎮 Personagens dos Jogadores</h2>
+    <h2 style="margin:14px 0 10px;color:var(--accent2);font-size:17px;display:flex;align-items:center;gap:8px;"><svg class="icon"><use href="#i-game-controller"/></svg>Personagens dos Jogadores</h2>
     <div class="grid">${pcs.map(pcCard).join('') || '<div class="empty">Nenhum jogador ainda.</div>'}</div>
     <div style="display:flex;align-items:center;gap:10px;margin:20px 0 10px;">
-      <h2 style="color:var(--accent2);font-size:17px;margin:0;">🎭 NPCs</h2>
+      <h2 style="color:var(--accent2);font-size:17px;margin:0;display:flex;align-items:center;gap:8px;"><svg class="icon"><use href="#i-mask-happy"/></svg>NPCs</h2>
       <div style="display:flex;gap:4px;flex-wrap:wrap;">
         ${Object.entries(NPC_TYPES).map(([k, v]) =>
-          `<button class="btn small ghost npc-type-filter" data-ntype="${k}" style="font-size:12px;">${v.label}</button>`).join('')}
+          `<button class="btn small ghost npc-type-filter" data-ntype="${k}" style="font-size:12px;">${npcLabel(v)}</button>`).join('')}
       </div>
     </div>
     ${npcGroups.map((g) => `
       <div class="npc-group" data-group="${g.key}">
-        <div style="font-size:12px;font-weight:700;letter-spacing:0.06em;color:${NPC_TYPES[g.key].color};margin:10px 0 6px;opacity:0.8;">
-          ${NPC_TYPES[g.key].label.toUpperCase()} (${g.npcs.length})
+        <div style="font-size:12px;font-weight:700;letter-spacing:0.06em;color:${NPC_TYPES[g.key].color};margin:10px 0 6px;opacity:0.8;display:flex;align-items:center;gap:6px;">
+          <svg class="icon"><use href="#i-${NPC_TYPES[g.key].icon}"/></svg>${NPC_TYPES[g.key].text.toUpperCase()} (${g.npcs.length})
         </div>
         <div class="grid">${g.npcs.map(npcCard).join('')}</div>
       </div>`).join('') || '<div class="empty">Nenhum NPC ainda.</div>'}`;
@@ -395,7 +396,7 @@ const chipVinculo = (charId, charNome, item, qty) => {
   return `<span class="inv-chip" style="border-color:${cor}55;">
     <span style="color:${cor};">${esc(item.name)}</span>
     <b>${qty}×</b>
-    <button class="inv-chip-x" data-take="${charId}|${item.id}" title="Tirar de ${esc(charNome)}">✕</button>
+    <button class="inv-chip-x" data-take="${charId}|${item.id}" title="Tirar de ${esc(charNome)}"><svg class="icon"><use href="#i-x"/></svg></button>
   </span>`;
 };
 
@@ -407,7 +408,7 @@ function ligarBotoesTirar(escopo) {
     const it = (state.items || []).find((i) => i.id === itemId);
     if (!confirm(`Tirar "${it?.name}" da mochila de ${ch?.name}?`)) return;
     await tryApi(() => api(`/characters/${charId}/inventory/${itemId}`, { method: 'DELETE' }),
-      `🗑 ${it?.name} removido de ${ch?.name}.`);
+      `${it?.name} removido de ${ch?.name}.`);
     refresh();
   });
 }
@@ -426,16 +427,16 @@ function renderItems() {
     <p class="help-text">Crie o item uma vez aqui e entregue a quantos personagens quiser. Ao entregar, o jogador recebe um card do item por DM no Discord — e pode consultar a mochila a qualquer momento com <code>/inventario</code>.</p>
 
     <div class="settings-section" style="margin-top:14px;">
-      <h3>🔗 Quem está com o quê</h3>
-      <p class="help-text">Visão de todas as mochilas. Clique no <b>✕</b> de um item para tirá-lo daquele personagem.</p>
+      <h3 style="display:flex;align-items:center;gap:8px;"><svg class="icon"><use href="#i-link"/></svg>Quem está com o quê</h3>
+      <p class="help-text">Visão de todas as mochilas. Clique no <b>X</b> de um item para tirá-lo daquele personagem.</p>
       <div style="margin-top:10px;">
         ${comMochila.length ? comMochila.map((c) => `
           <div class="inv-owner-row">
             <span class="inv-owner-name">
-              ${c.type === 'pc' ? '🎮' : '🎭'} <b>${esc(c.name)}</b>
+              <svg class="icon"><use href="#i-${c.type === 'pc' ? 'game-controller' : 'mask-happy'}"/></svg> <b>${esc(c.name)}</b>
               ${c.type === 'pc' ? (c.discordUserId
-                ? `<span class="badge gold" title="Recebe itens por DM e pode usar /inventario">🔗 ${esc(c.discordTag || 'vinculado')}</span>`
-                : '<span class="badge" title="O jogador precisa usar /vincular no Discord">⛓️ sem vínculo</span>') : ''}
+                ? `<span class="badge gold" title="Recebe itens por DM e pode usar /inventario"><svg class="icon"><use href="#i-link"/></svg>${esc(c.discordTag || 'vinculado')}</span>`
+                : '<span class="badge" title="O jogador precisa usar /vincular no Discord"><svg class="icon"><use href="#i-link-break"/></svg>sem vínculo</span>') : ''}
             </span>
             <div class="inv-chips">
               ${(c.inventory || []).map((l) => {
@@ -445,12 +446,12 @@ function renderItems() {
             </div>
             <button class="btn small ghost" data-open-bag="${c.id}" title="Abrir a mochila completa">Abrir</button>
           </div>`).join('')
-          : '<div class="empty">Ninguém está com itens ainda. Use 🎁 Entregar num item abaixo.</div>'}
+          : '<div class="empty">Ninguém está com itens ainda. Use Entregar num item abaixo.</div>'}
       </div>
       ${totalEntregue ? `<p class="help-text" style="margin-top:8px;">${totalEntregue} item(ns) entregue(s) entre ${comMochila.length} personagem(ns).</p>` : ''}
     </div>
 
-    <h2 style="margin:20px 0 10px;color:var(--accent2);font-size:17px;">📦 Catálogo</h2>
+    <h2 style="margin:20px 0 10px;color:var(--accent2);font-size:17px;display:flex;align-items:center;gap:8px;"><svg class="icon"><use href="#i-package"/></svg>Catálogo</h2>
     <div class="grid">${itens.map((it) => {
       const cor = corDaRaridade(it.rarity);
       const donos = donosDoItem(it.id);
@@ -467,13 +468,13 @@ function renderItems() {
           ? `<div class="inv-chips" style="margin-top:8px;">${donos.map((d) => `
               <span class="inv-chip" title="${esc(d.nome)} está com ${d.qty}">
                 ${esc(d.nome)} <b>${d.qty}×</b>
-                <button class="inv-chip-x" data-take="${d.id}|${it.id}" title="Tirar de ${esc(d.nome)}">✕</button>
+                <button class="inv-chip-x" data-take="${d.id}|${it.id}" title="Tirar de ${esc(d.nome)}"><svg class="icon"><use href="#i-x"/></svg></button>
               </span>`).join('')}</div>`
           : '<div class="meta" style="opacity:0.55;">Ninguém está com este item.</div>'}
         <div class="row">
-          <button class="btn small gold" data-give="${it.id}">🎁 Entregar</button>
-          <button class="btn small ghost" data-edit-item="${it.id}">✏️</button>
-          <button class="btn small danger" data-del-item="${it.id}">🗑</button>
+          <button class="btn small gold" data-give="${it.id}"><svg class="icon"><use href="#i-gift"/></svg>Entregar</button>
+          <button class="btn small ghost" data-edit-item="${it.id}"><svg class="icon"><use href="#i-pencil-simple"/></svg></button>
+          <button class="btn small danger" data-del-item="${it.id}"><svg class="icon"><use href="#i-trash"/></svg></button>
         </div>
       </div>`;
     }).join('') || '<div class="empty">Nenhum item ainda. Crie o primeiro — uma poção, uma espada, um bilhete...</div>'}</div>`;
@@ -482,7 +483,7 @@ function renderItems() {
   $$('#tab-items [data-edit-item]').forEach((b) => b.onclick = () => itemModal(itens.find((x) => x.id === b.dataset.editItem)));
   $$('#tab-items [data-del-item]').forEach((b) => b.onclick = async () => {
     if (!confirm('Excluir este item do catálogo? Ele some das mochilas de todo mundo também.')) return;
-    await tryApi(() => api(`/items/${b.dataset.delItem}`, { method: 'DELETE' }), '🗑 Item excluído.');
+    await tryApi(() => api(`/items/${b.dataset.delItem}`, { method: 'DELETE' }), 'Item excluído.');
     refresh();
   });
   $$('#tab-items [data-give]').forEach((b) => b.onclick = () => giveItemModal(itens.find((x) => x.id === b.dataset.give)));
@@ -503,7 +504,7 @@ function itemModal(it = {}) {
     data.imageUrl = await resolveImage('imageUrl', data);
     if (it.id) await api(`/items/${it.id}`, { method: 'PUT', body: data });
     else await api('/items', { method: 'POST', body: data });
-    toast(it.id ? '✏️ Item atualizado.' : '🎒 Item criado no catálogo.');
+    toast(it.id ? 'Item atualizado.' : 'Item criado no catálogo.');
   });
 }
 
@@ -514,34 +515,34 @@ function giveItemModal(it) {
   const npcs = state.characters.filter((c) => c.type === 'npc');
   if (!pcs.length && !npcs.length) return toast('Crie um personagem primeiro.', true);
   const opts = [
-    ...pcs.map((c) => ({ value: c.id, label: `🎮 ${c.name}${c.discordUserId ? '' : ' (sem vínculo no Discord)'}` })),
-    ...npcs.map((c) => ({ value: c.id, label: `🎭 ${c.name}` })),
+    ...pcs.map((c) => ({ value: c.id, label: `${c.name}${c.discordUserId ? '' : ' (sem vínculo no Discord)'}` })),
+    ...npcs.map((c) => ({ value: c.id, label: c.name })),
   ];
-  openModal(`🎁 Entregar ${esc(it.name)}`, `
+  openModal(`Entregar ${esc(it.name)}`, `
     ${fieldSelect('Para quem', 'charId', opts, opts[0].value)}
     <div class="field">
       <label>Quantidade</label>
       <input name="qty" type="number" min="1" step="1" value="1" />
     </div>
     <label class="tool-check" style="margin:8px 0;">
-      <input type="checkbox" name="notify" checked /> 📨 Avisar o jogador por DM no Discord (card do item)
+      <input type="checkbox" name="notify" checked /> Avisar o jogador por DM no Discord (card do item)
     </label>
-    <p class="help-text">Sem vínculo no Discord, o item entra na mochila mesmo assim — o jogador só não recebe o aviso. Ele vincula com <code>/vincular</code>. Para <b>tirar</b> itens, use o ✕ na mochila.</p>
+    <p class="help-text">Sem vínculo no Discord, o item entra na mochila mesmo assim — o jogador só não recebe o aviso. Ele vincula com <code>/vincular</code>. Para <b>tirar</b> itens, use o X na mochila.</p>
   `, async (data) => {
     const notify = $('#modal-form [name="notify"]').checked;
     // Lança em vez de "corrigir": o modal fica aberto mostrando o motivo,
     // e o Mestre não recebe o oposto do que pediu.
     const qty = Math.floor(Number(data.qty));
     if (!Number.isFinite(qty) || qty < 1) {
-      throw new Error('A quantidade precisa ser um número inteiro de 1 para cima. Para tirar itens, use o ✕ na mochila.');
+      throw new Error('A quantidade precisa ser um número inteiro de 1 para cima. Para tirar itens, use o X na mochila.');
     }
     const r = await api(`/characters/${data.charId}/inventory`, {
       method: 'POST',
       body: { itemId: it.id, qty, notify },
     });
     const quem = state.characters.find((c) => c.id === data.charId)?.name || 'personagem';
-    if (r.aviso) toast(`🎒 ${it.name} foi para a mochila de ${quem}, mas o DM falhou: ${r.aviso}`, true);
-    else toast(`🎁 ${it.name} entregue a ${quem}${notify ? ' e avisado no Discord!' : '.'}`);
+    if (r.aviso) toast(`${it.name} foi para a mochila de ${quem}, mas o DM falhou: ${r.aviso}`, true);
+    else toast(`${it.name} entregue a ${quem}${notify ? ' e avisado no Discord!' : '.'}`);
   }, 'Entregar');
 }
 
@@ -551,10 +552,10 @@ function inventoryModal(ch) {
     .filter((l) => l.item);
 
   $('#modal').innerHTML = `
-    <h3>🎒 Mochila de ${esc(ch.name)}</h3>
+    <h3 style="display:flex;align-items:center;gap:8px;"><svg class="icon"><use href="#i-backpack"/></svg>Mochila de ${esc(ch.name)}</h3>
     ${ch.discordUserId
-      ? `<p class="help-text">🔗 Vinculado a <b>${esc(ch.discordTag || 'jogador')}</b> — ele pode ver isso com <code>/inventario</code>.</p>`
-      : '<p class="help-text">⛓️ Sem vínculo no Discord — o jogador precisa usar <code>/vincular</code> para receber itens e consultar a mochila.</p>'}
+      ? `<p class="help-text"><svg class="icon"><use href="#i-link"/></svg> Vinculado a <b>${esc(ch.discordTag || 'jogador')}</b> — ele pode ver isso com <code>/inventario</code>.</p>`
+      : '<p class="help-text"><svg class="icon"><use href="#i-link-break"/></svg> Sem vínculo no Discord — o jogador precisa usar <code>/vincular</code> para receber itens e consultar a mochila.</p>'}
     <div id="inv-list" style="max-height:340px;overflow-y:auto;margin:10px 0;">
       ${inv.length ? inv.map((l) => {
         const cor = corDaRaridade(l.item.rarity);
@@ -562,20 +563,20 @@ function inventoryModal(ch) {
         <div class="srd-result-row" style="border-left:3px solid ${cor};padding-left:8px;">
           ${l.item.imageUrl
             ? `<img class="cp-thumb" src="${esc(l.item.imageUrl)}" alt="" onerror="this.remove()" />`
-            : '<span class="cp-thumb placeholder">🎒</span>'}
+            : '<span class="cp-thumb placeholder"><svg class="icon"><use href="#i-backpack"/></svg></span>'}
           <span>
             ${esc(l.item.name)}
             <small style="color:${cor};"> ${esc(l.item.rarity || '')}</small>
           </span>
           <input class="input inv-qty" type="number" min="0" value="${l.qty}" data-inv-qty="${l.itemId}" style="width:56px;text-align:center;" title="Quantidade (0 remove)" />
-          <button class="btn small ghost" data-inv-send="${l.itemId}" title="Reenviar o card deste item por DM">📨</button>
-          <button class="btn small danger" data-inv-del="${l.itemId}" title="Tirar da mochila">🗑</button>
+          <button class="btn small ghost" data-inv-send="${l.itemId}" title="Reenviar o card deste item por DM"><svg class="icon"><use href="#i-envelope-simple"/></svg></button>
+          <button class="btn small danger" data-inv-del="${l.itemId}" title="Tirar da mochila"><svg class="icon"><use href="#i-trash"/></svg></button>
         </div>`;
       }).join('') : '<div class="empty" style="font-size:13px;">Mochila vazia.</div>'}
     </div>
     <div class="modal-actions">
       <button class="btn ghost" id="modal-cancel">Fechar</button>
-      <button class="btn gold" id="inv-add">➕ Dar um item</button>
+      <button class="btn gold" id="inv-add">+ Dar um item</button>
     </div>`;
   $('#modal-backdrop').classList.remove('hidden');
   $('#modal-cancel').onclick = closeModal;
@@ -597,14 +598,14 @@ function inventoryModal(ch) {
     inventoryModal(state.characters.find((c) => c.id === ch.id));
   });
   $$('#inv-list [data-inv-send]').forEach((b) => b.onclick = () =>
-    tryApi(() => api(`/characters/${ch.id}/inventory/${b.dataset.invSend}/notify`, { method: 'POST' }), '📨 Card reenviado no Discord!'));
+    tryApi(() => api(`/characters/${ch.id}/inventory/${b.dataset.invSend}/notify`, { method: 'POST' }), 'Card reenviado no Discord!'));
 }
 
 // Escolhe um item do catálogo para dar a um personagem específico.
 function catalogPickerModal(ch) {
   const itens = state.items || [];
   $('#modal').innerHTML = `
-    <h3>➕ Dar um item a ${esc(ch.name)}</h3>
+    <h3>Dar um item a ${esc(ch.name)}</h3>
     <div id="cat-list" style="max-height:360px;overflow-y:auto;">
       ${itens.length ? itens.map((it) => {
         const cor = corDaRaridade(it.rarity);
@@ -612,11 +613,11 @@ function catalogPickerModal(ch) {
         <div class="srd-result-row" style="border-left:3px solid ${cor};padding-left:8px;">
           ${it.imageUrl
             ? `<img class="cp-thumb" src="${esc(it.imageUrl)}" alt="" onerror="this.remove()" />`
-            : '<span class="cp-thumb placeholder">🎒</span>'}
+            : '<span class="cp-thumb placeholder"><svg class="icon"><use href="#i-backpack"/></svg></span>'}
           <span>${esc(it.name)}<small style="color:${cor};"> ${esc(it.rarity || '')}</small></span>
-          <button class="btn small gold" data-cat-give="${it.id}">🎁 Entregar</button>
+          <button class="btn small gold" data-cat-give="${it.id}"><svg class="icon"><use href="#i-gift"/></svg>Entregar</button>
         </div>`;
-      }).join('') : '<div class="help-text">Nenhum item no catálogo. Crie um na aba 🎒 Itens.</div>'}
+      }).join('') : '<div class="help-text">Nenhum item no catálogo. Crie um na aba Itens.</div>'}
     </div>
     <div class="modal-actions"><button class="btn ghost" id="modal-cancel">Fechar</button></div>`;
   $('#modal-backdrop').classList.remove('hidden');
@@ -645,10 +646,10 @@ function charModal(c = {}) {
     </div>
     ${field('Atributos (texto livre)', 'stats', c.stats, 'text', 'FOR 16, DES 12, CON 14, INT 10, SAB 13, CAR 8')}
     ${isPc ? '' : fieldSelect('Tipo de NPC', 'npcType', [
-      { value: 'inimigo',   label: '👹 Inimigo — combate e antagonistas' },
-      { value: 'quest',     label: '📜 Quest — dão missões ou são objetivos' },
-      { value: 'aleatorio', label: '🎲 Aleatório — encontros ou figurantes' },
-      { value: 'npc',       label: '🎭 NPC — personagens de apoio' },
+      { value: 'inimigo',   label: 'Inimigo — combate e antagonistas' },
+      { value: 'quest',     label: 'Quest — dão missões ou são objetivos' },
+      { value: 'aleatorio', label: 'Aleatório — encontros ou figurantes' },
+      { value: 'npc',       label: 'NPC — personagens de apoio' },
     ], c.npcType || 'npc')}
     ${isPc ? '' : field('Voz e maneirismos', 'voice', c.voice, 'text', 'Fala arrastado, coça a barba, nunca olha nos olhos...')}
     ${isPc ? '' : `<div class="field-row">
@@ -668,12 +669,12 @@ function charModal(c = {}) {
 
 function handoutModal() {
   const pcs = state.characters.filter((c) => c.type === 'pc');
-  openModal('📨 Enviar handout', `
+  openModal('Enviar handout', `
     ${fieldSelect('Para quem?', 'target', [
-      { value: 'all', label: '📢 Todos (no canal de texto)' },
+      { value: 'all', label: 'Todos (no canal de texto)' },
       ...pcs.map((c) => ({
         value: c.id,
-        label: `🤫 ${c.name}${c.discordUserId ? ` — DM para ${c.discordTag || 'jogador'}` : ' — SEM VÍNCULO (use /vincular)'}`,
+        label: `${c.name}${c.discordUserId ? ` — DM para ${c.discordTag || 'jogador'}` : ' — SEM VÍNCULO (use /vincular)'}`,
       })),
     ], 'all')}
     ${field('Título', 'title', '', 'text', 'Uma carta amassada')}
@@ -682,28 +683,28 @@ function handoutModal() {
   `, async (data) => {
     const r = await tryApi(() => api('/handout', { method: 'POST', body: data }));
     if (r) {
-      let msg = r.sent?.length ? `📨 Enviado para: ${r.sent.join(', ')}.` : '';
-      if (r.failed?.length) msg += ` ⚠️ Falhou: ${r.failed.join('; ')}`;
+      let msg = r.sent?.length ? `Enviado para: ${r.sent.join(', ')}.` : '';
+      if (r.failed?.length) msg += ` Falhou: ${r.failed.join('; ')}`;
       toast(msg || 'Nada foi enviado.', Boolean(r.failed?.length));
     }
-  }, '📨 Enviar');
+  }, 'Enviar');
 }
 
 function speakModal(npc) {
-  openModal(`🗣️ ${esc(npc.name)} fala...`, `
+  openModal(`${esc(npc.name)} fala...`, `
     ${fieldArea('O que o NPC diz?', 'text', '', '"Saiam da minha taverna, forasteiros!"')}
     <div class="row">
-      <button type="button" class="btn ghost" id="btn-tts-preview">🎧 Ouvir aqui</button>
+      <button type="button" class="btn ghost" id="btn-tts-preview"><svg class="icon"><use href="#i-headphones"/></svg>Ouvir aqui</button>
     </div>
     <audio id="tts-audio" controls style="width:100%; margin-top:8px; display:none;"></audio>
-  `, async () => {}, '📡 Falar no Discord');
+  `, async () => {}, 'Falar no Discord');
 
   const speak = async (discord) => {
     const text = $('#modal-form [name="text"]').value;
     if (!text.trim()) return toast('Escreva a fala primeiro.', true);
     const r = await tryApi(() => api('/tts/speak', { method: 'POST', body: { text, npcId: npc.id, discord } }));
     if (!r) return;
-    if (discord) toast(r.warning ? `⚠️ ${r.warning}` : `🗣️ ${npc.name} falou no canal de voz!`, Boolean(r.warning));
+    if (discord) toast(r.warning || `${npc.name} falou no canal de voz!`, Boolean(r.warning));
     if (!discord) {
       const audio = $('#tts-audio');
       audio.src = r.url;
@@ -716,7 +717,7 @@ function speakModal(npc) {
 }
 
 function improvModal(npc) {
-  openModal(`🎭 Improvisar: ${esc(npc.name)}`, `
+  openModal(`Improvisar: ${esc(npc.name)}`, `
     ${fieldArea('O que está acontecendo?', 'situation', '', 'Os jogadores ameaçam o taverneiro exigindo saber sobre o culto...')}
     <div id="improv-result" class="msg assistant" style="display:none; max-width:100%;"></div>
   `, async () => {}, 'Fechar');
@@ -726,15 +727,19 @@ function improvModal(npc) {
     const situation = new FormData(e.target).get('situation');
     const out = $('#improv-result');
     out.style.display = 'block';
-    out.textContent = '✨ Incorporando o personagem...';
+    out.textContent = 'Incorporando o personagem...';
     const r = await tryApi(() => api(`/ai/npc/${npc.id}`, { method: 'POST', body: { situation } }));
     out.textContent = r ? r.reply : 'Erro ao consultar a IA.';
   };
-  $('#modal-form .modal-actions .btn:not(.ghost)').textContent = '✨ Improvisar';
+  $('#modal-form .modal-actions .btn:not(.ghost)').textContent = 'Improvisar';
 }
 
 // ---------- Áudio ----------
-const TYPE_LABEL = { ambient: '🌫️ Ambiente', music: '🎶 Música', sfx: '💥 Efeito' };
+const TYPE_LABEL = {
+  ambient: '<svg class="icon"><use href="#i-cloud-fog"/></svg>Ambiente',
+  music: '<svg class="icon"><use href="#i-music-notes"/></svg>Música',
+  sfx: '<svg class="icon"><use href="#i-waveform"/></svg>Efeito',
+};
 
 function renderAudio() {
   $('#tab-audio').innerHTML = `
@@ -747,25 +752,25 @@ function renderAudio() {
         <input type="file" name="file" accept=".mp3,.ogg,.wav,.m4a,.webm,.flac" required />
         <input name="name" placeholder="Nome (opcional)" />
         <select name="type">
-          <option value="ambient">🌫️ Ambiente (loop)</option>
-          <option value="music">🎶 Música (loop)</option>
-          <option value="sfx">💥 Efeito (uma vez)</option>
+          <option value="ambient">Ambiente (loop)</option>
+          <option value="music">Música (loop)</option>
+          <option value="sfx">Efeito (uma vez)</option>
         </select>
         <input name="tags" placeholder="tags: taverna, chuva, combate..." />
-        <button class="btn" type="submit">⬆ Enviar</button>
+        <button class="btn" type="submit"><svg class="icon"><use href="#i-upload-simple"/></svg>Enviar</button>
       </form>
       <p class="help-text">Dica: use tags descritivas — é por elas que a IA escolhe os sons certos para cada cena.</p>
     </div>
     <div class="card" style="margin-bottom:16px;">
-      <h3>🔎 Buscar no Freesound</h3>
+      <h3 style="display:flex;align-items:center;gap:8px;"><svg class="icon"><use href="#i-magnifying-glass"/></svg>Buscar no Freesound</h3>
       <div class="row" style="align-items:center;">
         <input id="fs-query" placeholder="rain, tavern, sword fight, thunder... (em inglês acha mais)" style="flex:1;" />
         <select id="fs-type">
-          <option value="ambient">🌫️ Ambiente</option>
-          <option value="music">🎶 Música</option>
-          <option value="sfx" selected>💥 Efeito</option>
+          <option value="ambient">Ambiente</option>
+          <option value="music">Música</option>
+          <option value="sfx" selected>Efeito</option>
         </select>
-        <button class="btn" id="btn-fs-search">🔍 Buscar</button>
+        <button class="btn" id="btn-fs-search"><svg class="icon"><use href="#i-magnifying-glass"/></svg>Buscar</button>
       </div>
       <div id="fs-results"></div>
       <p class="help-text">Requer FREESOUND_API_KEY no .env (grátis em freesound.org). O som é baixado direto para a sua biblioteca, já com as tags.</p>
@@ -775,9 +780,9 @@ function renderAudio() {
         <span>${TYPE_LABEL[a.type] || a.type}</span>
         <span class="name"><b>${esc(a.name)}</b><br/><small style="color:var(--muted)">${(a.tags || []).map((t) => `#${esc(t)}`).join(' ')}</small></span>
         <audio controls preload="none" src="/audio-files/${esc(a.filename)}"></audio>
-        <button class="btn small gold" data-play-discord="${a.id}" title="Tocar no canal de voz do Discord">📡 Discord</button>
-        <button class="btn small ghost" data-edit-audio="${a.id}">✏️</button>
-        <button class="btn small danger" data-del-audio="${a.id}">🗑</button>
+        <button class="btn small gold" data-play-discord="${a.id}" title="Tocar no canal de voz do Discord"><svg class="icon"><use href="#i-broadcast"/></svg>Discord</button>
+        <button class="btn small ghost" data-edit-audio="${a.id}"><svg class="icon"><use href="#i-pencil-simple"/></svg></button>
+        <button class="btn small danger" data-del-audio="${a.id}"><svg class="icon"><use href="#i-trash"/></svg></button>
       </div>`).join('') || '<div class="empty">Envie áudios de ambiente (chuva, taverna, floresta), músicas e efeitos (porta, espadas, trovão).</div>'}`;
 
   const fsSearch = async () => {
@@ -791,18 +796,18 @@ function renderAudio() {
         <span class="name"><b>${esc(s.name)}</b><br/>
           <small style="color:var(--muted)">${Math.round(s.duration)}s · por ${esc(s.username)} · ${s.tags.map((t) => `#${esc(t)}`).join(' ')}</small></span>
         <audio controls preload="none" src="${esc(s.previewUrl)}"></audio>
-        <button class="btn small gold" data-fs-import="${i}">⬇ Importar</button>
+        <button class="btn small gold" data-fs-import="${i}"><svg class="icon"><use href="#i-download-simple"/></svg>Importar</button>
       </div>`).join('') : '<div class="help-text">Nada encontrado.</div>';
 
     $$('#fs-results [data-fs-import]').forEach((b) => b.onclick = async () => {
       const s = results[Number(b.dataset.fsImport)];
-      b.disabled = true; b.textContent = '⬇ Baixando...';
+      b.disabled = true; b.textContent = 'Baixando...';
       const r = await tryApi(() => api('/freesound/import', {
         method: 'POST',
         body: { name: s.name, previewUrl: s.previewUrl, type: $('#fs-type').value, tags: s.tags },
-      }), `🎵 "${s.name}" importado para a biblioteca!`);
+      }), `"${s.name}" importado para a biblioteca!`);
       if (r) refresh();
-      else { b.disabled = false; b.textContent = '⬇ Importar'; }
+      else { b.disabled = false; b.textContent = 'Importar'; }
     });
   };
   $('#btn-fs-search').onclick = fsSearch;
@@ -811,11 +816,11 @@ function renderAudio() {
   $('#audio-upload-form').onsubmit = async (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
-    await tryApi(() => api('/audio', { method: 'POST', body: fd }), '🎵 Áudio enviado!');
+    await tryApi(() => api('/audio', { method: 'POST', body: fd }), 'Áudio enviado!');
     refresh();
   };
   $$('#tab-audio [data-play-discord]').forEach((b) => b.onclick = () =>
-    tryApi(() => api(`/sound/play/${b.dataset.playDiscord}`, { method: 'POST' }), '📡 Tocando no Discord!').then(refresh));
+    tryApi(() => api(`/sound/play/${b.dataset.playDiscord}`, { method: 'POST' }), 'Tocando no Discord!').then(refresh));
   $$('#tab-audio [data-del-audio]').forEach((b) => b.onclick = async () => {
     if (confirm('Excluir este áudio?')) { await api(`/audio/${b.dataset.delAudio}`, { method: 'DELETE' }); refresh(); }
   });
@@ -824,9 +829,9 @@ function renderAudio() {
     openModal('Editar áudio', `
       ${field('Nome', 'name', a.name)}
       ${fieldSelect('Tipo', 'type', [
-        { value: 'ambient', label: '🌫️ Ambiente (loop)' },
-        { value: 'music', label: '🎶 Música (loop)' },
-        { value: 'sfx', label: '💥 Efeito (uma vez)' },
+        { value: 'ambient', label: 'Ambiente (loop)' },
+        { value: 'music', label: 'Música (loop)' },
+        { value: 'sfx', label: 'Efeito (uma vez)' },
       ], a.type)}
       ${field('Tags (separadas por vírgula)', 'tags', (a.tags || []).join(', '))}
     `, async (data) => {
