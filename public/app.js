@@ -390,7 +390,7 @@ const donosDoItem = (itemId) => state.characters
   .filter((c) => (c.inventory || []).some((l) => l.itemId === itemId))
   .map((c) => ({ id: c.id, nome: c.name, qty: (c.inventory.find((l) => l.itemId === itemId) || {}).qty }));
 
-// Chip de vínculo com o ✕ para tirar o item daquele personagem.
+// Chip de vínculo com o X para tirar o item daquele personagem.
 const chipVinculo = (charId, charNome, item, qty) => {
   const cor = corDaRaridade(item.rarity);
   return `<span class="inv-chip" style="border-color:${cor}55;">
@@ -2550,24 +2550,24 @@ function bestiarioCardHtml({ index, name, detail, art }) {
   const ac = detail.armor_class?.[0]?.value ?? '?';
   return `
     <div class="card bestiario-card" data-index="${esc(index)}">
-      ${art ? `<img class="thumb" src="${esc(art)}" alt="" onerror="this.remove()" />` : '<div class="thumb thumb-placeholder">🐉</div>'}
+      ${art ? `<img class="thumb" src="${esc(art)}" alt="" onerror="this.remove()" />` : '<div class="thumb thumb-placeholder"><svg class="icon" style="font-size:32px;"><use href="#i-skull"/></svg></div>'}
       <h3>${esc(name)}</h3>
       <div class="meta">${esc(size)} ${esc(type)}, ${esc(align)}</div>
-      <div class="meta">🛡️ CA ${esc(ac)} · ❤️ ${esc(detail.hit_points)} PV · CR ${esc(detail.challenge_rating)}</div>
+      <div class="meta"><svg class="icon"><use href="#i-shield"/></svg> CA ${esc(ac)} · <svg class="icon"><use href="#i-heart-straight"/></svg> ${esc(detail.hit_points)} PV · CR ${esc(detail.challenge_rating)}</div>
       <div class="row">
-        <button class="btn small ghost">📋 Ficha completa</button>
-        <button class="btn small" data-srd-add="${esc(index)}">➕ Iniciativa</button>
-        <button class="btn small gold" data-srd-map="${esc(index)}" title="Iniciativa + mapa">🗺️</button>
+        <button class="btn small ghost"><svg class="icon"><use href="#i-clipboard-text"/></svg>Ficha completa</button>
+        <button class="btn small" data-srd-add="${esc(index)}">+ Iniciativa</button>
+        <button class="btn small gold" data-srd-map="${esc(index)}" title="Iniciativa + mapa"><svg class="icon"><use href="#i-map-trifold"/></svg></button>
       </div>
     </div>`;
 }
 
 function srdModal() {
   $('#modal').innerHTML = `
-    <h3>📖 Bestiário SRD</h3>
+    <h3>Bestiário SRD</h3>
     <div class="row" style="align-items:center;margin-bottom:10px;">
       <input id="srd-query" placeholder="goblin, dragon, skeleton... (nome em inglês)" style="flex:1;" />
-      <button class="btn small" id="btn-srd-search">🔍 Buscar</button>
+      <button class="btn small" id="btn-srd-search"><svg class="icon"><use href="#i-magnifying-glass"/></svg>Buscar</button>
     </div>
     <div id="srd-results" style="max-height:340px;overflow-y:auto;"></div>
     <div class="modal-actions">
@@ -2586,9 +2586,9 @@ function srdModal() {
       ? results.slice(0, 12).map((m) => `
           <div class="srd-result-row">
             <span>${esc(m.name)}</span>
-            <button class="btn small ghost" data-srd-view="${esc(m.index)}">📋 Ficha</button>
-            <button class="btn small" data-srd-add="${esc(m.index)}">➕ Iniciativa</button>
-            <button class="btn small gold" data-srd-map="${esc(m.index)}" title="Iniciativa + mapa">🗺️</button>
+            <button class="btn small ghost" data-srd-view="${esc(m.index)}"><svg class="icon"><use href="#i-clipboard-text"/></svg>Ficha</button>
+            <button class="btn small" data-srd-add="${esc(m.index)}">+ Iniciativa</button>
+            <button class="btn small gold" data-srd-map="${esc(m.index)}" title="Iniciativa + mapa"><svg class="icon"><use href="#i-map-trifold"/></svg></button>
           </div>`).join('')
       : '<div class="help-text">Nada encontrado — busque pelo nome em inglês (ex: goblin, dragon, skeleton).</div>';
 
@@ -2630,7 +2630,7 @@ async function addMonster(index, aoMapa) {
 
   if (aoMapa) {
     const map = activeMap();
-    if (!map) return toast('➕ Entrou na iniciativa, mas não há mapa em jogo para receber o token.', true);
+    if (!map) return toast('Entrou na iniciativa, mas não há mapa em jogo para receber o token.', true);
     const i = state.battle.tokens.length;
     state.battle.tokens.push({
       id: Math.random().toString(16).slice(2, 10),
@@ -2643,9 +2643,9 @@ async function addMonster(index, aoMapa) {
       hidden: false, color: '', imageUrl: arte,
     });
     pushBattle();
-    toast(`🗺️ ${nome} entrou na iniciativa (d20${mod >= 0 ? '+' : ''}${mod}) e está no mapa.`);
+    toast(`${nome} entrou na iniciativa (d20${mod >= 0 ? '+' : ''}${mod}) e está no mapa.`);
   } else {
-    toast(`➕ ${nome} entrou na iniciativa (d20${mod >= 0 ? '+' : ''}${mod}).`);
+    toast(`${nome} entrou na iniciativa (d20${mod >= 0 ? '+' : ''}${mod}).`);
   }
   refresh();
 }
@@ -2680,7 +2680,7 @@ async function addCharacter(charId, aoMapa) {
 
   if (aoMapa) {
     const map = activeMap();
-    if (!map) { toast('➕ Entrou na batalha, mas não há mapa em jogo para receber o token.', true); return refresh(); }
+    if (!map) { toast('Entrou na batalha, mas não há mapa em jogo para receber o token.', true); return refresh(); }
     const i = state.battle.tokens.length;
     state.battle.tokens.push({
       id: Math.random().toString(16).slice(2, 10),
@@ -2692,9 +2692,9 @@ async function addCharacter(charId, aoMapa) {
       hidden: false, color: '', imageUrl: ch.imageUrl || '', charId: ch.id,
     });
     pushBattle();
-    toast(`🗺️ ${nome} entrou na batalha e está no mapa.`);
+    toast(`${nome} entrou na batalha e está no mapa.`);
   } else {
-    toast(`➕ ${nome} entrou na batalha.`);
+    toast(`${nome} entrou na batalha.`);
   }
   refresh();
 }
@@ -2718,7 +2718,7 @@ function placeCharacterToken(charId) {
   });
   pushBattle();
   renderMapSide();
-  toast(`📍 ${ch.name} colocado no mapa.`);
+  toast(`${ch.name} colocado no mapa.`);
 }
 
 // Seletor dos personagens do Mestre (jogadores e NPCs) para jogar na batalha.
@@ -2726,36 +2726,37 @@ function charPickerModal() {
   const chars = state.characters || [];
   const pcs = chars.filter((c) => c.type === 'pc');
   const npcs = chars.filter((c) => c.type === 'npc');
-  const NPC_ICON = { inimigo: '👹', quest: '📜', aleatorio: '🎲', npc: '🎭' };
+  const NPC_ICON = { inimigo: 'skull', quest: 'scroll', aleatorio: 'dice-six', npc: 'mask-happy' };
+  const iconSvg = (name) => `<svg class="icon"><use href="#i-${name}"/></svg>`;
 
   const row = (ch) => {
     const isPc = ch.type === 'pc';
-    const icon = isPc ? '🎮' : (NPC_ICON[ch.npcType] || '🎭');
+    const icon = isPc ? 'game-controller' : (NPC_ICON[ch.npcType] || 'mask-happy');
     const hpTxt = ch.maxHp ? ` · ${ch.hp ?? ch.maxHp}/${ch.maxHp} PV` : '';
     return `
       <div class="srd-result-row">
         ${ch.imageUrl
           ? `<img class="cp-thumb" src="${esc(ch.imageUrl)}" alt="" data-fallback-icon="${icon}" />`
-          : `<span class="cp-thumb placeholder">${icon}</span>`}
+          : `<span class="cp-thumb placeholder">${iconSvg(icon)}</span>`}
         <span>${esc(ch.name)}<small style="color:var(--muted);">${esc(hpTxt)}</small></span>
-        <button class="btn small" data-cp-add="${ch.id}" title="Entra só na iniciativa (sem token no mapa)">⚔️ Combate</button>
-        <button class="btn small gold" data-cp-map="${ch.id}" title="Entra na iniciativa E vira token no mapa">🗺️ Combate + mapa</button>
-        <button class="btn small ghost" data-cp-token="${ch.id}" title="Só coloca o token no mapa, sem entrar no combate">📍 Só mapa</button>
+        <button class="btn small" data-cp-add="${ch.id}" title="Entra só na iniciativa (sem token no mapa)"><svg class="icon"><use href="#i-sword"/></svg>Combate</button>
+        <button class="btn small gold" data-cp-map="${ch.id}" title="Entra na iniciativa E vira token no mapa"><svg class="icon"><use href="#i-map-trifold"/></svg>Combate + mapa</button>
+        <button class="btn small ghost" data-cp-token="${ch.id}" title="Só coloca o token no mapa, sem entrar no combate"><svg class="icon"><use href="#i-map-pin"/></svg>Só mapa</button>
       </div>`;
   };
   const section = (titulo, arr) => arr.length
     ? `<div class="cp-section-label">${titulo}</div>${arr.map(row).join('')}` : '';
 
   $('#modal').innerHTML = `
-    <h3>🧙 Adicionar personagem</h3>
+    <h3>Adicionar personagem</h3>
     <div class="row" style="gap:6px;margin-bottom:10px;flex-wrap:wrap;">
-      ${pcs.length ? '<button class="btn small ghost" id="cp-all-pcs">👥 Todos os jogadores</button>' : ''}
-      <button class="btn small ghost" id="cp-blank">⬜ Token em branco</button>
+      ${pcs.length ? '<button class="btn small ghost" id="cp-all-pcs"><svg class="icon"><use href="#i-users"/></svg>Todos os jogadores</button>' : ''}
+      <button class="btn small ghost" id="cp-blank"><svg class="icon"><use href="#i-square"/></svg>Token em branco</button>
     </div>
     <div id="cp-list" style="max-height:360px;overflow-y:auto;">
       ${chars.length
-        ? section('🎮 Jogadores', pcs) + section('🎭 NPCs', npcs)
-        : '<div class="help-text">Nenhum personagem cadastrado ainda. Crie na aba 🧙 Personagens.</div>'}
+        ? section('Jogadores', pcs) + section('NPCs', npcs)
+        : '<div class="help-text">Nenhum personagem cadastrado ainda. Crie na aba Personagens.</div>'}
     </div>
     <div class="modal-actions"><button class="btn ghost" id="modal-cancel">Fechar</button></div>`;
   $('#modal-backdrop').classList.remove('hidden');
@@ -2769,7 +2770,7 @@ function charPickerModal() {
       if (!img.isConnected) return;
       const span = document.createElement('span');
       span.className = 'cp-thumb placeholder';
-      span.textContent = img.dataset.fallbackIcon || '🎭';
+      span.innerHTML = iconSvg(img.dataset.fallbackIcon || 'mask-happy');
       img.replaceWith(span);
     };
     img.addEventListener('error', swap, { once: true });
@@ -3019,7 +3020,7 @@ async function showMonster(index) {
     if (_srdLang !== 'pt' || ptBlocks || ptLoading) return;
     ptLoading = true;
     const status = $('#srd-ai-status');
-    if (status) status.textContent = '✨ traduzindo…';
+    if (status) status.textContent = 'traduzindo…';
     try {
       const r = await api(`/srd/monsters/${index}/translate`);
       if (r?.blocks) { ptBlocks = r.blocks; if (_srdLang === 'pt') buildModal('pt'); }
@@ -3031,12 +3032,12 @@ async function showMonster(index) {
 
   const buildModal = (lang) => {
     $('#modal').innerHTML = `
-      <h3>📋 ${esc(m.name)}</h3>
+      <h3><svg class="icon"><use href="#i-clipboard-text"/></svg> ${esc(m.name)}</h3>
       <div id="srd-sheet" style="font-size:13px;line-height:1.6;max-height:65vh;overflow-y:auto;">${renderMonster(lang)}</div>
       <div class="modal-actions">
         <button class="btn ghost" id="modal-cancel">Fechar</button>
-        <button class="btn small" id="srd-add-quick">➕ Iniciativa</button>
-        <button class="btn small gold" id="srd-map-quick" title="Iniciativa + mapa">🗺️ + Mapa</button>
+        <button class="btn small" id="srd-add-quick">+ Iniciativa</button>
+        <button class="btn small gold" id="srd-map-quick" title="Iniciativa + mapa"><svg class="icon"><use href="#i-map-trifold"/></svg> + Mapa</button>
       </div>`;
     $('#modal-backdrop').classList.remove('hidden');
     $('#modal-cancel').onclick = closeModal;
@@ -3045,7 +3046,7 @@ async function showMonster(index) {
     $('#srd-map-quick').onclick = () => { closeModal(); addMonster(m.index, true); };
     // Marca a tradução da IA quando já está ativa; senão dispara a busca.
     const status = $('#srd-ai-status');
-    if (status && lang === 'pt' && ptBlocks) status.textContent = '✨ tradução por IA';
+    if (status && lang === 'pt' && ptBlocks) status.textContent = 'tradução por IA';
     if (lang === 'pt') ensurePt();
   };
 
@@ -3060,11 +3061,11 @@ function renderAiTab() {
   $('#tab-ai').innerHTML = `
     <div class="tab-header"><h2><svg class="icon"><use href="#i-sparkle"/></svg>Assistente do Mestre</h2></div>
     <div class="ai-shortcuts">
-      <button class="btn small ghost" data-prompt="Me dê um resumo rápido de onde a campanha parou e quais ganchos estão em aberto.">📍 Onde paramos?</button>
-      <button class="btn small ghost" data-prompt="Os jogadores foram para um lugar que eu não preparei. Improvise um local interessante coerente com a campanha, com 1 NPC e 1 gancho.">🎲 Improvisar local</button>
-      <button class="btn small ghost" data-prompt="Crie um NPC rápido coerente com a campanha: nome, aparência, voz, motivação e um segredo.">🧙 NPC rápido</button>
-      <button class="btn small ghost" data-prompt="Monte um encontro de combate balanceado para o grupo atual, com tática dos inimigos.">⚔️ Encontro</button>
-      <button class="btn small ghost" data-prompt="Sugira 3 consequências interessantes para as últimas ações dos jogadores.">🌊 Consequências</button>
+      <button class="btn small ghost" data-prompt="Me dê um resumo rápido de onde a campanha parou e quais ganchos estão em aberto."><svg class="icon"><use href="#i-map-pin"/></svg>Onde paramos?</button>
+      <button class="btn small ghost" data-prompt="Os jogadores foram para um lugar que eu não preparei. Improvise um local interessante coerente com a campanha, com 1 NPC e 1 gancho."><svg class="icon"><use href="#i-dice-six"/></svg>Improvisar local</button>
+      <button class="btn small ghost" data-prompt="Crie um NPC rápido coerente com a campanha: nome, aparência, voz, motivação e um segredo."><svg class="icon"><use href="#i-users"/></svg>NPC rápido</button>
+      <button class="btn small ghost" data-prompt="Monte um encontro de combate balanceado para o grupo atual, com tática dos inimigos."><svg class="icon"><use href="#i-sword"/></svg>Encontro</button>
+      <button class="btn small ghost" data-prompt="Sugira 3 consequências interessantes para as últimas ações dos jogadores."><svg class="icon"><use href="#i-waves"/></svg>Consequências</button>
     </div>
     <div class="chat-box">
       <div class="chat-messages" id="chat-messages">
@@ -3081,7 +3082,7 @@ function renderAiTab() {
     const box = $('#chat-messages');
     chatHistory.push({ role: 'user', content: text });
     box.insertAdjacentHTML('beforeend', `<div class="msg user">${esc(text)}</div>`);
-    box.insertAdjacentHTML('beforeend', `<div class="msg assistant thinking" id="thinking">✨ Consultando os tomos...</div>`);
+    box.insertAdjacentHTML('beforeend', `<div class="msg assistant thinking" id="thinking"><svg class="icon"><use href="#i-sparkle"/></svg> Consultando os tomos...</div>`);
     box.scrollTop = box.scrollHeight;
     $('#chat-text').value = '';
     try {
@@ -3092,7 +3093,7 @@ function renderAiTab() {
     } catch (e) {
       $('#thinking').remove();
       chatHistory.pop();
-      box.insertAdjacentHTML('beforeend', `<div class="msg assistant">❌ ${esc(e.message)}</div>`);
+      box.insertAdjacentHTML('beforeend', `<div class="msg assistant"><svg class="icon"><use href="#i-x-circle"/></svg> ${esc(e.message)}</div>`);
     }
     box.scrollTop = box.scrollHeight;
   };
@@ -3123,7 +3124,7 @@ function renderSettings() {
     </div>
 
     <div class="settings-section">
-      <h3>🗒️ Obsidian</h3>
+      <h3 style="display:flex;align-items:center;gap:8px;"><svg class="icon"><use href="#i-note"/></svg>Obsidian</h3>
       <p class="help-text">Aponte para a pasta da campanha no seu vault e importe/exporte personagens, cenas, sessões e lore como arquivos Markdown.</p>
       <form class="settings-form" id="obs-form">
         <div>
@@ -3141,8 +3142,8 @@ function renderSettings() {
         <button class="btn" type="submit">Salvar configuração do Obsidian</button>
       </form>
       <div class="obs-actions">
-        <button class="btn btn-outline" id="btn-obs-import">🔄 Importar do Obsidian</button>
-        <button class="btn btn-outline" id="btn-obs-export">📤 Exportar para Obsidian</button>
+        <button class="btn btn-outline" id="btn-obs-import"><svg class="icon"><use href="#i-arrows-clockwise"/></svg>Importar do Obsidian</button>
+        <button class="btn btn-outline" id="btn-obs-export"><svg class="icon"><use href="#i-paper-plane-tilt"/></svg>Exportar para Obsidian</button>
       </div>
       <div id="obs-result" class="obs-result" style="display:none"></div>
     </div>`;
@@ -3152,14 +3153,14 @@ function renderSettings() {
   $('#settings-form').onsubmit = async (e) => {
     e.preventDefault();
     const data = Object.fromEntries(new FormData(e.target).entries());
-    await tryApi(() => api('/settings', { method: 'PUT', body: data }), '⚙️ Configurações salvas!');
+    await tryApi(() => api('/settings', { method: 'PUT', body: data }), 'Configurações salvas!');
     refresh();
   };
 
   $('#obs-form').onsubmit = async (e) => {
     e.preventDefault();
     const fields = Object.fromEntries(new FormData(e.target).entries());
-    await tryApi(() => api('/settings', { method: 'PUT', body: { obsidian: fields } }), '🗒️ Configuração do Obsidian salva!');
+    await tryApi(() => api('/settings', { method: 'PUT', body: { obsidian: fields } }), 'Configuração do Obsidian salva!');
     refresh();
   };
 
@@ -3193,7 +3194,7 @@ async function loadChannels() {
     }
     const vSel = $('#voice-channel-select');
     vSel.innerHTML = `<option value="">canal de voz...</option>` +
-      voice.map((ch) => `<option value="${ch.id}" ${ch.id === state.settings.voiceChannelId ? 'selected' : ''}>🔊 ${esc(ch.name)}</option>`).join('');
+      voice.map((ch) => `<option value="${ch.id}" ${ch.id === state.settings.voiceChannelId ? 'selected' : ''}>${esc(ch.name)}</option>`).join('');
   } catch { /* bot offline */ }
 }
 
@@ -3202,10 +3203,10 @@ $('#btn-join').onclick = async () => {
   const channelId = $('#voice-channel-select').value;
   if (!channelId) return toast('Escolha um canal de voz primeiro.', true);
   const r = await tryApi(() => api('/discord/join', { method: 'POST', body: { channelId } }));
-  if (r) { toast(`🎙️ Conectado em ${r.channel}!`); refresh(); }
+  if (r) { toast(`Conectado em ${r.channel}!`); refresh(); }
 };
-$('#btn-leave').onclick = () => tryApi(() => api('/discord/leave', { method: 'POST' }), '👋 Saí do canal de voz.').then(refresh);
-$('#btn-stop-sound').onclick = () => tryApi(() => api('/sound/stop', { method: 'POST' }), '⏹ Som parado.').then(refresh);
+$('#btn-leave').onclick = () => tryApi(() => api('/discord/leave', { method: 'POST' }), 'Saí do canal de voz.').then(refresh);
+$('#btn-stop-sound').onclick = () => tryApi(() => api('/sound/stop', { method: 'POST' }), 'Som parado.').then(refresh);
 $('#volume').onchange = (e) => tryApi(() => api('/sound/volume', { method: 'POST', body: { volume: Number(e.target.value) } }));
 $('#btn-roll').onclick = async () => {
   const expr = $('#dice-expr').value || '1d20';
