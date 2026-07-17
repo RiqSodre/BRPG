@@ -13,10 +13,31 @@
   --accent2-dim: #7a6440;
   --danger: #c05650;
   --ok: #4a9d6f;
-  /* Cor da categoria "Condição" no dnd5e-quickref (FireBrick) */
+  /* Cor da categoria "Condição" no dnd5e-quickref (FireBrick) — igual nos dois temas */
   --cond-color: #b22222;
   /* Legado — mantido por compatibilidade com estilos ainda não migrados */
   --panel: var(--bg2);
+  color-scheme: dark;
+}
+
+/* Tema claro — mesmos dois acentos, ajustados para contraste em fundo claro
+   (accent2/accent-bright aparecem sobretudo como texto, não fundo, então
+   precisam ser mais escuros aqui do que na versão escura). */
+:root[data-theme="light"] {
+  --bg: #f5f4f1;
+  --bg2: #ffffff;
+  --bg3: #edebe6;
+  --bg4: #e0ddd6;
+  --border: #d6d2c9;
+  --text: #201e24;
+  --muted: #6b6874;
+  --accent: #6e5bc4;
+  --accent-bright: #5b46c0;
+  --accent2: #96692f;
+  --accent2-dim: #c9a06e;
+  --danger: #a8362f;
+  --ok: #29764f;
+  color-scheme: light;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -68,6 +89,14 @@ nav { display: flex; flex-direction: column; gap: 2px; flex: 1; overflow-y: auto
   color: var(--muted); padding: 10px 12px 4px;
   opacity: 0.6;
 }
+.theme-toggle {
+  display: flex; align-items: center; gap: 10px;
+  background: none; border: none; border-top: 1px solid var(--border);
+  color: var(--muted); padding: 10px 12px; margin-top: 6px;
+  cursor: pointer; font-size: 13px; text-align: left; font-family: inherit;
+  transition: background 0.12s, color 0.12s;
+}
+.theme-toggle:hover { color: var(--text); background: var(--bg3); }
 .bot-status { font-size: 12px; color: var(--muted); padding: 10px 8px 0; border-top: 1px solid var(--border); }
 .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
 .dot.on { background: var(--ok); }
@@ -397,7 +426,8 @@ textarea { resize: vertical; min-height: 80px; }
 .map-stage { position: relative; flex: 1; min-width: 0; }
 .map-stage canvas {
   position: absolute; inset: 0; width: 100%; height: 100%;
-  background: var(--bg);
+  /* O mapa é sempre uma "mesa" escura, desenhada pelo battlemap.js — não segue o tema do app. */
+  background: #0d0d11;
   border: 1px solid var(--border); border-radius: 12px;
   cursor: crosshair; touch-action: none;
 }
@@ -704,7 +734,9 @@ textarea { resize: vertical; min-height: 80px; }
 .player-conn { font-size: 12px; color: var(--muted); }
 .player-stage { flex: 1; display: flex; min-height: 0; padding: 12px; gap: 12px; }
 .player-stage canvas {
-  flex: 1; min-width: 0; background: var(--bg);
+  flex: 1; min-width: 0;
+  /* O mapa é sempre uma "mesa" escura, desenhada pelo battlemap.js — não segue o tema do app. */
+  background: #0d0d11;
   border: 1px solid var(--border); border-radius: 12px; touch-action: none; cursor: grab;
 }
 .player-initiative {
