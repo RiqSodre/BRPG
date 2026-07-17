@@ -14,7 +14,7 @@ function loadImg(src, onLoad) {
   return img;
 }
 
-const KIND_COLOR = { pc: '#4ade80', npc: '#c4a747', enemy: '#e05252' };
+const KIND_COLOR = { pc: '#4a9d6f', npc: '#b8925a', enemy: '#c05650' };
 
 // ---------- Efeitos visuais de combate (elementais) ----------
 // Cada preset define cor, quantas partículas, se sobem (up) ou explodem (burst),
@@ -26,7 +26,7 @@ const FX_PRESETS = {
   holy:      { emoji: '✨', color: '#ffe58a', color2: '#fffbe0', dur: 1100, n: 18, spread: 'up',    ring: true, glow: true },
   poison:    { emoji: '☠️', color: '#8fd14f', color2: '#d6f5a0', dur: 1100, n: 16, spread: 'up',    glow: true },
   impact:    { emoji: '💥', color: '#ff5252', color2: '#ffffff', dur: 650,  n: 14, spread: 'burst', ring: true },
-  heal:      { emoji: '💚', color: '#4ade80', color2: '#eaffea', dur: 1000, n: 14, spread: 'up',    ring: true, glow: true },
+  heal:      { emoji: '💚', color: '#4a9d6f', color2: '#eaffea', dur: 1000, n: 14, spread: 'up',    ring: true, glow: true },
 };
 
 // Sons sintetizados no navegador (Web Audio) — tocam na tela do Mestre e na dos jogadores,
@@ -633,7 +633,7 @@ class BattleMap {
     ctx.fillRect(0, 0, w, h);
 
     if (!this.map) {
-      ctx.fillStyle = '#9a8fc0';
+      ctx.fillStyle = '#9c9aa8';
       ctx.font = '16px Segoe UI, sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText(this.isDm ? 'Nenhum mapa em jogo — crie ou ative um mapa.' : 'Aguardando o Mestre abrir o mapa...', w / 2, h / 2);
@@ -649,7 +649,7 @@ class BattleMap {
     const gh = this.map.rows * CELL;
 
     // Fundo do tabuleiro
-    ctx.fillStyle = '#1c1828';
+    ctx.fillStyle = '#17171d';
     ctx.fillRect(0, 0, gw, gh);
 
     // Imagem do mapa (upload ou URL), posicionada e escalada para casar com o grid
@@ -701,7 +701,7 @@ class BattleMap {
     }
     ctx.beginPath();
     ctx.arc(cx, cy, rCells * CELL, 0, Math.PI * 2);
-    ctx.strokeStyle = '#e05252';
+    ctx.strokeStyle = '#c05650';
     ctx.lineWidth = 3 / this.cam.zoom;
     ctx.stroke();
 
@@ -732,7 +732,7 @@ class BattleMap {
     const tw = ctx.measureText(text).width;
     ctx.fillStyle = 'rgba(10,8,16,0.85)';
     ctx.fillRect(cx - tw / 2 - 6 / this.cam.zoom, cy - 12 / this.cam.zoom, tw + 12 / this.cam.zoom, 24 / this.cam.zoom);
-    ctx.fillStyle = '#e05252';
+    ctx.fillStyle = '#c05650';
     ctx.fillText(text, cx, cy);
     ctx.restore();
   }
@@ -747,7 +747,7 @@ class BattleMap {
     const ay = d.from.row * CELL + CELL / 2;
     const bx = d.ghost.col * CELL + CELL / 2;
     const by = d.ghost.row * CELL + CELL / 2;
-    const cor = info.over ? '#e05252' : '#4ade80';
+    const cor = info.over ? '#c05650' : '#4a9d6f';
 
     ctx.save();
     ctx.strokeStyle = cor;
@@ -861,7 +861,7 @@ class BattleMap {
       if (t.hidden) ctx.globalAlpha = 0.45; // só o Mestre chega aqui com hidden
 
       // Corpo do token: imagem recortada em círculo, ou cor sólida com a inicial
-      const color = t.color || KIND_COLOR[t.kind] || '#8b5cf6';
+      const color = t.color || KIND_COLOR[t.kind] || '#6e5bc4';
       const tImg = loadImg(t.imageUrl, () => this.draw());
       ctx.beginPath();
       ctx.arc(cx, cy, radius, 0, Math.PI * 2);
@@ -877,7 +877,7 @@ class BattleMap {
       } else {
         ctx.fillStyle = color;
         ctx.fill();
-        ctx.fillStyle = '#14111c';
+        ctx.fillStyle = '#0d0d11';
         ctx.font = `bold ${Math.round(radius)}px Segoe UI, sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -899,7 +899,7 @@ class BattleMap {
         ctx.beginPath();
         ctx.arc(cx, cy, radius + 5, 0, Math.PI * 2);
         ctx.lineWidth = 2;
-        ctx.strokeStyle = '#8b5cf6';
+        ctx.strokeStyle = '#6e5bc4';
         ctx.setLineDash([5, 4]);
         ctx.stroke();
         ctx.setLineDash([]);
@@ -913,10 +913,10 @@ class BattleMap {
         const barY = py + d - barH - 4;
         ctx.fillStyle = 'rgba(0,0,0,0.7)';
         ctx.fillRect(px + 6, barY, bw, barH);
-        ctx.fillStyle = frac > 0.5 ? '#4ade80' : frac > 0.25 ? '#c4a747' : '#e05252';
+        ctx.fillStyle = frac > 0.5 ? '#4a9d6f' : frac > 0.25 ? '#b8925a' : '#c05650';
         ctx.fillRect(px + 6, barY, bw * frac, barH);
         if (frac === 0) {
-          ctx.fillStyle = '#e05252';
+          ctx.fillStyle = '#c05650';
           ctx.font = `bold ${Math.round(d * 0.5)}px Segoe UI, sans-serif`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';

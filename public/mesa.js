@@ -35,7 +35,7 @@ function renderInitiative(combat) {
 
   box.innerHTML = '<h3>Iniciativa</h3>' + combat.entries.map((e, i) => {
     const frac = hpFraction(e);
-    const cor = frac > 0.5 ? '#4ade80' : frac > 0.25 ? '#c4a747' : '#e05252';
+    const cor = frac > 0.5 ? '#4a9d6f' : frac > 0.25 ? '#b8925a' : '#c05650';
     const bar = frac === null ? ''
       : `<div class="hp-bar"><span style="width:${frac * 100}%; background:${cor}"></span></div>`;
     // PV exato para os personagens dos jogadores; para os inimigos, o estado que dá para

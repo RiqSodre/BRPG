@@ -1,16 +1,22 @@
 :root {
-  --bg: #14111c;
-  --bg2: #1c1828;
-  --bg3: #262136;
-  --border: #383050;
-  --text: #e8e2f5;
-  --muted: #9a8fc0;
-  --accent: #8b5cf6;
-  --accent2: #c4a747;
-  --danger: #e05252;
-  --ok: #4ade80;
+  /* Paleta v2 — carvão neutro, dois acentos usados com reserva (não mais roxo como base). */
+  --bg: #0d0d11;
+  --bg2: #17171d;
+  --bg3: #1f1f27;
+  --bg4: #292933;
+  --border: #34343f;
+  --text: #eceaf0;
+  --muted: #9c9aa8;
+  --accent: #6e5bc4;
+  --accent-bright: #8a78d9;
+  --accent2: #b8925a;
+  --accent2-dim: #7a6440;
+  --danger: #c05650;
+  --ok: #4a9d6f;
   /* Cor da categoria "Condição" no dnd5e-quickref (FireBrick) */
   --cond-color: #b22222;
+  /* Legado — mantido por compatibilidade com estilos ainda não migrados */
+  --panel: var(--bg2);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -128,7 +134,7 @@ textarea { resize: vertical; min-height: 80px; }
   flex-direction: column;
   gap: 8px;
 }
-.card.active-scene { border-color: var(--accent2); box-shadow: 0 0 12px rgba(196, 167, 71, 0.25); }
+.card.active-scene { border-color: var(--accent2); box-shadow: 0 0 12px rgba(184, 146, 90, 0.25); }
 .card h3 { font-size: 15px; color: var(--text); }
 .card .meta { font-size: 12px; color: var(--muted); }
 .card .desc { font-size: 13px; color: var(--muted); white-space: pre-wrap; max-height: 90px; overflow: hidden; }
@@ -150,7 +156,7 @@ textarea { resize: vertical; min-height: 80px; }
   color: var(--muted);
 }
 .badge.gold { color: var(--accent2); }
-.badge.purple { color: #b79cff; }
+.badge.purple { color: var(--accent-bright); }
 
 /* ---------- Modal ---------- */
 .modal-backdrop {
@@ -194,7 +200,7 @@ textarea { resize: vertical; min-height: 80px; }
 .co-header {
   display: flex; align-items: center; justify-content: space-between;
   padding-bottom: 7px; margin-bottom: 6px;
-  border-bottom: 1px solid rgba(196,167,71,0.3);
+  border-bottom: 1px solid rgba(184,146,90,0.3);
 }
 .co-label-text {
   font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
@@ -221,7 +227,7 @@ textarea { resize: vertical; min-height: 80px; }
   transition: background 0.1s;
 }
 .init-entry:hover { background: var(--bg3); }
-.init-entry.is-turn { background: rgba(196,167,71,0.09); border-left-color: var(--accent2); }
+.init-entry.is-turn { background: rgba(184,146,90,0.09); border-left-color: var(--accent2); }
 .init-entry.downed { opacity: 0.6; }
 
 .ie-arrow {
@@ -236,7 +242,7 @@ textarea { resize: vertical; min-height: 80px; }
   text-align: center; border-radius: 5px !important;
   font-variant-numeric: tabular-nums;
 }
-.init-entry.is-turn .ie-init { color: var(--accent2); border-color: rgba(196,167,71,0.5); }
+.init-entry.is-turn .ie-init { color: var(--accent2); border-color: rgba(184,146,90,0.5); }
 .ie-avatar {
   grid-column: 3; align-self: start;
   width: 26px; height: 26px; border-radius: 50%; object-fit: cover;
@@ -252,7 +258,7 @@ textarea { resize: vertical; min-height: 80px; }
   font-size: 12px !important; font-weight: 500;
   border-radius: 5px !important;
 }
-.init-entry.is-turn .ie-name { border-color: rgba(196,167,71,0.4); }
+.init-entry.is-turn .ie-name { border-color: rgba(184,146,90,0.4); }
 
 /* Controles de presença no mapa embutidos em cada combatente */
 .ie-mapbtn {
@@ -262,9 +268,9 @@ textarea { resize: vertical; min-height: 80px; }
   transition: background 0.12s, border-color 0.12s, opacity 0.12s;
 }
 .ie-mapbtn:hover { background: var(--bg2); border-color: var(--accent); }
-.ie-mapbtn.place { border-color: rgba(196,167,71,0.45); color: var(--accent2); }
+.ie-mapbtn.place { border-color: rgba(184,146,90,0.45); color: var(--accent2); }
 .ie-mapbtn.place:hover { background: var(--accent2); border-color: var(--accent2); color: #1a1a1a; }
-.ie-mapbtn.on { border-color: rgba(74,222,128,0.4); }
+.ie-mapbtn.on { border-color: rgba(74,157,111,0.4); }
 .ie-mapbtn.del:hover { background: var(--danger); border-color: var(--danger); color: #fff; }
 
 /* Combatente fora do mapa: retrato apagado sinaliza "ainda não colocado" */
@@ -273,12 +279,12 @@ textarea { resize: vertical; min-height: 80px; }
 /* Barra contextual "N fora do mapa · Colocar todos" */
 .co-place-all {
   display: block; width: 100%; text-align: left;
-  background: rgba(196,167,71,0.08); border: 1px dashed rgba(196,167,71,0.4);
+  background: rgba(184,146,90,0.08); border: 1px dashed rgba(184,146,90,0.4);
   border-radius: 6px; padding: 5px 8px; margin-bottom: 6px;
   font-size: 11px; color: var(--muted); cursor: pointer;
   transition: background 0.12s;
 }
-.co-place-all:hover { background: rgba(196,167,71,0.16); }
+.co-place-all:hover { background: rgba(184,146,90,0.16); }
 .co-place-all b { color: var(--accent2); }
 
 .ie-row2 {
@@ -338,7 +344,7 @@ textarea { resize: vertical; min-height: 80px; }
 .srd-hero {
   display: flex; justify-content: center; align-items: center;
   margin: 0 0 10px; padding: 8px;
-  background: radial-gradient(ellipse at center, rgba(196,167,71,0.12), transparent 70%);
+  background: radial-gradient(ellipse at center, rgba(184,146,90,0.12), transparent 70%);
   border-radius: 8px;
 }
 .srd-hero img {
@@ -380,7 +386,7 @@ textarea { resize: vertical; min-height: 80px; }
 .map-stage { position: relative; flex: 1; min-width: 0; }
 .map-stage canvas {
   position: absolute; inset: 0; width: 100%; height: 100%;
-  background: #0d0b13;
+  background: var(--bg);
   border: 1px solid var(--border); border-radius: 12px;
   cursor: crosshair; touch-action: none;
 }
@@ -429,7 +435,7 @@ textarea { resize: vertical; min-height: 80px; }
 }
 .ov-panel {
   display: flex; align-items: center; gap: 3px; flex-wrap: wrap;
-  background: rgba(20,17,28,0.82); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  background: rgba(13,13,17,0.82); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
   border: 1px solid var(--border); border-radius: 10px; padding: 4px 5px;
   box-shadow: 0 4px 16px rgba(0,0,0,0.35);
 }
@@ -441,7 +447,7 @@ textarea { resize: vertical; min-height: 80px; }
 }
 .ov-btn:hover { background: var(--bg2); border-color: var(--accent); }
 .ov-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
-.ov-btn.gold { border-color: rgba(196,167,71,0.5); color: var(--accent2); }
+.ov-btn.gold { border-color: rgba(184,146,90,0.5); color: var(--accent2); }
 .ov-btn.gold:hover { background: var(--accent2); border-color: var(--accent2); color: #1a1a1a; }
 .ov-btn.danger:hover { background: var(--danger); border-color: var(--danger); color: #fff; }
 .ov-sep { width: 1px; height: 18px; background: var(--border); margin: 0 1px; }
@@ -479,7 +485,7 @@ textarea { resize: vertical; min-height: 80px; }
 .map-img-info {
   font-size: 12px; color: var(--muted); margin: 6px 0 8px;
   padding: 6px 9px; border-radius: 7px;
-  background: rgba(196,167,71,0.08); border: 1px dashed rgba(196,167,71,0.35);
+  background: rgba(184,146,90,0.08); border: 1px dashed rgba(184,146,90,0.35);
 }
 .map-img-info:empty { display: none; }
 .map-img-info b { color: var(--accent2); }
@@ -499,7 +505,7 @@ textarea { resize: vertical; min-height: 80px; }
 /* HUD de turno — compacto, no rodapé flutuante (posicionado pelo .ov-bottom) */
 .combat-hud {
   display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap;
-  background: rgba(20,17,28,0.9); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  background: rgba(13,13,17,0.9); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
   border: 1px solid var(--accent); border-radius: 12px; padding: 6px 10px;
   box-shadow: 0 6px 22px rgba(0,0,0,0.45); max-width: 100%;
 }
@@ -554,7 +560,7 @@ textarea { resize: vertical; min-height: 80px; }
 .fx-palette {
   display: flex; gap: 4px; margin: 6px 0 8px;
   padding: 5px; border-radius: 8px;
-  background: linear-gradient(180deg, rgba(196,167,71,0.07), transparent);
+  background: linear-gradient(180deg, rgba(184,146,90,0.07), transparent);
   border: 1px solid var(--border);
 }
 .fx-btn {
@@ -622,7 +628,7 @@ textarea { resize: vertical; min-height: 80px; }
 
 /* Painel de ordem de iniciativa na sidebar */
 .co-section { margin-bottom: 4px; }
-.co-label { color: var(--accent2) !important; border-bottom-color: rgba(196,167,71,0.3) !important; }
+.co-label { color: var(--accent2) !important; border-bottom-color: rgba(184,146,90,0.3) !important; }
 .co-row {
   display: flex; align-items: flex-start; gap: 5px;
   padding: 5px 3px; border-radius: 7px; cursor: pointer;
@@ -631,7 +637,7 @@ textarea { resize: vertical; min-height: 80px; }
 }
 .co-row:hover { background: var(--bg3); }
 .co-row.is-turn {
-  background: rgba(196,167,71,0.1);
+  background: rgba(184,146,90,0.1);
   border-left-color: var(--accent2);
 }
 .co-row.downed { opacity: 0.55; }
@@ -665,7 +671,7 @@ textarea { resize: vertical; min-height: 80px; }
 .token-row .name small { color: var(--muted); }
 .token-row.hidden-token { opacity: 0.5; }
 .token-row.is-turn {
-  background: rgba(196,167,71,0.08);
+  background: rgba(184,146,90,0.08);
   border-left-color: var(--accent2);
 }
 .token-row.is-turn .name { color: var(--accent2); font-weight: 600; }
@@ -687,7 +693,7 @@ textarea { resize: vertical; min-height: 80px; }
 .player-conn { font-size: 12px; color: var(--muted); }
 .player-stage { flex: 1; display: flex; min-height: 0; padding: 12px; gap: 12px; }
 .player-stage canvas {
-  flex: 1; min-width: 0; background: #0d0b13;
+  flex: 1; min-width: 0; background: var(--bg);
   border: 1px solid var(--border); border-radius: 12px; touch-action: none; cursor: grab;
 }
 .player-initiative {
@@ -705,12 +711,12 @@ textarea { resize: vertical; min-height: 80px; }
   width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
   border: 2px solid var(--border); background: var(--bg3);
 }
-.init-row.current .init-avatar { border-color: #ffd75e; }
+.init-row.current .init-avatar { border-color: #d9a869; }
 .init-avatar.placeholder { display: inline-block; }
 .hp-bar { height: 6px; background: rgba(0,0,0,0.5); border-radius: 3px; margin-top: 4px; overflow: hidden; }
 .hp-bar span { display: block; height: 100%; }
 .hp-text { display: block; font-size: 11px; color: var(--muted); margin-top: 2px; }
-.init-row.current .hp-text { color: #f0e9ff; }
+.init-row.current .hp-text { color: #f2f0f5; }
 .cond-list { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; }
 /* Cor da categoria "Condição" do dnd5e-quickref (FireBrick) — mesmo tom em todo lugar que uma condição aparece. */
 .cond-chip {

@@ -1621,7 +1621,7 @@ function renderCombatHud() {
   const retratoProx = proximo ? retratoDe(proximo, tokenOf(proximo.name)) : null;
 
   const hpFrac = atual?.maxHp > 0 ? Math.max(0, Math.min(1, (atual.hp ?? 0) / atual.maxHp)) : null;
-  const hpCor = hpFrac > 0.5 ? '#4ade80' : hpFrac > 0.25 ? '#c4a747' : '#e05252';
+  const hpCor = hpFrac > 0.5 ? '#4a9d6f' : hpFrac > 0.25 ? '#b8925a' : '#c05650';
   const conds = (atual?.conditions || []);
 
   el.innerHTML = `
@@ -1676,7 +1676,7 @@ function renderTokenPanel() {
   const hp = Number(fonte.hp ?? t.hp ?? 0);
   const maxHp = Number(fonte.maxHp ?? t.maxHp ?? 0);
   const frac = maxHp > 0 ? Math.max(0, Math.min(1, hp / maxHp)) : null;
-  const cor = frac > 0.5 ? '#4ade80' : frac > 0.25 ? '#c4a747' : '#e05252';
+  const cor = frac > 0.5 ? '#4a9d6f' : frac > 0.25 ? '#b8925a' : '#c05650';
   const conds = fonte.conditions || [];
   const conc = fonte.concentration || false;
 
@@ -2082,7 +2082,7 @@ function renderLooseTokens() {
   if (!el) return;
   const soltos = (state.battle.tokens || []).filter((t) => !entryOf(t));
   const icon = { pc: '🎮', npc: '🎭', enemy: '👹' };
-  const kindColor = { pc: '#4ade80', npc: '#c4a747', enemy: '#e05252' };
+  const kindColor = { pc: '#4a9d6f', npc: '#b8925a', enemy: '#c05650' };
 
   el.innerHTML = `
     <div class="side-section">
@@ -2091,7 +2091,7 @@ function renderLooseTokens() {
         <button class="btn small gold" id="btn-loose-add" title="Adicionar personagem cadastrado ou um token avulso">＋ Adicionar</button>
       </div>
       ${soltos.length ? `<div id="loose-list">${soltos.map((t) => {
-        const cor = t.color || kindColor[t.kind] || '#8b5cf6';
+        const cor = t.color || kindColor[t.kind] || '#6e5bc4';
         const frac = t.maxHp > 0 ? Math.max(0, Math.min(1, (t.hp ?? 0) / t.maxHp)) : null;
         const conds = (t.conditions || []).map((cd) => `<span class="cond-chip" title="${esc(condTitle(cd))}">${condImg(cd)}</span>`).join('');
         return `
@@ -2340,7 +2340,7 @@ function tokenModal(t = null) {
       ${field('PV', 'hp', t?.hp ?? '', 'number')}
       ${field('PV máx', 'maxHp', t?.maxHp ?? '', 'number')}
       ${field('Deslocamento (m)', 'speed', t?.speed ?? 9, 'number')}
-      ${field('Cor', 'color', t?.color || '#8b5cf6', 'color')}
+      ${field('Cor', 'color', t?.color || '#6e5bc4', 'color')}
     </div>
     ${fieldSelect('Ligar à iniciativa (PV e condições sincronizados)', 'combatName',
       [{ value: '', label: '— não ligar —' }, ...combatNames.map((n) => ({ value: n, label: n }))], t?.combatName ?? '')}
