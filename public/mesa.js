@@ -43,7 +43,7 @@ function renderInitiative(combat) {
     const vida = e.hp != null && e.maxHp > 0 ? `${esc(e.hp)}/${esc(e.maxHp)} PV`
       : e.hpLabel ? esc(e.hpLabel) : '';
     const conds = (e.conditions || []).map((c) =>
-      `<span class="cond-chip" title="${esc(c)}">${condIcon(c)} ${esc(c)}</span>`).join('');
+      `<span class="cond-chip" title="${esc(c)}">${esc(c)}</span>`).join('');
     const morto = frac === 0;
 
     return `<div class="init-row ${i === combat.turn ? 'current' : ''} ${morto ? 'downed' : ''}">
