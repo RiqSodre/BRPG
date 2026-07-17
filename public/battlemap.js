@@ -940,7 +940,8 @@ class BattleMap {
         const iw = conds.length * s + (conds.length - 1) * gap;
         const rowX = cx - iw / 2;
         const rowY = py - s - 6;
-        ctx.fillStyle = 'rgba(10,8,16,0.8)';
+        // Cor da categoria "Condição" no dnd5e-quickref (FireBrick), igual aos chips do HUD.
+        ctx.fillStyle = 'rgba(178,34,34,0.88)';
         ctx.fillRect(rowX - 4, rowY, iw + 8, s + 5);
         conds.forEach((cd, i) => {
           const icon = loadImg(condIconUrl(cd), () => this.draw());

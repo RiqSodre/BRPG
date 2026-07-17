@@ -9,6 +9,8 @@
   --accent2: #c4a747;
   --danger: #e05252;
   --ok: #4ade80;
+  /* Cor da categoria "Condição" no dnd5e-quickref (FireBrick) */
+  --cond-color: #b22222;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -306,7 +308,7 @@ textarea { resize: vertical; min-height: 80px; }
 }
 .ie-conds { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 3px; }
 .ie-conds .cond-chip { cursor: pointer; }
-.ie-conds .cond-chip:hover { background: var(--danger); border-color: var(--danger); color: #fff; }
+.ie-conds .cond-chip:hover { background: var(--danger); border-color: var(--danger); }
 .death-saves { display: flex; align-items: center; gap: 4px; font-size: 11px; margin-top: 4px; flex-wrap: wrap; }
 .death-saves .btn { padding: 0 5px; font-size: 10px; }
 
@@ -542,8 +544,8 @@ textarea { resize: vertical; min-height: 80px; }
   background: var(--bg2); border: 1px solid var(--border); color: var(--text);
   border-radius: 6px; padding: 4px 7px; cursor: pointer; line-height: 1;
 }
-.cond-toggle:hover { border-color: var(--accent); }
-.cond-toggle.on { background: var(--accent); border-color: var(--accent); }
+.cond-toggle:hover { border-color: var(--cond-color); }
+.cond-toggle.on { background: var(--cond-color); border-color: var(--accent2); box-shadow: 0 0 0 1px var(--accent2); }
 /* Ícone real de condição (game-icons.net) — branco sobre transparente, cabe em qualquer pill escuro */
 .cond-icon { width: 14px; height: 14px; vertical-align: -2px; object-fit: contain; }
 .cond-toggle .cond-icon { width: 16px; height: 16px; vertical-align: -3px; }
@@ -710,9 +712,10 @@ textarea { resize: vertical; min-height: 80px; }
 .hp-text { display: block; font-size: 11px; color: var(--muted); margin-top: 2px; }
 .init-row.current .hp-text { color: #f0e9ff; }
 .cond-list { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; }
+/* Cor da categoria "Condição" do dnd5e-quickref (FireBrick) — mesmo tom em todo lugar que uma condição aparece. */
 .cond-chip {
   font-size: 10px; padding: 1px 5px; border-radius: 8px;
-  background: var(--bg3); border: 1px solid var(--accent); color: var(--text);
+  background: var(--cond-color); border: 1px solid var(--cond-color); color: #fff;
 }
 
 .toast {
