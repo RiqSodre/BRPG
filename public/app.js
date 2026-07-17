@@ -1507,7 +1507,7 @@ async function nextTurn(dir) {
   if (dir < 0 && antes === 0) c.round = Math.max(1, c.round - 1);
 
   const atual = c.entries[c.turn];
-  if (atual?.conditions?.length) toast(`⚠️ ${atual.name} está: ${atual.conditions.join(', ')}`);
+  if (atual?.conditions?.length) toast(`${atual.name} está: ${atual.conditions.join(', ')}`);
   await saveCombatState();
   renderMapSide();
   focusTurn();
@@ -1527,7 +1527,7 @@ async function rollInitiative() {
   await saveCombatState();
   renderMapSide();
   await refresh();
-  toast('🎲 Iniciativa rolada para todos! Ordem: ' + c.entries.map((e) => `${e.name} (${e.init})`).join(' → '));
+  toast('Iniciativa rolada para todos! Ordem: ' + c.entries.map((e) => `${e.name} (${e.init})`).join(' → '));
   focusTurn();
 }
 
@@ -1548,11 +1548,11 @@ async function applyHp(tokens, delta) {
     const novo = Math.max(0, max ? Math.min(max, atual + delta) : atual + delta);
 
     if (delta < 0 && alvo.concentration) {
-      avisos.push(`🧠 ${t.name}: salvaguarda de CON CD ${Math.max(10, Math.floor(-delta / 2))} para manter a concentração`);
+      avisos.push(`${t.name}: salvaguarda de CON CD ${Math.max(10, Math.floor(-delta / 2))} para manter a concentração`);
     }
     if (novo <= 0 && atual > 0) {
       alvo.deathSaves = { s: 0, f: 0 };
-      avisos.push(`💀 ${t.name} caiu`);
+      avisos.push(`${t.name} caiu`);
     }
     alvo.hp = novo;
     if (e) {
@@ -1572,7 +1572,7 @@ async function applyHp(tokens, delta) {
   if (bmap) bmap.draw();
   renderMapSide();
 
-  const verbo = delta < 0 ? `💥 ${-delta} de dano` : `💚 ${delta} de cura`;
+  const verbo = delta < 0 ? `${-delta} de dano` : `${delta} de cura`;
   const alvosTxt = tokens.map((t) => t.name).join(', ');
   toast([`${verbo} em ${alvosTxt}.`, ...avisos].join(' · '), avisos.length > 0);
 }
@@ -1614,7 +1614,7 @@ function duplicateToken(id) {
   state.battle.tokens.push(copy);
   pushBattle();
   renderMapSide();
-  toast(`➕ ${newName} duplicado no mapa.`);
+  toast(`${newName} duplicado no mapa.`);
 }
 
 function renderCombatHud() {
@@ -1654,20 +1654,20 @@ function renderCombatHud() {
     <div class="hud-actions">
       <button class="btn small ghost" id="hud-prev" title="Voltar um turno">◀</button>
       <button class="btn gold" id="hud-next" title="Próximo turno (Espaço)">▶ Próximo</button>
-      <button class="btn small" id="hud-roll" title="Rola a iniciativa de TODOS os combatentes e reordena">🎲 Rolar iniciativa</button>
-      <button class="btn small ghost" id="hud-announce" title="Postar a ordem no Discord">📤 Postar</button>
-      <button class="btn small ghost danger" id="hud-end" title="Encerrar o combate">⏹ Fim</button>
+      <button class="btn small" id="hud-roll" title="Rola a iniciativa de TODOS os combatentes e reordena"><svg class="icon"><use href="#i-dice-six"/></svg>Rolar iniciativa</button>
+      <button class="btn small ghost" id="hud-announce" title="Postar a ordem no Discord"><svg class="icon"><use href="#i-paper-plane-tilt"/></svg>Postar</button>
+      <button class="btn small ghost danger" id="hud-end" title="Encerrar o combate"><svg class="icon"><use href="#i-stop"/></svg>Fim</button>
     </div>`;
 
   $('#hud-next').onclick = () => nextTurn(1);
   $('#hud-prev').onclick = () => nextTurn(-1);
   $('#hud-roll').onclick = rollInitiative;
-  $('#hud-announce').onclick = () => tryApi(() => api('/combat/announce', { method: 'POST' }), '📤 Iniciativa postada!');
+  $('#hud-announce').onclick = () => tryApi(() => api('/combat/announce', { method: 'POST' }), 'Iniciativa postada!');
   $('#hud-end').onclick = async () => {
     if (!confirm('Encerrar o combate? A iniciativa é limpa; os tokens continuam no mapa.')) return;
     state.combat = { active: false, round: 1, turn: 0, entries: [] };
     await saveCombatState();
-    toast('⏹ Combate encerrado.');
+    toast('Combate encerrado.');
   };
 }
 
@@ -1695,7 +1695,7 @@ function renderTokenPanel() {
         ${t.imageUrl ? `<img class="token-avatar" src="${esc(t.imageUrl)}" alt="" onerror="this.remove()" />` : ''}
         <div class="act-name">
           <b>${esc(t.name)}</b>
-          ${entry ? `<small style="color:var(--muted);font-size:11px;">⚔️ na iniciativa</small>` : ''}
+          ${entry ? `<small style="color:var(--muted);font-size:11px;"><svg class="icon"><use href="#i-sword"/></svg> na iniciativa</small>` : ''}
           ${frac !== null ? `
             <div class="hp-bar"><span style="width:${frac * 100}%; background:${cor}"></span></div>
             <small class="hp-text">${hp}/${maxHp} PV</small>` : '<small class="hp-text">sem PV definidos</small>'}
@@ -1703,8 +1703,8 @@ function renderTokenPanel() {
       </div>
       <div class="act-hp">
         <input type="number" id="act-amount" min="1" placeholder="0" />
-        <button class="btn small danger" id="act-dmg" title="Enter aplica dano">💥 Dano</button>
-        <button class="btn small" id="act-heal">💚 Cura</button>
+        <button class="btn small danger" id="act-dmg" title="Enter aplica dano"><svg class="icon"><use href="#i-hand-fist"/></svg>Dano</button>
+        <button class="btn small" id="act-heal"><svg class="icon"><use href="#i-heart-straight"/></svg>Cura</button>
       </div>
       <div class="fx-palette" title="Dispara um efeito visual e sonoro no token, na sua tela e na dos jogadores">
         ${FX_PALETTE.map((f) => `<button class="fx-btn" data-fx="${f.kind}" title="${esc(f.label)}"><svg class="icon"><use href="#i-${f.icon}"/></svg></button>`).join('')}
@@ -1715,12 +1715,12 @@ function renderTokenPanel() {
           return `<button class="cond-toggle ${on ? 'on' : ''}" data-cond="${esc(c)}" title="${esc(condTitle(c))}">${condImg(c)}</button>`;
         }).join('')}
       </div>
-      <label class="tool-check"><input type="checkbox" id="act-conc" ${conc ? 'checked' : ''} /> 🧠 Concentrando</label>
+      <label class="tool-check"><input type="checkbox" id="act-conc" ${conc ? 'checked' : ''} /> <svg class="icon"><use href="#i-brain"/></svg> Concentrando</label>
       <div class="row">
-        <button class="btn small ghost" id="act-dup" title="Cria uma cópia do token com PV cheios">📋 Duplicar</button>
-        <button class="btn small ghost" id="act-hide">${t.hidden ? '🙈 Mostrar' : '👁️ Esconder'}</button>
-        <button class="btn small ghost" id="act-edit">✏️ Editar</button>
-        <button class="btn small danger" id="act-del">🗑</button>
+        <button class="btn small ghost" id="act-dup" title="Cria uma cópia do token com PV cheios"><svg class="icon"><use href="#i-clipboard-text"/></svg>Duplicar</button>
+        <button class="btn small ghost" id="act-hide"><svg class="icon"><use href="#i-${t.hidden ? 'eye-slash' : 'eye'}"/></svg>${t.hidden ? 'Mostrar' : 'Esconder'}</button>
+        <button class="btn small ghost" id="act-edit"><svg class="icon"><use href="#i-pencil-simple"/></svg>Editar</button>
+        <button class="btn small danger" id="act-del"><svg class="icon"><use href="#i-trash"/></svg></button>
       </div>
     </div>`;
 
@@ -1754,9 +1754,9 @@ function renderAoePanel() {
 
   el.innerHTML = `
     <div class="act-panel aoe">
-      <div class="act-head"><b>🎯 Área — raio ${aoe.radius.toFixed(1)} m</b></div>
+      <div class="act-head"><b><svg class="icon"><use href="#i-target"/></svg> Área — raio ${aoe.radius.toFixed(1)} m</b></div>
       ${alvos.length
-        ? `<div class="aoe-targets">${alvos.map((t) => `<span class="cond-chip">${t.kind === 'pc' ? '🎮' : '👹'} ${esc(t.name)}</span>`).join('')}</div>`
+        ? `<div class="aoe-targets">${alvos.map((t) => `<span class="cond-chip"><svg class="icon"><use href="#i-${t.kind === 'pc' ? 'game-controller' : 'mask-happy'}"/></svg> ${esc(t.name)}</span>`).join('')}</div>`
         : '<div class="help-text">Ninguém dentro da área.</div>'}
       <div class="fx-palette" title="Dispara o efeito em todos na área — na sua tela e na dos jogadores">
         ${FX_PALETTE.map((f) => `<button class="fx-btn" data-aoefx="${f.kind}" title="${esc(f.label)} na área"><svg class="icon"><use href="#i-${f.icon}"/></svg></button>`).join('')}
@@ -1764,11 +1764,11 @@ function renderAoePanel() {
       <div class="aoe-roll-row">
         <span class="aoe-roll-label">Dano:</span>
         <input type="text" id="aoe-expr" placeholder="8d6" class="aoe-expr-input" />
-        <button class="btn small ghost" id="aoe-roll" title="Rolar dano">🎲 Rolar</button>
+        <button class="btn small ghost" id="aoe-roll" title="Rolar dano"><svg class="icon"><use href="#i-dice-six"/></svg>Rolar</button>
         <span class="aoe-result" id="aoe-result"></span>
       </div>
       <div class="act-hp">
-        <button class="btn small danger" id="aoe-dmg" title="Dano cheio em todos" disabled>💥 Todos</button>
+        <button class="btn small danger" id="aoe-dmg" title="Dano cheio em todos" disabled><svg class="icon"><use href="#i-hand-fist"/></svg>Todos</button>
         <button class="btn small" id="aoe-half" title="Metade do dano" disabled>½ Salvou</button>
       </div>
       <button class="btn small ghost" id="aoe-clear">Limpar área</button>
@@ -1837,7 +1837,7 @@ function addTokens(defs) {
     added++;
   }
   pushBattle();
-  toast(added ? `➕ ${added} token(s) no mapa.` : 'Todos já estavam no mapa.');
+  toast(added ? `${added} token(s) no mapa.` : 'Todos já estavam no mapa.');
   renderMapSide();
 }
 
@@ -1856,23 +1856,23 @@ function renderCombatOrder() {
 
   el.innerHTML = `
     <div class="co-header">
-      <span class="co-label-text">⚔️ COMBATENTES · R.${c.round}</span>
+      <span class="co-label-text"><svg class="icon"><use href="#i-sword"/></svg> COMBATENTES · R.${c.round}</span>
       <div class="co-controls">
         <button class="btn small ghost co-btn" id="co-add" title="Combatente em branco">+</button>
-        <button class="btn small ghost co-btn" id="co-pcs" title="Adicionar personagens (jogadores e NPCs)">🧙</button>
-        <button class="btn small ghost co-btn" id="co-sort" title="Ordenar por iniciativa">⇅</button>
-        <button class="btn small ghost co-btn" id="co-srd" title="Bestiário SRD">📖</button>
+        <button class="btn small ghost co-btn" id="co-pcs" title="Adicionar personagens (jogadores e NPCs)"><svg class="icon"><use href="#i-users"/></svg></button>
+        <button class="btn small ghost co-btn" id="co-sort" title="Ordenar por iniciativa"><svg class="icon"><use href="#i-arrows-down-up"/></svg></button>
+        <button class="btn small ghost co-btn" id="co-srd" title="Bestiário SRD"><svg class="icon"><use href="#i-book-open-text"/></svg></button>
       </div>
     </div>
     ${c.entries.length ? `
     <div class="co-turn-bar">
       <button class="btn small co-btn" id="co-next">▶ Próximo</button>
-      <button class="btn small ghost co-btn" id="co-announce" title="Postar no Discord">📤</button>
-      <button class="btn small danger co-btn" id="co-end" title="Encerrar combate">✕ Fim</button>
+      <button class="btn small ghost co-btn" id="co-announce" title="Postar no Discord"><svg class="icon"><use href="#i-paper-plane-tilt"/></svg></button>
+      <button class="btn small danger co-btn" id="co-end" title="Encerrar combate"><svg class="icon"><use href="#i-x"/></svg>Fim</button>
     </div>` : ''}
     ${c.entries.length && temMapa && foraDoMapa ? `
     <button class="co-place-all" id="co-place-all" title="Coloca no mapa todos que ainda não têm token">
-      🗺️ ${foraDoMapa} fora do mapa · <b>Colocar todos</b>
+      <svg class="icon"><use href="#i-map-trifold"/></svg> ${foraDoMapa} fora do mapa · <b>Colocar todos</b>
     </button>` : ''}
     <div id="co-list">
       ${c.entries.map((e, i) => {
@@ -1890,22 +1890,22 @@ function renderCombatOrder() {
             <input class="input ie-init" type="number" value="${esc(e.init)}" data-ci="${i}" data-cf="init" title="Iniciativa" />
             ${retrato
               ? `<img class="ie-avatar" src="${esc(retrato)}" alt="" onerror="this.src=''" />`
-              : `<span class="ie-avatar placeholder" style="font-size:12px;display:flex;align-items:center;justify-content:center;">${e.isPc ? '🎮' : '👹'}</span>`}
+              : `<span class="ie-avatar placeholder" style="font-size:12px;display:flex;align-items:center;justify-content:center;"><svg class="icon"><use href="#i-${e.isPc ? 'game-controller' : 'mask-happy'}"/></svg></span>`}
             <div class="ie-main">
               <div class="ie-name-row">
                 <input class="input ie-name" value="${esc(e.name)}" data-ci="${i}" data-cf="name" title="Nome" />
                 ${onMap
-                  ? `<button class="ie-mapbtn on" data-locate="${i}" title="Localizar no mapa">📍</button>
-                     <button class="ie-mapbtn" data-hide="${i}" title="${tok.hidden ? 'Mostrar aos jogadores' : 'Esconder dos jogadores'}">${tok.hidden ? '🙈' : '👁️'}</button>`
-                  : `<button class="ie-mapbtn place" data-place="${i}" title="Colocar no mapa">🗺️</button>`}
-                <button class="ie-mapbtn del" data-remove-combatant="${i}" title="Remover do combate e do mapa">🗑</button>
+                  ? `<button class="ie-mapbtn on" data-locate="${i}" title="Localizar no mapa"><svg class="icon"><use href="#i-map-pin"/></svg></button>
+                     <button class="ie-mapbtn" data-hide="${i}" title="${tok.hidden ? 'Mostrar aos jogadores' : 'Esconder dos jogadores'}"><svg class="icon"><use href="#i-${tok.hidden ? 'eye-slash' : 'eye'}"/></svg></button>`
+                  : `<button class="ie-mapbtn place" data-place="${i}" title="Colocar no mapa"><svg class="icon"><use href="#i-map-trifold"/></svg></button>`}
+                <button class="ie-mapbtn del" data-remove-combatant="${i}" title="Remover do combate e do mapa"><svg class="icon"><use href="#i-trash"/></svg></button>
               </div>
               <div class="ie-row2">
                 <input class="input ie-hp" type="number" value="${esc(e.hp ?? '')}" data-ci="${i}" data-cf="hp" title="PV atual" />
                 <span class="ie-sep">/</span>
                 <input class="input ie-maxhp" type="number" value="${esc(e.maxHp ?? '')}" data-ci="${i}" data-cf="maxHp" title="PV máximo" />
                 <span class="ie-pv">PV</span>
-                <button class="btn small ghost ie-conc${e.concentration ? ' on' : ''}" data-conc="${i}" title="Concentração">🧠</button>
+                <button class="btn small ghost ie-conc${e.concentration ? ' on' : ''}" data-conc="${i}" title="Concentração"><svg class="icon"><use href="#i-brain"/></svg></button>
                 <select class="input ie-cond-sel" data-add-cond="${i}" title="Adicionar condição">
                   <option value="">+</option>
                   ${CONDITIONS.filter((x) => !(e.conditions || []).includes(x)).map((x) => `<option value="${esc(x)}">${esc(x)}</option>`).join('')}
@@ -1914,16 +1914,16 @@ function renderCombatOrder() {
               ${conds ? `<div class="ie-conds">${conds}</div>` : ''}
               ${downed && e.maxHp ? `
                 <div class="death-saves">
-                  ☠️ ✅${'●'.repeat(e.deathSaves?.s || 0)}${'○'.repeat(3 - (e.deathSaves?.s || 0))}
+                  <svg class="icon"><use href="#i-skull"/></svg> <svg class="icon"><use href="#i-check-circle"/></svg>${'●'.repeat(e.deathSaves?.s || 0)}${'○'.repeat(3 - (e.deathSaves?.s || 0))}
                   <button class="btn small ghost" data-ds-s="${i}">+</button>
-                  ❌${'●'.repeat(e.deathSaves?.f || 0)}${'○'.repeat(3 - (e.deathSaves?.f || 0))}
+                  <svg class="icon"><use href="#i-x-circle"/></svg>${'●'.repeat(e.deathSaves?.f || 0)}${'○'.repeat(3 - (e.deathSaves?.f || 0))}
                   <button class="btn small ghost" data-ds-f="${i}">+</button>
                 </div>` : ''}
             </div>
           </div>`;
       }).join('')}
     </div>
-    ${!c.entries.length ? '<div class="empty" style="font-size:12px;padding:8px 4px;">🧙 traz seus jogadores e NPCs · 📖 busca no bestiário · + cria um combatente em branco.</div>' : ''}`;
+    ${!c.entries.length ? '<div class="empty" style="font-size:12px;padding:8px 4px;">Traga seus jogadores e NPCs, busque no bestiário ou crie um combatente em branco com o +.</div>' : ''}`;
 
   $$('#co-list .init-entry').forEach((row) => {
     row.onclick = (e) => {
@@ -1940,7 +1940,7 @@ function renderCombatOrder() {
     const val = inp.type === 'number' ? Number(inp.value) : inp.value;
     if (fn === 'hp') {
       const dmg = (e.hp ?? 0) - val;
-      if (dmg > 0 && e.concentration) toast(`🧠 ${e.name} tomou ${dmg} de dano concentrando: CD ${Math.max(10, Math.floor(dmg / 2))}!`);
+      if (dmg > 0 && e.concentration) toast(`${e.name} tomou ${dmg} de dano concentrando: CD ${Math.max(10, Math.floor(dmg / 2))}!`);
       if (val <= 0 && e.hp > 0) e.deathSaves = { s: 0, f: 0 };
     }
     const nomeAntigo = e.name;
@@ -2018,7 +2018,7 @@ function renderCombatOrder() {
     const e = c.entries[Number(b.dataset.dsS)];
     e.deathSaves = e.deathSaves || { s: 0, f: 0 };
     e.deathSaves.s = Math.min(3, (e.deathSaves.s || 0) + 1);
-    if (e.deathSaves.s >= 3) toast(`💚 ${e.name} estabilizou!`);
+    if (e.deathSaves.s >= 3) toast(`${e.name} estabilizou!`);
     saveCombat();
   });
 
@@ -2027,7 +2027,7 @@ function renderCombatOrder() {
     const e = c.entries[Number(b.dataset.dsF)];
     e.deathSaves = e.deathSaves || { s: 0, f: 0 };
     e.deathSaves.f = Math.min(3, (e.deathSaves.f || 0) + 1);
-    if (e.deathSaves.f >= 3) toast(`💀 ${e.name} morreu...`);
+    if (e.deathSaves.f >= 3) toast(`${e.name} morreu...`);
     saveCombat();
   });
 
@@ -2054,10 +2054,10 @@ function renderCombatOrder() {
     c.turn = (c.turn + 1) % c.entries.length;
     if (c.turn === 0) c.round += 1;
     const cur = c.entries[c.turn];
-    if (cur?.conditions?.length) toast(`⚠️ ${cur.name} está: ${cur.conditions.join(', ')}`);
+    if (cur?.conditions?.length) toast(`${cur.name} está: ${cur.conditions.join(', ')}`);
     saveCombat();
   };
-  if (coAnnounce) coAnnounce.onclick = () => tryApi(() => api('/combat/announce', { method: 'POST' }), '📤 Iniciativa postada!');
+  if (coAnnounce) coAnnounce.onclick = () => tryApi(() => api('/combat/announce', { method: 'POST' }), 'Iniciativa postada!');
   if (coEnd) coEnd.onclick = () => {
     if (confirm('Encerrar o combate e limpar a lista?')) { c.entries = []; c.round = 1; c.turn = 0; saveCombat(); }
   };
@@ -2083,21 +2083,21 @@ function looseToCombat(tokenId) {
   // Garante o vínculo pelo combatName, mesmo que o token seja renomeado depois.
   if (!t.combatName) { t.combatName = nome; pushBattle(); }
   tryApi(() => api('/combat', { method: 'PUT', body: c })).then(() => renderMapSide());
-  toast(`⚔️ ${nome} entrou no combate.`);
+  toast(`${nome} entrou no combate.`);
 }
 
 function renderLooseTokens() {
   const el = $('#loose-tokens');
   if (!el) return;
   const soltos = (state.battle.tokens || []).filter((t) => !entryOf(t));
-  const icon = { pc: '🎮', npc: '🎭', enemy: '👹' };
+  const icon = { pc: 'game-controller', npc: 'mask-happy', enemy: 'skull' };
   const kindColor = { pc: '#4a9d6f', npc: '#b8925a', enemy: '#c05650' };
 
   el.innerHTML = `
     <div class="side-section">
       <div class="side-section-label">
         <span>OUTROS NO MAPA</span>
-        <button class="btn small gold" id="btn-loose-add" title="Adicionar personagem cadastrado ou um token avulso">＋ Adicionar</button>
+        <button class="btn small gold" id="btn-loose-add" title="Adicionar personagem cadastrado ou um token avulso">+ Adicionar</button>
       </div>
       ${soltos.length ? `<div id="loose-list">${soltos.map((t) => {
         const cor = t.color || kindColor[t.kind] || '#6e5bc4';
@@ -2109,15 +2109,15 @@ function renderLooseTokens() {
             ? `<img class="token-avatar" style="border-color:${esc(cor)}" src="${esc(t.imageUrl)}" alt="" onerror="this.remove()" />`
             : `<span class="token-dot" style="background:${esc(cor)}"></span>`}
           <span class="name">
-            ${icon[t.kind] || '⚪ '}${esc(t.name)}${t.concentration ? ' 🧠' : ''}
+            <svg class="icon"><use href="#i-${icon[t.kind] || 'square'}"/></svg> ${esc(t.name)}${t.concentration ? ' <svg class="icon"><use href="#i-brain"/></svg>' : ''}
             ${frac !== null ? `<small>${esc(t.hp)}/${esc(t.maxHp)} PV</small>` : ''}
             ${conds ? `<div class="cond-list">${conds}</div>` : ''}
           </span>
-          <button class="btn small gold" data-tok-combat="${t.id}" title="Adicionar ao combate (entra na iniciativa)">⚔️</button>
-          <button class="btn small ghost" data-tok-dup="${t.id}" title="Duplicar este token com PV cheios">📋</button>
-          <button class="btn small ghost" data-tok-hide="${t.id}" title="${t.hidden ? 'Mostrar aos jogadores' : 'Esconder dos jogadores'}">${t.hidden ? '🙈' : '👁️'}</button>
-          <button class="btn small ghost" data-tok-edit="${t.id}">✏️</button>
-          <button class="btn small danger" data-tok-del="${t.id}">🗑</button>
+          <button class="btn small gold" data-tok-combat="${t.id}" title="Adicionar ao combate (entra na iniciativa)"><svg class="icon"><use href="#i-sword"/></svg></button>
+          <button class="btn small ghost" data-tok-dup="${t.id}" title="Duplicar este token com PV cheios"><svg class="icon"><use href="#i-clipboard-text"/></svg></button>
+          <button class="btn small ghost" data-tok-hide="${t.id}" title="${t.hidden ? 'Mostrar aos jogadores' : 'Esconder dos jogadores'}"><svg class="icon"><use href="#i-${t.hidden ? 'eye-slash' : 'eye'}"/></svg></button>
+          <button class="btn small ghost" data-tok-edit="${t.id}"><svg class="icon"><use href="#i-pencil-simple"/></svg></button>
+          <button class="btn small danger" data-tok-del="${t.id}"><svg class="icon"><use href="#i-trash"/></svg></button>
         </div>`;
       }).join('')}</div>` : '<div class="empty" style="font-size:12px;padding:6px 4px;">Nenhum token avulso. Os combatentes ficam na lista acima.</div>'}
     </div>`;
@@ -2148,7 +2148,7 @@ async function sampleMapsModal() {
   const mapas = await tryApi(() => api('/sample-maps'));
   if (!mapas) return;
 
-  openModal('📚 Mapas de exemplo', mapas.length ? `
+  openModal('Mapas de exemplo', mapas.length ? `
     <p class="help-text">Escolha as colunas — as linhas se ajustam sozinhas à proporção da imagem.
     O DnDavid publica os mapas dele sem grade, geralmente em 30×40, 40×40 ou 40×30.</p>
     <div class="sample-grid">${mapas.map((m, i) => `
@@ -2218,7 +2218,7 @@ async function sampleMapsModal() {
     if (!map) { b.disabled = false; b.textContent = '▶ Usar este mapa'; return; }
 
     await tryApi(() => api('/battle', { method: 'PUT', body: { mapId: map.id } }));
-    toast(`🗺️ "${map.name}" está em jogo (${map.cols}×${map.rows}).`);
+    toast(`"${map.name}" está em jogo (${map.cols}×${map.rows}).`);
     closeModal();
     await refresh();
     setTimeout(() => bmap.fit(), 100);
@@ -2266,7 +2266,7 @@ function mapModal(m = {}) {
       if (fileInput?.files[0]) fd.append('file', fileInput.files[0]);
       const map = await api('/maps', { method: 'POST', body: fd });
       await api('/battle', { method: 'PUT', body: { mapId: map.id } });
-      toast('🗺️ Mapa criado e em jogo!');
+      toast('Mapa criado e em jogo!');
       setTimeout(() => bmap.fit(), 100);
     } else {
       delete data.file;
@@ -2280,7 +2280,7 @@ function mapModal(m = {}) {
         bmap.setData({ map: updated, battle: state.battle, combat: state.combat });
         bmap.fit();
       }
-      toast('🗺️ Grid atualizado!');
+      toast('Grid atualizado!');
     }
   });
 
@@ -2301,7 +2301,7 @@ function mapModal(m = {}) {
     if (!imgDim) { info.innerHTML = ''; return; }
     const cols = Math.max(1, Number(colsInput.value) || 20);
     const px = Math.round(imgDim.w / cols);
-    info.innerHTML = `🖼️ Imagem detectada: <b>${imgDim.w}×${imgDim.h}px</b>`
+    info.innerHTML = `<svg class="icon"><use href="#i-image"/></svg> Imagem detectada: <b>${imgDim.w}×${imgDim.h}px</b>`
       + `${autofit?.checked ? ` · as linhas seguem a proporção · cada quadrado ≈ <b>${px}px</b> da foto` : ''}`;
   };
   const medir = (src) => {
@@ -2334,9 +2334,9 @@ function tokenModal(t = null) {
     ${field('Nome', 'name', t?.name ?? '', 'text', 'Goblin 3')}
     <div class="field-row">
       ${fieldSelect('Tipo', 'kind', [
-        { value: 'pc', label: '🎮 Jogador' },
-        { value: 'npc', label: '🎭 NPC' },
-        { value: 'enemy', label: '👹 Inimigo' },
+        { value: 'pc', label: 'Jogador' },
+        { value: 'npc', label: 'NPC' },
+        { value: 'enemy', label: 'Inimigo' },
       ], t?.kind ?? 'enemy')}
       ${fieldSelect('Tamanho', 'size', [
         { value: '1', label: 'Médio (1×1)' },
@@ -2354,7 +2354,7 @@ function tokenModal(t = null) {
     ${fieldSelect('Ligar à iniciativa (PV e condições sincronizados)', 'combatName',
       [{ value: '', label: '— não ligar —' }, ...combatNames.map((n) => ({ value: n, label: n }))], t?.combatName ?? '')}
     ${fieldImage('Retrato do token', 'imageUrl', t?.imageUrl ?? '')}
-    <label style="font-size:13px;"><input type="checkbox" name="hidden" ${t?.hidden ? 'checked' : ''} /> 🙈 Escondido dos jogadores</label>
+    <label style="font-size:13px;"><input type="checkbox" name="hidden" ${t?.hidden ? 'checked' : ''} /> <svg class="icon"><use href="#i-eye-slash"/></svg> Escondido dos jogadores</label>
   `, async (data) => {
     const map = activeMap();
     if (!map) return toast('Coloque um mapa em jogo primeiro.', true);
@@ -2395,10 +2395,10 @@ function renderSessions() {
         <span class="badge">${esc(s.date || '')}</span>
         <div class="desc">${esc(s.recap || s.notes || '')}</div>
         <div class="row">
-          <button class="btn small gold" data-recap="${s.id}">✨ Gerar recap</button>
-          ${s.recap ? `<button class="btn small" data-post-recap="${s.id}">📤 Postar no Discord</button>` : ''}
+          <button class="btn small gold" data-recap="${s.id}"><svg class="icon"><use href="#i-sparkle"/></svg>Gerar recap</button>
+          ${s.recap ? `<button class="btn small" data-post-recap="${s.id}"><svg class="icon"><use href="#i-paper-plane-tilt"/></svg>Postar no Discord</button>` : ''}
           <button class="btn small ghost" data-edit-session="${s.id}">Editar</button>
-          <button class="btn small danger" data-del-session="${s.id}">🗑</button>
+          <button class="btn small danger" data-del-session="${s.id}"><svg class="icon"><use href="#i-trash"/></svg></button>
         </div>
       </div>`).join('') || '<div class="empty">Nenhuma sessão registrada.</div>'}</div>`;
 
@@ -2408,13 +2408,13 @@ function renderSessions() {
     if (confirm('Excluir esta sessão?')) { await api(`/sessions/${b.dataset.delSession}`, { method: 'DELETE' }); refresh(); }
   });
   $$('#tab-sessions [data-recap]').forEach((b) => b.onclick = async () => {
-    b.disabled = true; b.textContent = '✨ Escrevendo...';
-    await tryApi(() => api(`/ai/recap/${b.dataset.recap}`, { method: 'POST' }), '✨ Recap gerado!');
+    b.disabled = true; b.textContent = 'Escrevendo...';
+    await tryApi(() => api(`/ai/recap/${b.dataset.recap}`, { method: 'POST' }), 'Recap gerado!');
     refresh();
   });
   $$('#tab-sessions [data-post-recap]').forEach((b) => b.onclick = async () => {
     const s = state.sessions.find((x) => x.id === b.dataset.postRecap);
-    await tryApi(() => api('/discord/post', { method: 'POST', body: { content: `📜 **Recap — ${s.title || s.date}**\n\n${s.recap}` } }), '📤 Recap postado!');
+    await tryApi(() => api('/discord/post', { method: 'POST', body: { content: `**Recap — ${s.title || s.date}**\n\n${s.recap}` } }), 'Recap postado!');
   });
 }
 
