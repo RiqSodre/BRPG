@@ -298,7 +298,7 @@ function renderCharacters() {
       <h3>${esc(c.name)}</h3>
       <div class="meta">${[esc([c.race, c.klass, c.level ? `nível ${c.level}` : ''].filter(Boolean).join(' · ')), c.player ? `<svg class="icon"><use href="#i-game-controller"/></svg>${esc(c.player)}` : ''].filter(Boolean).join(' · ')}</div>
       ${c.discordUserId
-        ? `<span class="badge gold"><svg class="icon"><use href="#i-link"/></svg>Discord: ${esc(c.discordTag || 'vinculado')}</span>`
+        ? `<button type="button" class="badge gold badge-btn" data-unlink-discord="${c.id}" title="Clique para desvincular do Discord"><svg class="icon"><use href="#i-link"/></svg>Discord: ${esc(c.discordTag || 'vinculado')}<svg class="icon"><use href="#i-x"/></svg></button>`
         : '<span class="badge" title="O jogador usa /vincular no Discord"><svg class="icon"><use href="#i-link-break"/></svg>sem vínculo</span>'}
       ${c.ac || c.maxHp ? `<div class="meta"><svg class="icon"><use href="#i-shield"/></svg> CA ${esc(c.ac ?? '?')} · <svg class="icon"><use href="#i-heart-straight"/></svg> ${esc(c.hp ?? '?')}/${esc(c.maxHp ?? '?')} PV</div>` : ''}
       <div class="desc">${esc(c.description || '')}</div>
@@ -365,6 +365,12 @@ function renderCharacters() {
     if (confirm('Excluir este personagem?')) { await api(`/characters/${b.dataset.delChar}`, { method: 'DELETE' }); refresh(); }
   });
   $$('#tab-characters [data-inv]').forEach((b) => b.onclick = () => inventoryModal(chars.find((c) => c.id === b.dataset.inv)));
+  $$('#tab-characters [data-unlink-discord]').forEach((b) => b.onclick = async () => {
+    const ch = chars.find((c) => c.id === b.dataset.unlinkDiscord);
+    if (!confirm(`Desvincular o Discord de ${ch?.name}? O jogador precisará usar /vincular de novo.`)) return;
+    const r = await tryApi(() => api(`/characters/${b.dataset.unlinkDiscord}`, { method: 'PUT', body: { discordUserId: null, discordTag: null } }), 'Vínculo com o Discord removido.');
+    if (r) refresh();
+  });
   $$('#tab-characters [data-improv]').forEach((b) => b.onclick = () => improvModal(chars.find((c) => c.id === b.dataset.improv)));
   $$('#tab-characters [data-speak]').forEach((b) => b.onclick = () => speakModal(chars.find((c) => c.id === b.dataset.speak)));
   $$('#tab-characters [data-embody]').forEach((b) => b.onclick = () => {

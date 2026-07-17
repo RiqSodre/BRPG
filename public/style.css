@@ -197,6 +197,12 @@ textarea { resize: vertical; min-height: 80px; }
 }
 .badge.gold { color: var(--accent2); }
 .badge.purple { color: var(--accent-bright); }
+.badge-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  border: none; cursor: pointer; font: inherit;
+  transition: background 0.12s, color 0.12s;
+}
+.badge-btn:hover { background: var(--danger); color: #fff; }
 
 /* ---------- Modal ---------- */
 .modal-backdrop {

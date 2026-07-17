@@ -87,11 +87,12 @@ async function registerCommands() {
       .addStringOption((o) => o.setName('dados').setDescription('Expressão, ex: 1d20+5').setRequired(true)),
     new SlashCommandBuilder().setName('vincular').setDescription('Vincula seu usuário do Discord ao seu personagem da campanha')
       .addStringOption((o) => o.setName('personagem').setDescription('Seu personagem').setRequired(true).setAutocomplete(true)),
+    new SlashCommandBuilder().setName('desvincular').setDescription('Remove o vínculo entre seu usuário do Discord e seu personagem'),
     new SlashCommandBuilder().setName('inventario').setDescription('Abre a mochila do seu personagem'),
   ].map((c) => c.toJSON());
   const rest = new REST().setToken(process.env.DISCORD_TOKEN);
   await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), { body: commands });
-  console.log('[bot] Comandos /entrar, /sair, /rolar, /vincular e /inventario registrados.');
+  console.log('[bot] Comandos /entrar, /sair, /rolar, /vincular, /desvincular e /inventario registrados.');
 }
 
 async function onInteraction(interaction) {
@@ -99,7 +100,10 @@ async function onInteraction(interaction) {
     try {
       const typed = interaction.options.getFocused().toLowerCase();
       const pcs = getDb().characters.filter((c) => c.type === 'pc' && c.name.toLowerCase().includes(typed));
-      await interaction.respond(pcs.slice(0, 25).map((c) => ({ name: c.name, value: c.id })));
+      await interaction.respond(pcs.slice(0, 25).map((c) => ({
+        name: c.discordUserId && c.discordUserId !== interaction.user.id ? `${c.name} (já vinculado a outro jogador)` : c.name,
+        value: c.id,
+      })));
     } catch (err) {
       console.error('[bot] Falha no autocomplete de /vincular:', err.message);
     }
@@ -128,8 +132,30 @@ async function onInteraction(interaction) {
         await interaction.reply({ content: 'Personagem não encontrado — peça ao Mestre para criar sua ficha no painel.', ephemeral: true });
         return;
       }
+      if (character.discordUserId === interaction.user.id) {
+        await interaction.reply({ content: `Você já é **${character.name}** — nada a fazer.`, ephemeral: true });
+        return;
+      }
+      if (character.discordUserId) {
+        await interaction.reply({ content: `❌ **${character.name}** já está vinculado a outro jogador (${character.discordTag || 'desconhecido'}). Peça ao Mestre para desvincular pelo painel antes de tentar de novo.`, ephemeral: true });
+        return;
+      }
+      // Um jogador só fica vinculado a um personagem por vez — solta o antigo antes de vincular o novo.
+      const antigo = getDb().characters.find((c) => c.discordUserId === interaction.user.id && c.id !== charId);
+      if (antigo) updateItem('characters', antigo.id, { discordUserId: null, discordTag: null });
       updateItem('characters', charId, { discordUserId: interaction.user.id, discordTag: interaction.user.username });
-      await interaction.reply({ content: `🔗 Pronto! Você agora é **${character.name}**. O Mestre pode te enviar segredos por DM... 👀`, ephemeral: true });
+      await interaction.reply({
+        content: `🔗 Pronto! Você agora é **${character.name}**.${antigo ? ` (Desvinculei **${antigo.name}**, que estava com você antes.)` : ''} O Mestre pode te enviar segredos por DM... 👀`,
+        ephemeral: true,
+      });
+    } else if (interaction.commandName === 'desvincular') {
+      const ch = getDb().characters.find((c) => c.discordUserId === interaction.user.id);
+      if (!ch) {
+        await interaction.reply({ content: 'Você não tem nenhum personagem vinculado no momento.', ephemeral: true });
+        return;
+      }
+      updateItem('characters', ch.id, { discordUserId: null, discordTag: null });
+      await interaction.reply({ content: `🔓 Vínculo com **${ch.name}** removido. Use \`/vincular\` de novo quando quiser.`, ephemeral: true });
     } else if (interaction.commandName === 'rolar') {
       const expr = interaction.options.getString('dados');
       const result = rollDice(expr);
