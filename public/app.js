@@ -853,13 +853,13 @@ function renderBoothTab() {
       <b>Use fones de ouvido</b> e, enquanto estiver no ar, <b>mute-se no Discord</b> para os jogadores não ouvirem sua voz dupla.</p><br/>
       <div class="card" style="max-width:640px;">
         <div class="row" style="align-items:center;">
-          <button class="btn" id="booth-mic">🎤 Ativar microfone</button>
+          <button class="btn" id="booth-mic"><svg class="icon"><use href="#i-microphone"/></svg>Ativar microfone</button>
           <span id="booth-status" class="help-text">microfone desligado</span>
         </div>
         <div class="row" style="align-items:center; margin-top:8px;">
           <select id="booth-npc" style="flex:1;"></select>
-          <button class="btn small ghost" id="booth-load">⤵ Carregar preset</button>
-          <button class="btn small ghost" id="booth-save">💾 Salvar no NPC</button>
+          <button class="btn small ghost" id="booth-load"><svg class="icon"><use href="#i-arrow-elbow-down-right"/></svg>Carregar preset</button>
+          <button class="btn small ghost" id="booth-save"><svg class="icon"><use href="#i-floppy-disk"/></svg>Salvar no NPC</button>
         </div>
         <div class="booth-sliders">
           <label>Tom (pitch) <span id="booth-pitch-val">0 st</span>
@@ -871,8 +871,8 @@ function renderBoothTab() {
           <label>Ganho da voz <span id="booth-gain-val">2.0×</span>
             <input type="range" id="booth-gain" min="0.5" max="3.5" step="0.1" value="2" /></label>
         </div>
-        <label style="font-size:13px;"><input type="checkbox" id="booth-monitor" /> 🎧 Ouvir minha voz transformada (só com fones!)</label>
-        <button class="btn danger" id="booth-onair" style="margin-top:10px; font-size:16px;">🔴 ENTRAR NO AR</button>
+        <label style="font-size:13px;"><input type="checkbox" id="booth-monitor" /> <svg class="icon"><use href="#i-headphones"/></svg> Ouvir minha voz transformada (só com fones!)</label>
+        <button class="btn danger" id="booth-onair" style="margin-top:10px; font-size:16px;"><svg class="icon"><use href="#i-record"/></svg>ENTRAR NO AR</button>
         <p class="help-text" style="margin-top:6px;">Dicas: ogro/gigante = tom -6 a -9 · gnomo/fada = +5 a +8 · fantasma = reverb alto + tom -2 · demônio = tom -7 + distorção 40%.</p>
       </div>`;
 
@@ -880,12 +880,14 @@ function renderBoothTab() {
       $('#booth-status').textContent = msg;
       if (isError) toast(msg, true);
       const onAirBtn = $('#booth-onair');
-      onAirBtn.textContent = booth.onAir ? '⏹ SAIR DO AR' : '🔴 ENTRAR NO AR';
+      onAirBtn.innerHTML = booth.onAir
+        ? '<svg class="icon"><use href="#i-stop"/></svg>SAIR DO AR'
+        : '<svg class="icon"><use href="#i-record"/></svg>ENTRAR NO AR';
       onAirBtn.classList.toggle('gold', booth.onAir);
     };
 
     $('#booth-mic').onclick = async () => {
-      if (await boothInitMic()) $('#booth-status').textContent = '🎤 Microfone pronto. Ajuste os efeitos e entre no ar.';
+      if (await boothInitMic()) $('#booth-status').textContent = 'Microfone pronto. Ajuste os efeitos e entre no ar.';
     };
     const bindSlider = (id, valId, key, fmt) => {
       $(id).oninput = () => {
@@ -913,7 +915,7 @@ function renderBoothTab() {
       await tryApi(() => api(`/characters/${id}`, {
         method: 'PUT',
         body: { fxPitch: booth.fx.pitch, fxReverb: booth.fx.reverb, fxDist: booth.fx.distortion, fxGain: booth.fx.gain },
-      }), '💾 Preset de voz salvo no NPC!');
+      }), 'Preset de voz salvo no NPC!');
       refresh();
     };
   }
@@ -922,7 +924,7 @@ function renderBoothTab() {
   const current = sel.value;
   sel.innerHTML = '<option value="">— preset de NPC —</option>' +
     state.characters.filter((c) => c.type === 'npc').map((c) =>
-      `<option value="${c.id}" ${c.id === current ? 'selected' : ''}>${esc(c.name)}${c.fxPitch != null ? ' 🎙️' : ''}</option>`).join('');
+      `<option value="${c.id}" ${c.id === current ? 'selected' : ''}>${esc(c.name)}${c.fxPitch != null ? ' (voz configurada)' : ''}</option>`).join('');
 }
 
 function boothLoadPreset(npc) {
@@ -939,7 +941,7 @@ function boothLoadPreset(npc) {
   $('#booth-dist-val').textContent = `${Math.round(booth.fx.distortion * 100)}%`;
   $('#booth-gain-val').textContent = `${booth.fx.gain.toFixed(1)}×`;
   boothApplyFx();
-  toast(`🎙️ Preset de "${npc.name}" carregado.`);
+  toast(`Preset de "${npc.name}" carregado.`);
 }
 
 // ---------- Mapa de batalha ----------
@@ -962,12 +964,12 @@ function pushMap(map) {
 
 // Paleta de efeitos elementais que o Mestre dispara à mão (golpes, magias...).
 const FX_PALETTE = [
-  { kind: 'fire',      emoji: '🔥', label: 'Fogo' },
-  { kind: 'ice',       emoji: '❄️', label: 'Gelo' },
-  { kind: 'lightning', emoji: '⚡', label: 'Raio' },
-  { kind: 'holy',      emoji: '✨', label: 'Sagrado' },
-  { kind: 'poison',    emoji: '☠️', label: 'Veneno' },
-  { kind: 'impact',    emoji: '💥', label: 'Impacto' },
+  { kind: 'fire',      icon: 'fire',       label: 'Fogo' },
+  { kind: 'ice',       icon: 'snowflake',  label: 'Gelo' },
+  { kind: 'lightning', icon: 'lightning',  label: 'Raio' },
+  { kind: 'holy',      icon: 'sparkle',    label: 'Sagrado' },
+  { kind: 'poison',    icon: 'skull',      label: 'Veneno' },
+  { kind: 'impact',    icon: 'hand-fist',  label: 'Impacto' },
 ];
 
 // Dispara um efeito visual+sonoro na tela do Mestre E repassa para a dos jogadores.
@@ -1016,36 +1018,36 @@ function renderMapTab() {
           <!-- Barra de ferramentas flutuante no topo (quebra linha em telas estreitas) -->
           <div class="map-overlay ov-top">
             <div class="ov-panel">
-              <button class="ov-btn tool active" data-tool="select" title="Arrastar tokens">✋ Mover</button>
-              <button class="ov-btn tool" data-tool="ruler" title="Medir distância (diagonal 5e)">📏 Medir</button>
-              <button class="ov-btn tool" data-tool="ping" title="Piscar um ponto na tela dos jogadores">📍 Ping</button>
-              <button class="ov-btn tool" data-tool="aoe" title="Área de efeito (arraste do centro)">🎯 Área</button>
-              <button class="ov-btn tool" data-tool="reveal" title="Pincel: revelar névoa">🔦 Revelar</button>
-              <button class="ov-btn tool" data-tool="hide" title="Pincel: cobrir de névoa">🌫️ Cobrir</button>
-              <button class="ov-btn" id="btn-map-fit" title="Enquadrar o mapa na tela">⤢ Enquadrar</button>
-              <button class="ov-btn" id="ov-help" title="Clique num token para agir sobre ele · arraste para mover (mostra o deslocamento) · Espaço passa o turno · setas movem o selecionado · Del remove · Esc limpa a seleção">❔ Ajuda</button>
+              <button class="ov-btn tool active" data-tool="select" title="Arrastar tokens"><svg class="icon"><use href="#i-hand-palm"/></svg>Mover</button>
+              <button class="ov-btn tool" data-tool="ruler" title="Medir distância (diagonal 5e)"><svg class="icon"><use href="#i-ruler"/></svg>Medir</button>
+              <button class="ov-btn tool" data-tool="ping" title="Piscar um ponto na tela dos jogadores"><svg class="icon"><use href="#i-map-pin"/></svg>Ping</button>
+              <button class="ov-btn tool" data-tool="aoe" title="Área de efeito (arraste do centro)"><svg class="icon"><use href="#i-target"/></svg>Área</button>
+              <button class="ov-btn tool" data-tool="reveal" title="Pincel: revelar névoa"><svg class="icon"><use href="#i-flashlight"/></svg>Revelar</button>
+              <button class="ov-btn tool" data-tool="hide" title="Pincel: cobrir de névoa"><svg class="icon"><use href="#i-cloud-fog"/></svg>Cobrir</button>
+              <button class="ov-btn" id="btn-map-fit" title="Enquadrar o mapa na tela"><svg class="icon"><use href="#i-arrows-out"/></svg>Enquadrar</button>
+              <button class="ov-btn" id="ov-help" title="Clique num token para agir sobre ele · arraste para mover (mostra o deslocamento) · Espaço passa o turno · setas movem o selecionado · Del remove · Esc limpa a seleção"><svg class="icon"><use href="#i-question"/></svg>Ajuda</button>
             </div>
             <div class="ov-panel">
               <select id="map-select" title="Mapa em jogo"></select>
               <button class="ov-btn gold" id="btn-map-activate" title="Colocar este mapa em jogo">▶ Em jogo</button>
-              <button class="ov-btn" id="btn-new-map" title="Criar um novo mapa">＋ Novo</button>
-              <button class="ov-btn" id="btn-sample-maps" title="Mapas prontos de exemplo">📚 Exemplos</button>
-              <button class="ov-btn" id="btn-edit-map" title="Editar o grid do mapa">▦ Grid</button>
-              <button class="ov-btn danger" id="btn-del-map" title="Excluir este mapa">🗑 Excluir</button>
-              <a class="ov-btn" href="/mesa.html" target="_blank" title="Abrir a tela dos jogadores (segunda tela / Discord)">🖥️ Jogadores</a>
+              <button class="ov-btn" id="btn-new-map" title="Criar um novo mapa">+ Novo</button>
+              <button class="ov-btn" id="btn-sample-maps" title="Mapas prontos de exemplo"><svg class="icon"><use href="#i-books"/></svg>Exemplos</button>
+              <button class="ov-btn" id="btn-edit-map" title="Editar o grid do mapa"><svg class="icon"><use href="#i-grid-four"/></svg>Grid</button>
+              <button class="ov-btn danger" id="btn-del-map" title="Excluir este mapa"><svg class="icon"><use href="#i-trash"/></svg>Excluir</button>
+              <a class="ov-btn" href="/mesa.html" target="_blank" title="Abrir a tela dos jogadores (segunda tela / Discord)"><svg class="icon"><use href="#i-desktop"/></svg>Jogadores</a>
             </div>
             <div class="ov-panel">
-              <label class="tool-check" title="Névoa de guerra pintada à mão"><input type="checkbox" id="fog-enabled" /> 🌫️ Névoa</label>
-              <button class="ov-btn" id="btn-fog-all" title="Revelar o mapa inteiro">☀️ Revelar tudo</button>
-              <button class="ov-btn" id="btn-fog-none" title="Cobrir o mapa inteiro">🌑 Cobrir tudo</button>
+              <label class="tool-check" title="Névoa de guerra pintada à mão"><input type="checkbox" id="fog-enabled" /> <svg class="icon"><use href="#i-cloud-fog"/></svg> Névoa</label>
+              <button class="ov-btn" id="btn-fog-all" title="Revelar o mapa inteiro"><svg class="icon"><use href="#i-sun"/></svg>Revelar tudo</button>
+              <button class="ov-btn" id="btn-fog-none" title="Cobrir o mapa inteiro"><svg class="icon"><use href="#i-moon"/></svg>Cobrir tudo</button>
               <span class="ov-sep"></span>
-              <label class="tool-check" title="Cada personagem revela um raio ao redor de si; o resto fica na névoa"><input type="checkbox" id="vision-enabled" /> 👁️ Visão</label>
+              <label class="tool-check" title="Cada personagem revela um raio ao redor de si; o resto fica na névoa"><input type="checkbox" id="vision-enabled" /> <svg class="icon"><use href="#i-eye"/></svg> Visão</label>
               <input type="number" id="vision-radius" min="3" max="60" step="1" class="vision-radius-input" title="Raio de visão dos personagens (metros)" /><span class="ov-label">m</span>
               <span class="ov-sep"></span>
-              <label class="tool-check" title="Mostrar os números de PV dos inimigos aos jogadores"><input type="checkbox" id="show-enemy-hp" /> ❤️ PV inimigos</label>
+              <label class="tool-check" title="Mostrar os números de PV dos inimigos aos jogadores"><input type="checkbox" id="show-enemy-hp" /> <svg class="icon"><use href="#i-heart-straight"/></svg> PV inimigos</label>
               <span class="ov-sep"></span>
-              <button class="ov-btn" id="btn-sound-toggle" title="Soundboard: solta efeitos no canal de voz (atalhos 1-9)">🔊 Sons</button>
-              <button class="ov-btn" id="btn-img-toggle" title="Ajustar a imagem do mapa ao grid">🖼️ Imagem</button>
+              <button class="ov-btn" id="btn-sound-toggle" title="Soundboard: solta efeitos no canal de voz (atalhos 1-9)"><svg class="icon"><use href="#i-speaker-high"/></svg>Sons</button>
+              <button class="ov-btn" id="btn-img-toggle" title="Ajustar a imagem do mapa ao grid"><svg class="icon"><use href="#i-image"/></svg>Imagem</button>
             </div>
             <div class="ov-panel ov-img hidden" id="img-align">
               <span class="ov-label">Ajustar imagem:</span>
@@ -1053,9 +1055,9 @@ function renderMapTab() {
               <button class="ov-btn" data-img="right" title="Mover à direita">▶</button>
               <button class="ov-btn" data-img="up" title="Mover para cima">▲</button>
               <button class="ov-btn" data-img="down" title="Mover para baixo">▼</button>
-              <button class="ov-btn" data-img="out" title="Diminuir">➖</button>
-              <button class="ov-btn" data-img="in" title="Aumentar">➕</button>
-              <button class="ov-btn" data-img="auto" title="Esticar para preencher o grid">⤢ Encaixar</button>
+              <button class="ov-btn" data-img="out" title="Diminuir"><svg class="icon"><use href="#i-minus"/></svg></button>
+              <button class="ov-btn" data-img="in" title="Aumentar"><svg class="icon"><use href="#i-plus"/></svg></button>
+              <button class="ov-btn" data-img="auto" title="Esticar para preencher o grid"><svg class="icon"><use href="#i-arrows-out"/></svg>Encaixar</button>
             </div>
           </div>
 
@@ -1143,7 +1145,7 @@ function renderMapTab() {
       const id = $('#map-select').value;
       if (!id) return;
       if (confirm('Excluir este mapa?')) {
-        await tryApi(() => api(`/maps/${id}`, { method: 'DELETE' }), '🗑 Mapa excluído.');
+        await tryApi(() => api(`/maps/${id}`, { method: 'DELETE' }), 'Mapa excluído.');
         refresh();
       }
     };
@@ -1151,7 +1153,7 @@ function renderMapTab() {
       const mapId = $('#map-select').value;
       if (!mapId) return toast('Crie um mapa primeiro.', true);
       state.battle = { ...state.battle, mapId };
-      await tryApi(() => api('/battle', { method: 'PUT', body: { mapId } }), '🗺️ Mapa em jogo — os jogadores já estão vendo.');
+      await tryApi(() => api('/battle', { method: 'PUT', body: { mapId } }), 'Mapa em jogo — os jogadores já estão vendo.');
       refresh();
       setTimeout(() => bmap.fit(), 50);
     };
@@ -1162,7 +1164,7 @@ function renderMapTab() {
       if (!map) return;
       map.fog = { enabled: e.target.checked, revealed: map.fog?.revealed || [] };
       pushMap(map);
-      toast(e.target.checked ? '🌫️ Névoa ligada — use o pincel 🔦 para revelar.' : '☀️ Névoa desligada.');
+      toast(e.target.checked ? 'Névoa ligada — use o pincel Revelar para abrir caminho.' : 'Névoa desligada.');
     };
     const setFogAll = (reveal) => {
       const map = activeMap();
@@ -1180,7 +1182,7 @@ function renderMapTab() {
       state.battle.vision = { ...atual, enabled: e.target.checked };
       pushBattle();
       toast(e.target.checked
-        ? '👁️ Visão automática ligada — os jogadores só veem ao redor dos personagens.'
+        ? 'Visão automática ligada — os jogadores só veem ao redor dos personagens.'
         : 'Visão automática desligada — os jogadores voltam a ver o mapa todo (ou a névoa manual).');
     };
     $('#vision-radius').onchange = (e) => {
@@ -1194,18 +1196,18 @@ function renderMapTab() {
       state.battle.showEnemyHp = e.target.checked;
       pushBattle();
       toast(e.target.checked
-        ? '👁️ Os jogadores agora veem os PV exatos dos inimigos.'
-        : '🎭 Os jogadores voltam a ver só o estado dos inimigos (Ferido, Quase morto...).');
+        ? 'Os jogadores agora veem os PV exatos dos inimigos.'
+        : 'Os jogadores voltam a ver só o estado dos inimigos (Ferido, Quase morto...).');
     };
 
-    // Botão 🔊 mostra/esconde o soundboard de batalha
+    // Botão de som mostra/esconde o soundboard de batalha
     $('#btn-sound-toggle').onclick = () => {
       const p = $('#soundboard-panel');
       p.classList.toggle('hidden');
       $('#btn-sound-toggle').classList.toggle('active', !p.classList.contains('hidden'));
     };
 
-    // Botão 🖼️ mostra/esconde os controles de alinhar a imagem do mapa
+    // Botão de imagem mostra/esconde os controles de alinhar a imagem do mapa
     $('#btn-img-toggle').onclick = () => {
       const p = $('#img-align');
       p.classList.toggle('hidden');
@@ -1317,7 +1319,7 @@ const sbVisiveis = () => {
 function tocarSfx(audio) {
   if (!audio) return;
   if (!state.bot?.connected) return toast('O bot está desconectado — sem som no Discord.', true);
-  tryApi(() => api(`/sound/play/${audio.id}`, { method: 'POST' }), `🔊 ${audio.name}`);
+  tryApi(() => api(`/sound/play/${audio.id}`, { method: 'POST' }), audio.name);
 }
 
 // Busca no Freesound o que está no filtro e deixa importar na hora.
@@ -1326,7 +1328,7 @@ async function sbBuscarFreesound() {
   const box = $('#sb-fs-results');
   if (!box) return;
   if (!q) return toast('Digite o que procura — ex: sword, thunder, scream (em inglês acha mais).', true);
-  box.innerHTML = '<span class="ov-label">🔎 Buscando no Freesound…</span>';
+  box.innerHTML = '<span class="ov-label">Buscando no Freesound…</span>';
   const results = await tryApi(() => api(`/freesound/search?q=${encodeURIComponent(q)}`));
   if (!results) { box.innerHTML = ''; return; }
   if (!results.length) { box.innerHTML = '<span class="ov-label">Nada encontrado no Freesound.</span>'; return; }
@@ -1338,9 +1340,9 @@ async function sbBuscarFreesound() {
         ${esc(s.name.replace(/_/g, ' ').slice(0, 30))}${s.name.length > 30 ? '…' : ''}
         <small>${Math.round(s.duration)}s</small>
       </span>
-      <button class="ov-btn gold" data-fs-use="${i}" title="Baixar para a biblioteca e já usar">⬇ Usar</button>
+      <button class="ov-btn gold" data-fs-use="${i}" title="Baixar para a biblioteca e já usar"><svg class="icon"><use href="#i-download-simple"/></svg>Usar</button>
     </div>`).join('')
-    + '<button class="ov-btn" id="sb-fs-close" title="Fechar os resultados">✕ Fechar busca</button>';
+    + '<button class="ov-btn" id="sb-fs-close" title="Fechar os resultados"><svg class="icon"><use href="#i-x"/></svg>Fechar busca</button>';
 
   $$('#sb-fs-results [data-fs-prev]').forEach((b) => b.onclick = () => {
     const s = results[Number(b.dataset.fsPrev)];
@@ -1351,16 +1353,16 @@ async function sbBuscarFreesound() {
 
   $$('#sb-fs-results [data-fs-use]').forEach((b) => b.onclick = async () => {
     const s = results[Number(b.dataset.fsUse)];
-    b.disabled = true; b.textContent = '⬇ Baixando…';
+    b.disabled = true; b.textContent = 'Baixando…';
     const r = await tryApi(() => api('/freesound/import', {
       method: 'POST',
       body: { name: s.name, previewUrl: s.previewUrl, type: 'sfx', tags: s.tags },
     }));
-    if (!r) { b.disabled = false; b.textContent = '⬇ Usar'; return; }
+    if (!r) { b.disabled = false; b.textContent = 'Usar'; return; }
     if (sbPreview) { sbPreview.pause(); sbPreview = null; }
     box.innerHTML = '';
     await refresh(); // a biblioteca recarrega e o som já aparece no soundboard
-    toast(`🎵 "${s.name}" está no soundboard — aperte a tecla dele para tocar!`);
+    toast(`"${s.name}" está no soundboard — aperte a tecla dele para tocar!`);
   });
 
   $('#sb-fs-close').onclick = () => { box.innerHTML = ''; };
@@ -1375,17 +1377,17 @@ function renderSoundboard() {
     el.dataset.built = '1';
     el.innerHTML = `
       <div class="sb-head">
-        <span class="ov-label">🔊 Efeitos</span>
+        <span class="ov-label"><svg class="icon"><use href="#i-speaker-high"/></svg> Efeitos</span>
         <input id="sb-search" class="sb-search" placeholder="filtrar ou buscar som novo…" />
-        <button class="ov-btn" id="sb-fs" title="Buscar este termo no Freesound e usar na hora">🔎 Freesound</button>
-        <button class="ov-btn danger" id="sb-stop" title="Parar tudo que está tocando">⏹</button>
+        <button class="ov-btn" id="sb-fs" title="Buscar este termo no Freesound e usar na hora"><svg class="icon"><use href="#i-magnifying-glass"/></svg>Freesound</button>
+        <button class="ov-btn danger" id="sb-stop" title="Parar tudo que está tocando"><svg class="icon"><use href="#i-stop"/></svg></button>
       </div>
       <div class="sb-list" id="sb-list"></div>
       <div class="sb-fs-results" id="sb-fs-results"></div>`;
     $('#sb-search').oninput = (e) => { sbFiltro = e.target.value; renderSbList(); };
     $('#sb-search').onkeydown = (e) => { if (e.key === 'Enter') sbBuscarFreesound(); };
     $('#sb-fs').onclick = () => sbBuscarFreesound();
-    $('#sb-stop').onclick = () => tryApi(() => api('/sound/stop', { method: 'POST' }), '⏹ Som parado.');
+    $('#sb-stop').onclick = () => tryApi(() => api('/sound/stop', { method: 'POST' }), 'Som parado.');
   }
   renderSbList();
 }
@@ -1401,8 +1403,8 @@ function renderSbList() {
         ${i < 9 ? `<kbd class="sfx-key">${i + 1}</kbd>` : ''}${esc(a.name.replace(/_/g, ' ').slice(0, 22))}${a.name.length > 22 ? '…' : ''}
       </button>`).join('')
     : `<span class="ov-label">${total
-        ? `Nenhum som com “${esc(sbFiltro)}” — use o 🔎 Freesound para achar um novo.`
-        : 'Biblioteca vazia — busque um som no 🔎 Freesound.'}</span>`;
+        ? `Nenhum som com “${esc(sbFiltro)}” — use o Freesound para achar um novo.`
+        : 'Biblioteca vazia — busque um som no Freesound.'}</span>`;
 
   $$('#sb-list [data-sfx-play]').forEach((b) => b.onclick = () =>
     tocarSfx(sfx.find((a) => a.id === b.dataset.sfxPlay)));
@@ -1705,7 +1707,7 @@ function renderTokenPanel() {
         <button class="btn small" id="act-heal">💚 Cura</button>
       </div>
       <div class="fx-palette" title="Dispara um efeito visual e sonoro no token, na sua tela e na dos jogadores">
-        ${FX_PALETTE.map((f) => `<button class="fx-btn" data-fx="${f.kind}" title="${esc(f.label)}">${f.emoji}</button>`).join('')}
+        ${FX_PALETTE.map((f) => `<button class="fx-btn" data-fx="${f.kind}" title="${esc(f.label)}"><svg class="icon"><use href="#i-${f.icon}"/></svg></button>`).join('')}
       </div>
       <div class="act-conds">
         ${CONDITIONS.map((c) => {
@@ -1757,7 +1759,7 @@ function renderAoePanel() {
         ? `<div class="aoe-targets">${alvos.map((t) => `<span class="cond-chip">${t.kind === 'pc' ? '🎮' : '👹'} ${esc(t.name)}</span>`).join('')}</div>`
         : '<div class="help-text">Ninguém dentro da área.</div>'}
       <div class="fx-palette" title="Dispara o efeito em todos na área — na sua tela e na dos jogadores">
-        ${FX_PALETTE.map((f) => `<button class="fx-btn" data-aoefx="${f.kind}" title="${esc(f.label)} na área">${f.emoji}</button>`).join('')}
+        ${FX_PALETTE.map((f) => `<button class="fx-btn" data-aoefx="${f.kind}" title="${esc(f.label)} na área"><svg class="icon"><use href="#i-${f.icon}"/></svg></button>`).join('')}
       </div>
       <div class="aoe-roll-row">
         <span class="aoe-roll-label">Dano:</span>
