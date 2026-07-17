@@ -1633,7 +1633,7 @@ function renderCombatHud() {
         ${hpFrac !== null ? `<div class="hud-hp-bar"><span style="width:${hpFrac*100}%;background:${hpCor}"></span></div>` : ''}
         ${(hpFrac !== null || conds.length) ? `<div class="hud-meta">
           ${hpFrac !== null ? `<span class="hud-hp-text">${esc(atual.hp)}/${esc(atual.maxHp)} PV</span>` : ''}
-          ${conds.length ? `<div class="hud-conds">${conds.map((cd) => `<span class="cond-chip" title="${esc(cd)}">${condIcon(cd)}</span>`).join('')}</div>` : ''}
+          ${conds.length ? `<div class="hud-conds">${conds.map((cd) => `<span class="cond-chip" title="${esc(condTitle(cd))}">${condImg(cd)}</span>`).join('')}</div>` : ''}
         </div>` : ''}
       </div>
     </div>
@@ -1703,7 +1703,7 @@ function renderTokenPanel() {
       <div class="act-conds">
         ${CONDITIONS.map((c) => {
           const on = conds.includes(c);
-          return `<button class="cond-toggle ${on ? 'on' : ''}" data-cond="${esc(c)}" title="${esc(c)}">${condIcon(c)}</button>`;
+          return `<button class="cond-toggle ${on ? 'on' : ''}" data-cond="${esc(c)}" title="${esc(condTitle(c))}">${condImg(c)}</button>`;
         }).join('')}
       </div>
       <label class="tool-check"><input type="checkbox" id="act-conc" ${conc ? 'checked' : ''} /> 🧠 Concentrando</label>
@@ -1873,7 +1873,7 @@ function renderCombatOrder() {
         const onMap = !!tok;
         const retrato = retratoDe(e, tok);
         const conds = (e.conditions || []).map((cd) =>
-          `<span class="cond-chip ie-cond" data-rm-cond="${i}|${esc(cd)}" title="Remover ${esc(cd)}">${condIcon(cd)}</span>`
+          `<span class="cond-chip ie-cond" data-rm-cond="${i}|${esc(cd)}" title="${esc(`Clique para remover — ${condTitle(cd)}`)}">${condImg(cd)}</span>`
         ).join('');
         return `
           <div class="init-entry ${isTurn ? 'is-turn' : ''} ${downed ? 'downed' : ''} ${onMap ? '' : 'offmap'}" data-ie-i="${i}">
@@ -2093,7 +2093,7 @@ function renderLooseTokens() {
       ${soltos.length ? `<div id="loose-list">${soltos.map((t) => {
         const cor = t.color || kindColor[t.kind] || '#8b5cf6';
         const frac = t.maxHp > 0 ? Math.max(0, Math.min(1, (t.hp ?? 0) / t.maxHp)) : null;
-        const conds = (t.conditions || []).map((cd) => `<span class="cond-chip" title="${esc(cd)}">${condIcon(cd)}</span>`).join('');
+        const conds = (t.conditions || []).map((cd) => `<span class="cond-chip" title="${esc(condTitle(cd))}">${condImg(cd)}</span>`).join('');
         return `
         <div class="token-row ${t.hidden ? 'hidden-token' : ''}" data-tok-id="${t.id}">
           ${t.imageUrl
@@ -2423,6 +2423,8 @@ function sessionModal(s = {}) {
 
 // ---------- Iniciativa ----------
 const CONDITIONS = ['Agarrado', 'Amedrontado', 'Atordoado', 'Caído', 'Cego', 'Contido', 'Enfeitiçado', 'Envenenado', 'Exausto', 'Incapacitado', 'Inconsciente', 'Invisível', 'Paralisado', 'Petrificado', 'Surdo'];
+// Ícone real da condição (game-icons.net) — a descrição completa (efeitos + página do livro) fica no title.
+const condImg = (cd, cls = '') => `<img class="cond-icon${cls ? ` ${cls}` : ''}" src="${esc(condIcon(cd))}" alt="${esc(cd)}" />`;
 const d20 = () => 1 + Math.floor(Math.random() * 20);
 const abilityMod = (score) => Math.floor((Number(score) - 10) / 2);
 
