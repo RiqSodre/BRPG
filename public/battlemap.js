@@ -18,15 +18,15 @@ const KIND_COLOR = { pc: '#4a9d6f', npc: '#b8925a', enemy: '#c05650' };
 
 // ---------- Efeitos visuais de combate (elementais) ----------
 // Cada preset define cor, quantas partículas, se sobem (up) ou explodem (burst),
-// o emoji que "estoura" no centro e adornos (anel de choque, raio).
+// o ícone (arte real, não emoji) que "estoura" no centro e adornos (anel de choque, raio).
 const FX_PRESETS = {
-  fire:      { emoji: '🔥', color: '#ff6a1a', color2: '#ffd21a', dur: 900,  n: 22, spread: 'up',    ring: false, glow: true },
-  ice:       { emoji: '❄️', color: '#7fd8ff', color2: '#eaffff', dur: 1000, n: 16, spread: 'burst', ring: true },
-  lightning: { emoji: '⚡', color: '#fff45e', color2: '#bcd0ff', dur: 700,  n: 8,  spread: 'burst', bolt: true },
-  holy:      { emoji: '✨', color: '#ffe58a', color2: '#fffbe0', dur: 1100, n: 18, spread: 'up',    ring: true, glow: true },
-  poison:    { emoji: '☠️', color: '#8fd14f', color2: '#d6f5a0', dur: 1100, n: 16, spread: 'up',    glow: true },
-  impact:    { emoji: '💥', color: '#ff5252', color2: '#ffffff', dur: 650,  n: 14, spread: 'burst', ring: true },
-  heal:      { emoji: '💚', color: '#4a9d6f', color2: '#eaffea', dur: 1000, n: 14, spread: 'up',    ring: true, glow: true },
+  fire:      { icon: 'fire',           color: '#ff6a1a', color2: '#ffd21a', dur: 900,  n: 22, spread: 'up',    ring: false, glow: true },
+  ice:       { icon: 'snowflake',      color: '#7fd8ff', color2: '#eaffff', dur: 1000, n: 16, spread: 'burst', ring: true },
+  lightning: { icon: 'lightning',      color: '#fff45e', color2: '#bcd0ff', dur: 700,  n: 8,  spread: 'burst', bolt: true },
+  holy:      { icon: 'sparkle',        color: '#ffe58a', color2: '#fffbe0', dur: 1100, n: 18, spread: 'up',    ring: true, glow: true },
+  poison:    { icon: 'skull',          color: '#8fd14f', color2: '#d6f5a0', dur: 1100, n: 16, spread: 'up',    glow: true },
+  impact:    { icon: 'hand-fist',      color: '#ff5252', color2: '#ffffff', dur: 650,  n: 14, spread: 'burst', ring: true },
+  heal:      { icon: 'heart-straight', color: '#4a9d6f', color2: '#eaffea', dur: 1000, n: 14, spread: 'up',    ring: true, glow: true },
 };
 
 // Sons sintetizados no navegador (Web Audio) — tocam na tela do Mestre e na dos jogadores,
@@ -759,7 +759,7 @@ class BattleMap {
     ctx.stroke();
     ctx.setLineDash([]);
 
-    const text = `${info.squares} qd · ${info.meters.toFixed(1)}/${info.speed} m${info.over ? ' ⚠️' : ''}`;
+    const text = `${info.squares} qd · ${info.meters.toFixed(1)}/${info.speed} m${info.over ? ' (excedido)' : ''}`;
     ctx.font = `bold ${13 / this.cam.zoom}px Segoe UI, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -916,20 +916,25 @@ class BattleMap {
         ctx.fillStyle = frac > 0.5 ? '#4a9d6f' : frac > 0.25 ? '#b8925a' : '#c05650';
         ctx.fillRect(px + 6, barY, bw * frac, barH);
         if (frac === 0) {
-          ctx.fillStyle = '#c05650';
-          ctx.font = `bold ${Math.round(d * 0.5)}px Segoe UI, sans-serif`;
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText('✕', cx, cy);
+          const s = Math.round(d * 0.5);
+          const xIcon = loadImg('/icons/markers/x.svg', () => this.draw());
+          if (xIcon && xIcon.complete && xIcon.naturalWidth) {
+            ctx.drawImage(xIcon, cx - s / 2, cy - s / 2, s, s);
+          }
         }
       }
 
       // Concentração: quem está mantendo uma magia leva um selo no canto
       if (t.concentration) {
-        ctx.font = `${Math.round(d * 0.22)}px Segoe UI, sans-serif`;
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'top';
-        ctx.fillText('🧠', px + 3, py + 3);
+        const s = Math.round(d * 0.22);
+        const brainIcon = loadImg('/icons/markers/brain.svg', () => this.draw());
+        if (brainIcon && brainIcon.complete && brainIcon.naturalWidth) {
+          ctx.fillStyle = 'rgba(110,91,196,0.88)';
+          ctx.beginPath();
+          ctx.arc(px + 3 + s / 2, py + 3 + s / 2, s / 2 + 3, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.drawImage(brainIcon, px + 3, py + 3, s, s);
+        }
       }
 
       // Condições: fileira de ícones (arte real, não emoji) logo acima do token
@@ -1099,14 +1104,16 @@ class BattleMap {
         ctx.fill();
       }
 
-      // Emoji que "estoura" no centro
+      // Ícone que "estoura" no centro (arte real, não emoji)
       const pop = age < 0.28 ? age / 0.28 : 1;
       const scale = 0.55 + pop * 0.75;
       ctx.globalAlpha = Math.max(0, 1 - Math.max(0, (age - 0.35) / 0.65));
-      ctx.font = `${CELL * 0.62 * scale * fx.size}px serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(p.emoji, fx.cx, fx.cy - age * CELL * 0.15);
+      const popIcon = loadImg(`/icons/fx/${p.icon}.svg`, () => this.draw());
+      if (popIcon && popIcon.complete && popIcon.naturalWidth) {
+        const s = CELL * 0.62 * scale * fx.size;
+        const iy = fx.cy - age * CELL * 0.15;
+        ctx.drawImage(popIcon, fx.cx - s / 2, iy - s / 2, s, s);
+      }
 
       // Número flutuante de dano/cura (tamanho constante na tela)
       if (fx.text) {

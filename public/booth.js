@@ -201,7 +201,7 @@ async function boothGoOnAir() {
         const msg = JSON.parse(e.data);
         if (msg.type === 'started') {
           booth.onAir = true;
-          boothNotify('🔴 NO AR — sua voz está saindo pelo bot!');
+          boothNotify('NO AR — sua voz está saindo pelo bot!');
           resolve(true);
         } else if (msg.type === 'error') {
           boothNotify(msg.error, true);

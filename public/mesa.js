@@ -31,7 +31,7 @@ function renderInitiative(combat) {
     return;
   }
   const cur = combat.entries[combat.turn];
-  el('player-turn').innerHTML = `⚔️ Rodada ${combat.round} — vez de <b>${esc(cur?.name || '?')}</b>`;
+  el('player-turn').innerHTML = `<svg class="icon"><use href="#i-sword"/></svg> Rodada ${combat.round} — vez de <b>${esc(cur?.name || '?')}</b>`;
 
   box.innerHTML = '<h3>Iniciativa</h3>' + combat.entries.map((e, i) => {
     const frac = hpFraction(e);
@@ -52,7 +52,7 @@ function renderInitiative(combat) {
         ? `<img class="init-avatar" src="${esc(e.imageUrl)}" alt="" onerror="this.style.visibility='hidden'" />`
         : '<span class="init-avatar placeholder"></span>'}
       <span class="init-name">
-        <b>${esc(e.name)}</b>${morto ? ' ☠️' : ''}${e.concentration ? ' <span title="Concentrando em uma magia">🧠</span>' : ''}
+        <b>${esc(e.name)}</b>${morto ? ' <svg class="icon"><use href="#i-skull"/></svg>' : ''}${e.concentration ? ' <span title="Concentrando em uma magia"><svg class="icon"><use href="#i-brain"/></svg></span>' : ''}
         ${bar}
         ${vida ? `<small class="hp-text">${vida}</small>` : ''}
         ${conds ? `<div class="cond-list">${conds}</div>` : ''}
