@@ -41,11 +41,14 @@ body {
   padding: 16px 10px;
 }
 .brand { display: flex; gap: 10px; align-items: center; padding: 0 8px 18px; }
-.brand-icon { font-size: 28px; }
+.brand-icon { font-size: 28px; color: var(--accent2); }
 .brand h1 { font-size: 16px; color: var(--accent2); }
 .brand small { color: var(--muted); }
 nav { display: flex; flex-direction: column; gap: 2px; flex: 1; overflow-y: auto; }
 .nav-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   text-align: left;
   background: none;
   border: none;
@@ -56,6 +59,8 @@ nav { display: flex; flex-direction: column; gap: 2px; flex: 1; overflow-y: auto
   font-size: 14px;
   transition: background 0.12s;
 }
+.nav-btn .icon { font-size: 16px; color: var(--muted); flex-shrink: 0; }
+.nav-btn:hover .icon, .nav-btn.active .icon { color: inherit; }
 .nav-btn:hover { background: var(--bg3); }
 .nav-btn.active { background: var(--accent); color: #fff; font-weight: 600; }
 .nav-divider {
@@ -83,15 +88,21 @@ nav { display: flex; flex-direction: column; gap: 2px; flex: 1; overflow-y: auto
   gap: 12px;
   flex-wrap: wrap;
 }
-.sound-now { color: var(--accent2); font-size: 14px; white-space: nowrap; }
+.sound-now { display: flex; align-items: center; gap: 6px; color: var(--accent2); font-size: 14px; white-space: nowrap; }
 .sound-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .volume { display: flex; align-items: center; gap: 6px; font-size: 13px; }
 .volume input { width: 90px; accent-color: var(--accent); }
 .dice-quick { display: flex; align-items: center; gap: 6px; }
 #dice-result { color: var(--accent2); font-weight: bold; min-width: 60px; font-size: 13px; }
 
+/* ---------- Ícones (sprite Phosphor, ver icons.js) ---------- */
+.icon { width: 1em; height: 1em; fill: currentColor; flex-shrink: 0; vertical-align: -0.125em; }
+
 /* ---------- Componentes ---------- */
 .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   background: var(--accent);
   color: #fff;
   border: none;
@@ -120,7 +131,7 @@ input:focus, textarea:focus, select:focus { outline: 1px solid var(--accent); }
 textarea { resize: vertical; min-height: 80px; }
 
 .tab-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 10px; flex-wrap: wrap; }
-.tab-header h2 { font-size: 20px; color: var(--accent2); }
+.tab-header h2 { display: flex; align-items: center; gap: 10px; font-size: 20px; color: var(--accent2); }
 .tab-header .actions { display: flex; gap: 8px; }
 
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 14px; }

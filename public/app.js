@@ -141,9 +141,11 @@ function renderAll() {
 function renderBotStatus() {
   const b = state.bot;
   $('#bot-status').innerHTML = b.connected
-    ? `<span class="dot on"></span> ${esc(b.tag)}${b.inVoice ? ' · 🎙️ em voz' : ''}`
+    ? `<span class="dot on"></span> ${esc(b.tag)}${b.inVoice ? ' · <svg class="icon"><use href="#i-microphone"/></svg> em voz' : ''}`
     : '<span class="dot off"></span> Bot desconectado';
-  $('#now-playing').textContent = b.nowPlaying ? `🎵 Tocando: ${b.nowPlaying.name}` : '🔇 Nenhum som tocando';
+  $('#now-playing').innerHTML = b.nowPlaying
+    ? `<svg class="icon"><use href="#i-music-notes"/></svg>Tocando: ${esc(b.nowPlaying.name)}`
+    : '<svg class="icon"><use href="#i-speaker-slash"/></svg>Nenhum som tocando';
 }
 
 // ---------- Cenas ----------
@@ -151,7 +153,7 @@ function renderScenes() {
   const scenes = state.scenes;
   $('#tab-scenes').innerHTML = `
     <div class="tab-header">
-      <h2>🎭 Cenas</h2>
+      <h2><svg class="icon"><use href="#i-mask-happy"/></svg>Cenas</h2>
       <div class="actions"><button class="btn" id="btn-new-scene">+ Nova cena</button></div>
     </div>
     <p class="help-text">Ativar uma cena posta a descrição e a imagem no canal de texto do Discord e <b>toca o áudio dela automaticamente</b> no canal de voz.</p><br/>
@@ -224,7 +226,7 @@ function sceneModal(scene = {}) {
 function renderStory() {
   $('#tab-story').innerHTML = `
     <div class="tab-header">
-      <h2>📜 História & Lore</h2>
+      <h2><svg class="icon"><use href="#i-scroll"/></svg>História & Lore</h2>
       <div class="actions"><button class="btn" id="btn-new-story">+ Nova anotação</button></div>
     </div>
     <div class="grid">${state.story.map((s) => `
@@ -320,7 +322,7 @@ function renderCharacters() {
 
   $('#tab-characters').innerHTML = `
     <div class="tab-header">
-      <h2>🧙 Personagens</h2>
+      <h2><svg class="icon"><use href="#i-users"/></svg>Personagens</h2>
       <div class="actions">
         <button class="btn ghost" id="btn-handout">📨 Handout</button>
         <button class="btn" id="btn-new-pc">+ Jogador</button>
@@ -418,7 +420,7 @@ function renderItems() {
 
   $('#tab-items').innerHTML = `
     <div class="tab-header">
-      <h2>🎒 Itens</h2>
+      <h2><svg class="icon"><use href="#i-backpack"/></svg>Itens</h2>
       <div class="actions"><button class="btn gold" id="btn-new-item">+ Novo item</button></div>
     </div>
     <p class="help-text">Crie o item uma vez aqui e entregue a quantos personagens quiser. Ao entregar, o jogador recebe um card do item por DM no Discord — e pode consultar a mochila a qualquer momento com <code>/inventario</code>.</p>
@@ -737,7 +739,7 @@ const TYPE_LABEL = { ambient: '🌫️ Ambiente', music: '🎶 Música', sfx: '�
 function renderAudio() {
   $('#tab-audio').innerHTML = `
     <div class="tab-header">
-      <h2>🎵 Biblioteca de Áudio</h2>
+      <h2><svg class="icon"><use href="#i-music-notes"/></svg>Biblioteca de Áudio</h2>
     </div>
     <div class="card" style="margin-bottom:16px;">
       <h3>Enviar novo áudio</h3>
@@ -841,7 +843,7 @@ function renderBoothTab() {
   if (!boothRendered) {
     boothRendered = true;
     $('#tab-booth').innerHTML = `
-      <div class="tab-header"><h2>🎙️ Cabine do Mestre</h2></div>
+      <div class="tab-header"><h2><svg class="icon"><use href="#i-microphone"/></svg>Cabine do Mestre</h2></div>
       <p class="help-text">Fale pelos NPCs com a sua voz transformada: o som sai pelo bot, por cima da música ambiente.
       <b>Use fones de ouvido</b> e, enquanto estiver no ar, <b>mute-se no Discord</b> para os jogadores não ouvirem sua voz dupla.</p><br/>
       <div class="card" style="max-width:640px;">
@@ -2376,7 +2378,7 @@ function tokenModal(t = null) {
 function renderSessions() {
   $('#tab-sessions').innerHTML = `
     <div class="tab-header">
-      <h2>🗓️ Sessões</h2>
+      <h2><svg class="icon"><use href="#i-calendar"/></svg>Sessões</h2>
       <div class="actions"><button class="btn" id="btn-new-session">+ Nova sessão</button></div>
     </div>
     <p class="help-text">Anote o que aconteceu em cada sessão. A IA gera um <b>recap épico</b> para você postar no Discord antes da próxima.</p><br/>
@@ -2443,7 +2445,7 @@ async function renderBestiarioTab() {
     bestiarioShellRendered = true;
     $('#tab-bestiario').innerHTML = `
       <div class="tab-header">
-        <h2>📖 Bestiário SRD</h2>
+        <h2><svg class="icon"><use href="#i-book-open-text"/></svg>Bestiário SRD</h2>
         <div class="actions">
           <input id="bestiario-query" placeholder="Filtrar por nome ou tipo (inglês)..." style="min-width:240px;" />
         </div>
@@ -3049,7 +3051,7 @@ function renderAiTab() {
   if (aiRendered) return; // não re-renderiza para não perder o chat
   aiRendered = true;
   $('#tab-ai').innerHTML = `
-    <div class="tab-header"><h2>✨ Assistente do Mestre</h2></div>
+    <div class="tab-header"><h2><svg class="icon"><use href="#i-sparkle"/></svg>Assistente do Mestre</h2></div>
     <div class="ai-shortcuts">
       <button class="btn small ghost" data-prompt="Me dê um resumo rápido de onde a campanha parou e quais ganchos estão em aberto.">📍 Onde paramos?</button>
       <button class="btn small ghost" data-prompt="Os jogadores foram para um lugar que eu não preparei. Improvise um local interessante coerente com a campanha, com 1 NPC e 1 gancho.">🎲 Improvisar local</button>
@@ -3100,7 +3102,7 @@ function renderSettings() {
   const s = state.settings;
   const obs = s.obsidian || {};
   $('#tab-settings').innerHTML = `
-    <div class="tab-header"><h2>⚙️ Configurações</h2></div>
+    <div class="tab-header"><h2><svg class="icon"><use href="#i-gear"/></svg>Configurações</h2></div>
     <form class="settings-form" id="settings-form">
       <div><label>Nome da campanha</label><input name="campaignName" value="${esc(s.campaignName)}" /></div>
       <div><label>Sistema</label><input name="system" value="${esc(s.system)}" /></div>

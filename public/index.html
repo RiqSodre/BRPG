@@ -7,9 +7,10 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <script src="icons.js"></script>
   <aside class="sidebar">
     <div class="brand">
-      <span class="brand-icon">🐉</span>
+      <svg class="icon brand-icon"><use href="#i-dice-six"/></svg>
       <div>
         <h1 id="campaign-name">Mesa do Mestre</h1>
         <small id="campaign-system">D&D 5e</small>
@@ -17,19 +18,19 @@
     </div>
     <nav>
       <div class="nav-divider">SESSÃO</div>
-      <button class="nav-btn active" data-tab="scenes">🎭 Cenas</button>
-      <button class="nav-btn" data-tab="sessions">🗓️ Sessões</button>
-      <button class="nav-btn" data-tab="ai">✨ Assistente IA</button>
+      <button class="nav-btn active" data-tab="scenes"><svg class="icon"><use href="#i-mask-happy"/></svg>Cenas</button>
+      <button class="nav-btn" data-tab="sessions"><svg class="icon"><use href="#i-calendar"/></svg>Sessões</button>
+      <button class="nav-btn" data-tab="ai"><svg class="icon"><use href="#i-sparkle"/></svg>Assistente IA</button>
       <div class="nav-divider">COMBATE</div>
-      <button class="nav-btn" data-tab="map">⚔️ Batalha</button>
-      <button class="nav-btn" data-tab="bestiario">📖 Bestiário</button>
+      <button class="nav-btn" data-tab="map"><svg class="icon"><use href="#i-sword"/></svg>Batalha</button>
+      <button class="nav-btn" data-tab="bestiario"><svg class="icon"><use href="#i-book-open-text"/></svg>Bestiário</button>
       <div class="nav-divider">CAMPANHA</div>
-      <button class="nav-btn" data-tab="story">📜 História</button>
-      <button class="nav-btn" data-tab="characters">🧙 Personagens</button>
-      <button class="nav-btn" data-tab="items">🎒 Itens</button>
-      <button class="nav-btn" data-tab="audio">🎵 Áudio</button>
-      <button class="nav-btn" data-tab="booth">🎙️ Cabine</button>
-      <button class="nav-btn" data-tab="settings">⚙️ Config</button>
+      <button class="nav-btn" data-tab="story"><svg class="icon"><use href="#i-scroll"/></svg>História</button>
+      <button class="nav-btn" data-tab="characters"><svg class="icon"><use href="#i-users"/></svg>Personagens</button>
+      <button class="nav-btn" data-tab="items"><svg class="icon"><use href="#i-backpack"/></svg>Itens</button>
+      <button class="nav-btn" data-tab="audio"><svg class="icon"><use href="#i-music-notes"/></svg>Áudio</button>
+      <button class="nav-btn" data-tab="booth"><svg class="icon"><use href="#i-microphone"/></svg>Cabine</button>
+      <button class="nav-btn" data-tab="settings"><svg class="icon"><use href="#i-gear"/></svg>Config</button>
     </nav>
     <div class="bot-status" id="bot-status">
       <span class="dot off"></span> Bot desconectado
@@ -39,16 +40,16 @@
   <main class="content">
     <!-- Barra de controle de som, sempre visível -->
     <div class="sound-bar">
-      <div class="sound-now" id="now-playing">🔇 Nenhum som tocando</div>
+      <div class="sound-now" id="now-playing"><svg class="icon"><use href="#i-speaker-slash"/></svg>Nenhum som tocando</div>
       <div class="sound-controls">
         <select id="voice-channel-select" title="Canal de voz"></select>
-        <button id="btn-join" class="btn small">🎙️ Conectar voz</button>
+        <button id="btn-join" class="btn small"><svg class="icon"><use href="#i-microphone"/></svg>Conectar voz</button>
         <button id="btn-leave" class="btn small ghost">Sair</button>
-        <button id="btn-stop-sound" class="btn small danger">⏹ Parar som</button>
-        <label class="volume">🔊 <input type="range" id="volume" min="0" max="1" step="0.05" /></label>
+        <button id="btn-stop-sound" class="btn small danger"><svg class="icon"><use href="#i-stop"/></svg>Parar som</button>
+        <label class="volume"><svg class="icon"><use href="#i-speaker-high"/></svg><input type="range" id="volume" min="0" max="1" step="0.05" /></label>
         <span class="dice-quick">
           <input id="dice-expr" placeholder="1d20+5" size="7" />
-          <button id="btn-roll" class="btn small">🎲</button>
+          <button id="btn-roll" class="btn small" title="Rolar dado"><svg class="icon"><use href="#i-dice-six"/></svg></button>
           <span id="dice-result"></span>
         </span>
       </div>
