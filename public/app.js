@@ -2446,7 +2446,7 @@ async function renderBestiarioTab() {
           <input id="bestiario-query" placeholder="Filtrar por nome ou tipo (inglês)..." style="min-width:240px;" />
         </div>
       </div>
-      <p class="help-text">Todos os monstros do SRD, com ficha completa, tradução por IA e envio direto para a iniciativa/mapa — a mesma busca da aba ⚔️ Batalha, agora navegável por página.</p>
+      <p class="help-text">Clique num card para abrir a ficha completa (traduzida por IA) — os botões enviam direto pra iniciativa/mapa sem sair da lista.</p>
       <div id="bestiario-results"></div>
       <div id="bestiario-pagination" style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:14px;flex-wrap:wrap;"></div>`;
 
@@ -2474,25 +2474,13 @@ function applyBestiarioFilter() {
   renderBestiarioList();
 }
 
-function renderBestiarioList() {
+let bestiarioLoadToken = 0; // descarta respostas de páginas que o Mestre já deixou
+
+async function renderBestiarioList() {
   const totalPages = Math.max(1, Math.ceil(bestiarioFiltered.length / BESTIARIO_PAGE_SIZE));
   bestiarioPage = Math.min(Math.max(1, bestiarioPage), totalPages);
   const start = (bestiarioPage - 1) * BESTIARIO_PAGE_SIZE;
   const pageItems = bestiarioFiltered.slice(start, start + BESTIARIO_PAGE_SIZE);
-
-  $('#bestiario-results').innerHTML = pageItems.length
-    ? pageItems.map((m) => `
-        <div class="srd-result-row">
-          <span>${esc(m.name)}</span>
-          <button class="btn small ghost" data-srd-view="${esc(m.index)}">📋 Ficha</button>
-          <button class="btn small" data-srd-add="${esc(m.index)}">➕ Iniciativa</button>
-          <button class="btn small gold" data-srd-map="${esc(m.index)}" title="Iniciativa + mapa">🗺️</button>
-        </div>`).join('')
-    : '<div class="help-text">Nada encontrado.</div>';
-
-  $$('#bestiario-results [data-srd-view]').forEach((b) => b.onclick = () => showMonster(b.dataset.srdView));
-  $$('#bestiario-results [data-srd-add]').forEach((b) => b.onclick = () => addMonster(b.dataset.srdAdd, false));
-  $$('#bestiario-results [data-srd-map]').forEach((b) => b.onclick = () => addMonster(b.dataset.srdMap, true));
 
   $('#bestiario-pagination').innerHTML = `
     <button class="btn small ghost" id="best-first" ${bestiarioPage === 1 ? 'disabled' : ''}>« Primeira</button>
@@ -2500,11 +2488,67 @@ function renderBestiarioList() {
     <span class="help-text">Página ${bestiarioPage} de ${totalPages} · ${bestiarioFiltered.length} monstro(s)</span>
     <button class="btn small ghost" id="best-next" ${bestiarioPage === totalPages ? 'disabled' : ''}>Próxima ›</button>
     <button class="btn small ghost" id="best-last" ${bestiarioPage === totalPages ? 'disabled' : ''}>Última »</button>`;
-
   $('#best-first').onclick = () => { bestiarioPage = 1; renderBestiarioList(); };
   $('#best-prev').onclick = () => { bestiarioPage -= 1; renderBestiarioList(); };
   $('#best-next').onclick = () => { bestiarioPage += 1; renderBestiarioList(); };
   $('#best-last').onclick = () => { bestiarioPage = totalPages; renderBestiarioList(); };
+
+  if (!pageItems.length) {
+    $('#bestiario-results').innerHTML = '<div class="help-text">Nada encontrado.</div>';
+    return;
+  }
+
+  // Busca ficha (CA/PV/CR) e arte de cada monstro da página — 12 por vez, tudo cacheado no servidor.
+  const myToken = ++bestiarioLoadToken;
+  $('#bestiario-results').innerHTML = '<p class="help-text">Carregando fichas...</p>';
+
+  const cards = await Promise.all(pageItems.map(async (m) => {
+    try {
+      const [detail, imgRes] = await Promise.all([
+        api(`/srd/monsters/${m.index}`),
+        api(`/srd/monsters/${m.index}/image`).catch(() => ({ url: null })),
+      ]);
+      return { index: m.index, name: m.name, detail, art: imgRes?.url || '' };
+    } catch {
+      return { index: m.index, name: m.name, detail: null, art: '' };
+    }
+  }));
+  if (myToken !== bestiarioLoadToken) return; // o Mestre já virou a página / mudou o filtro
+
+  $('#bestiario-results').innerHTML = `<div class="grid">${cards.map(bestiarioCardHtml).join('')}</div>`;
+
+  $$('#bestiario-results .bestiario-card').forEach((el) => { el.onclick = () => showMonster(el.dataset.index); });
+  $$('#bestiario-results [data-srd-add]').forEach((b) => b.onclick = (e) => { e.stopPropagation(); addMonster(b.dataset.srdAdd, false); });
+  $$('#bestiario-results [data-srd-map]').forEach((b) => b.onclick = (e) => { e.stopPropagation(); addMonster(b.dataset.srdMap, true); });
+}
+
+// Card no estilo ficha (igual aos de Personagens): foto, tipo/tamanho/alinhamento, CA/PV/CR.
+// O card inteiro é clicável e abre a ficha completa (showMonster); os botões de ação
+// param a propagação pra não abrir o modal junto.
+function bestiarioCardHtml({ index, name, detail, art }) {
+  if (!detail) {
+    return `
+      <div class="card bestiario-card" data-index="${esc(index)}">
+        <h3>${esc(name)}</h3>
+        <div class="meta">Ficha indisponível no momento — tente de novo.</div>
+      </div>`;
+  }
+  const size = _PT_SIZES[detail.size] || detail.size;
+  const type = _PT_TYPES[detail.type?.toLowerCase()] || detail.type;
+  const align = _PT_ALIGNS[detail.alignment?.toLowerCase()] || detail.alignment;
+  const ac = detail.armor_class?.[0]?.value ?? '?';
+  return `
+    <div class="card bestiario-card" data-index="${esc(index)}">
+      ${art ? `<img class="thumb" src="${esc(art)}" alt="" onerror="this.remove()" />` : '<div class="thumb thumb-placeholder">🐉</div>'}
+      <h3>${esc(name)}</h3>
+      <div class="meta">${esc(size)} ${esc(type)}, ${esc(align)}</div>
+      <div class="meta">🛡️ CA ${esc(ac)} · ❤️ ${esc(detail.hit_points)} PV · CR ${esc(detail.challenge_rating)}</div>
+      <div class="row">
+        <button class="btn small ghost">📋 Ficha completa</button>
+        <button class="btn small" data-srd-add="${esc(index)}">➕ Iniciativa</button>
+        <button class="btn small gold" data-srd-map="${esc(index)}" title="Iniciativa + mapa">🗺️</button>
+      </div>
+    </div>`;
 }
 
 function srdModal() {
