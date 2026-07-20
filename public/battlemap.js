@@ -16,6 +16,28 @@ function loadImg(src, onLoad) {
 
 const KIND_COLOR = { pc: '#4a9d6f', npc: '#b8925a', enemy: '#c05650' };
 
+// ---------- Paredes (bloqueiam a visão automática) ----------
+// Interseção de dois segmentos abertos (sem contar os extremos, pra um raio que passa
+// exatamente por uma quina de parede não "piscar" como bloqueado).
+function segmentsIntersect(p0x, p0y, p1x, p1y, p2x, p2y, p3x, p3y) {
+  const s1x = p1x - p0x, s1y = p1y - p0y;
+  const s2x = p3x - p2x, s2y = p3y - p2y;
+  const denom = -s2x * s1y + s1x * s2y;
+  if (denom === 0) return false; // paralelas
+  const s = (-s1y * (p0x - p2x) + s1x * (p0y - p2y)) / denom;
+  const t = (s2x * (p0y - p2y) - s2y * (p0x - p2x)) / denom;
+  return s > 0 && s < 1 && t > 0 && t < 1;
+}
+
+// Menor distância de um ponto a um segmento — usado pra "clicar numa parede" e apagar.
+function distToSegment(px, py, x1, y1, x2, y2) {
+  const dx = x2 - x1, dy = y2 - y1;
+  const lenSq = dx * dx + dy * dy;
+  let t = lenSq ? ((px - x1) * dx + (py - y1) * dy) / lenSq : 0;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+}
+
 // ---------- Efeitos visuais de combate (elementais) ----------
 // Cada preset define cor, quantas partículas, se sobem (up) ou explodem (burst),
 // o ícone (arte real, não emoji) que "estoura" no centro e adornos (anel de choque, raio).
@@ -282,6 +304,7 @@ class BattleMap {
     this.onTokenClick = null; // (token) => void  (clique direito no painel)
     this.onSelect = null;     // (token|null) => void
     this.onAoe = null;        // (aoe|null) => void
+    this.onWallsChange = null; // (walls) => void — parede desenhada, apagada ou movida
 
     this._bindEvents();
     this._resize();
@@ -444,6 +467,22 @@ class BattleMap {
     const g = this._toGrid(clientX, clientY);
     return { col: Math.floor(g.x / CELL), row: Math.floor(g.y / CELL) };
   }
+  // Quina do grid mais próxima, em unidades de célula (parede sempre encosta nas quinas).
+  _toCorner(clientX, clientY) {
+    const g = this._toGrid(clientX, clientY);
+    return { x: Math.round(g.x / CELL), y: Math.round(g.y / CELL) };
+  }
+  // Parede mais perto do clique, dentro de uma folga em pixels de tela (independente do zoom).
+  _wallAt(clientX, clientY) {
+    const g = this._toGrid(clientX, clientY);
+    const tol = 10 / this.cam.zoom;
+    const walls = this.map?.walls || [];
+    for (let i = walls.length - 1; i >= 0; i--) {
+      const w = walls[i];
+      if (distToSegment(g.x, g.y, w.x1 * CELL, w.y1 * CELL, w.x2 * CELL, w.y2 * CELL) <= tol) return i;
+    }
+    return -1;
+  }
   _tokenAt(clientX, clientY) {
     const g = this._toGrid(clientX, clientY);
     // De trás para frente: o token desenhado por cima ganha o clique
@@ -511,6 +550,19 @@ class BattleMap {
         this.draw();
         return;
       }
+      if (this.isDm && this.tool === 'wall') {
+        const hit = this._wallAt(e.clientX, e.clientY);
+        if (hit !== -1) {
+          this.map.walls.splice(hit, 1);
+          if (this.onWallsChange) this.onWallsChange(this.map.walls);
+          this.draw();
+          return;
+        }
+        const corner = this._toCorner(e.clientX, e.clientY);
+        this.drag = { mode: 'wall', from: corner, to: corner };
+        this.draw();
+        return;
+      }
       if (this.isDm && this.tool === 'aoe') {
         const cell = this._toCell(e.clientX, e.clientY);
         this.aoe = { col: cell.col, row: cell.row, radius: 0 };
@@ -542,6 +594,8 @@ class BattleMap {
         this._paintFog(e.clientX, e.clientY);
       } else if (d.mode === 'ruler') {
         this.ruler.to = this._toCell(e.clientX, e.clientY);
+      } else if (d.mode === 'wall') {
+        d.to = this._toCorner(e.clientX, e.clientY);
       } else if (d.mode === 'aoe') {
         const g = this._toGrid(e.clientX, e.clientY);
         const dx = g.x / CELL - (this.aoe.col + 0.5);
@@ -568,6 +622,12 @@ class BattleMap {
         }
       } else if (d.mode === 'fog' && this.onFogPaint) {
         this.onFogPaint([...d.cells], this.tool === 'reveal');
+      } else if (d.mode === 'wall') {
+        if (d.from.x !== d.to.x || d.from.y !== d.to.y) {
+          if (!this.map.walls) this.map.walls = [];
+          this.map.walls.push({ x1: d.from.x, y1: d.from.y, x2: d.to.x, y2: d.to.y });
+          if (this.onWallsChange) this.onWallsChange(this.map.walls);
+        }
       } else if (d.mode === 'aoe') {
         // Área pequena demais = clique errado; some em vez de virar uma área de 0 m
         if (this.aoe.radius < 0.5) this.aoe = null;
@@ -668,6 +728,7 @@ class BattleMap {
     for (let r = 0; r <= this.map.rows; r++) { ctx.moveTo(0, r * CELL); ctx.lineTo(gw, r * CELL); }
     ctx.stroke();
 
+    this._drawWalls();
     this._reveal = this._computeReveal(); // reaproveitado por _drawFog e _isVisible
     this._drawFog(gw, gh);
     this._drawAoe();
@@ -773,8 +834,49 @@ class BattleMap {
     ctx.restore();
   }
 
+  // Linha reta entre dois pontos (em unidades de célula) sem cruzar nenhuma parede.
+  _hasLineOfSight(x1, y1, x2, y2) {
+    const walls = this.map?.walls;
+    if (!walls || !walls.length) return true;
+    for (const w of walls) {
+      if (segmentsIntersect(x1, y1, x2, y2, w.x1, w.y1, w.x2, w.y2)) return false;
+    }
+    return true;
+  }
+
+  // Paredes desenhadas pelo Mestre — só ele vê a linha; para o jogador elas só existem
+  // como matemática (bloqueiam a visão automática em _computeReveal).
+  _drawWalls() {
+    if (!this.isDm) return;
+    const { ctx } = this;
+    const walls = this.map.walls || [];
+    if (!walls.length && this.tool !== 'wall') return;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(94,200,255,0.85)';
+    ctx.lineWidth = 3 / this.cam.zoom;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (const w of walls) {
+      ctx.moveTo(w.x1 * CELL, w.y1 * CELL);
+      ctx.lineTo(w.x2 * CELL, w.y2 * CELL);
+    }
+    ctx.stroke();
+    // Parede em desenho: prévia pontilhada acompanhando o arrasto
+    if (this.tool === 'wall' && this.drag?.mode === 'wall') {
+      const d = this.drag;
+      ctx.setLineDash([6 / this.cam.zoom, 5 / this.cam.zoom]);
+      ctx.strokeStyle = 'rgba(94,200,255,0.55)';
+      ctx.beginPath();
+      ctx.moveTo(d.from.x * CELL, d.from.y * CELL);
+      ctx.lineTo(d.to.x * CELL, d.to.y * CELL);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   // Conjunto de células reveladas: névoa pintada à mão (map.fog) unida com o campo de
-  // visão automático (raio ao redor de cada PC). Devolve null quando nada esconde nada.
+  // visão automático (raio ao redor de cada PC, bloqueado por paredes). Devolve null
+  // quando nada esconde nada.
   _computeReveal() {
     const visionOn = this.battle?.vision?.enabled;
     const manualOn = this.map?.fog?.enabled;
@@ -795,9 +897,11 @@ class BattleMap {
         const maxR = Math.min(this.map.rows - 1, Math.ceil(cr + R));
         for (let c = minC; c <= maxC; c++) {
           for (let r = minR; r <= maxR; r++) {
+            const key = `${c},${r}`;
+            if (set.has(key)) continue;
             const dc = (c + 0.5) - cc;
             const dr = (r + 0.5) - cr;
-            if (Math.hypot(dc, dr) <= R) set.add(`${c},${r}`);
+            if (Math.hypot(dc, dr) <= R && this._hasLineOfSight(cc, cr, c + 0.5, r + 0.5)) set.add(key);
           }
         }
       }
