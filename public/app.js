@@ -1245,13 +1245,11 @@ function renderMapTab() {
         if (!src) return toast('Este mapa não tem imagem.', true);
         const probe = new Image();
         probe.onload = () => {
+          const size = Grid.mapPixelSize(map);
           map.img = {
             x: 0,
             y: 0,
-            scale: Math.max(
-              (map.cols * MAP_CELL) / probe.naturalWidth,
-              (map.rows * MAP_CELL) / probe.naturalHeight,
-            ),
+            scale: Math.max(size.w / probe.naturalWidth, size.h / probe.naturalHeight),
           };
           pushMap(map);
         };
@@ -2252,10 +2250,14 @@ function mapModal(m = {}) {
     ` : ''}
     <div id="map-img-info" class="map-img-info"></div>
     <div class="field-row">
-      ${field('Colunas (quadrados)', 'cols', m.cols ?? 20, 'number')}
-      ${field('Linhas (quadrados)', 'rows', m.rows ?? 15, 'number')}
-      ${field('Metros por quadrado', 'cellSize', m.cellSize ?? 1.5, 'number')}
+      ${field('Colunas', 'cols', m.cols ?? 20, 'number')}
+      ${field('Linhas', 'rows', m.rows ?? 15, 'number')}
+      ${field('Metros por célula', 'cellSize', m.cellSize ?? 1.5, 'number')}
     </div>
+    ${fieldSelect('Tipo de grid', 'gridType', [
+      { value: 'square', label: 'Quadrado' },
+      { value: 'hex', label: 'Hexágono' },
+    ], m.gridType || 'square')}
     ${(isNew || temImagem) ? `
       <label class="tool-check" style="margin-bottom:8px;" title="As linhas seguem a proporção da foto e a imagem é esticada para preencher o grid exatamente">
         <input type="checkbox" id="map-autofit" checked /> Encaixar a imagem no grid automaticamente
@@ -2269,7 +2271,8 @@ function mapModal(m = {}) {
     data.cellSize = Number(data.cellSize);
     // Escala que faz a imagem cobrir exatamente a largura do grid.
     const encaixar = $('#map-autofit')?.checked;
-    const escala = (imgDim && encaixar) ? (data.cols * MAP_CELL) / imgDim.w : null;
+    const gw = Grid.mapPixelSize({ cols: data.cols, rows: data.rows, gridType: data.gridType }).w;
+    const escala = (imgDim && encaixar) ? gw / imgDim.w : null;
 
     if (isNew) {
       const fileInput = $('#modal-form [name="file"]');

@@ -487,6 +487,7 @@ export function startServer() {
       cols: Math.max(1, Math.min(80, Number(b.cols) || 20)),
       rows: Math.max(1, Math.min(80, Number(b.rows) || 15)),
       cellSize: Number(b.cellSize) || 1.5, // metros por quadrado (5 pés = 1,5 m)
+      gridType: b.gridType === 'hex' ? 'hex' : 'square',
       filename: req.file?.filename || '',
       imageUrl: req.file ? '' : (b.imageUrl || ''),
       img: { x: Number(b.imgX) || 0, y: Number(b.imgY) || 0, scale },

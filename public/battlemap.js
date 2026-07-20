@@ -2,6 +2,95 @@
 // O mapa vive num "espaço de grid": cada quadrado tem CELL pixels. A câmera (pan/zoom) é só visual.
 const CELL = 64;
 
+// ---------- Geometria do grid: quadrado ou hexágono ----------
+// Os dois guardam a posição em "col,row". No hexágono é o offset "odd-r" (linhas
+// ímpares deslocadas meia célula pra direita) — o mesmo esquema dos tapetes físicos de
+// hexágono. Hexágono é sempre "pointy-top" (ponta em cima/embaixo). O resto do arquivo
+// nunca mais faz "col*CELL" na mão — tudo passa por Grid.center()/Grid.distance().
+const HEX_SIZE = CELL / Math.sqrt(3); // "raio": centro até um vértice
+const HEX_ROW = HEX_SIZE * 1.5;       // espaçamento vertical entre linhas
+const Grid = {
+  isHex(map) { return map?.gridType === 'hex'; },
+
+  // Vértice i (0-5) de um hexágono pointy-top centrado em (cx,cy).
+  hexCorner(cx, cy, i) {
+    const a = (Math.PI / 180) * (60 * i - 30);
+    return { x: cx + HEX_SIZE * Math.cos(a), y: cy + HEX_SIZE * Math.sin(a) };
+  },
+
+  // Centro em pixels (espaço do grid, antes de cam.x/zoom) de uma célula. `size` só
+  // importa pro quadrado (bloco NxN) — no hex um token grande fica só maior, ancorado
+  // no mesmo hexágono, sem tentar cobrir vários hexágonos exatamente.
+  center(map, col, row, size = 1) {
+    if (this.isHex(map)) {
+      const x = col * CELL + (row & 1 ? CELL / 2 : 0) + CELL / 2;
+      const y = row * HEX_ROW + HEX_SIZE;
+      return { x, y };
+    }
+    return { x: col * CELL + (size * CELL) / 2, y: row * CELL + (size * CELL) / 2 };
+  },
+
+  // Ponto (pixel) -> célula mais próxima. Um hexágono regular é exatamente a célula de
+  // Voronoi do seu centro, então "centro mais próximo" é sempre a resposta certa — só
+  // precisa testar uma vizinhança grande o bastante ao redor de uma estimativa.
+  pointToCell(map, x, y) {
+    if (!this.isHex(map)) return { col: Math.floor(x / CELL), row: Math.floor(y / CELL) };
+    const rowGuess = Math.round((y - HEX_SIZE) / HEX_ROW);
+    let best = null, bestD = Infinity;
+    for (let dr = -1; dr <= 1; dr++) {
+      const row = rowGuess + dr;
+      const offset = row & 1 ? CELL / 2 : 0;
+      const colGuess = Math.round((x - offset - CELL / 2) / CELL);
+      for (let dc = -1; dc <= 1; dc++) {
+        const col = colGuess + dc;
+        const c = this.center(map, col, row);
+        const d = Math.hypot(x - c.x, y - c.y);
+        if (d < bestD) { bestD = d; best = { col, row }; }
+      }
+    }
+    return best;
+  },
+
+  // Vértice de hexágono mais próximo de um ponto — usado só pra parede encostar direitinho
+  // nas quinas (uma quina é compartilhada por até 3 hexágonos vizinhos).
+  hexVertexNear(map, x, y) {
+    const near = this.pointToCell(map, x, y);
+    let best = null, bestD = Infinity;
+    for (let dr = -1; dr <= 1; dr++) {
+      for (let dc = -1; dc <= 1; dc++) {
+        const c = this.center(map, near.col + dc, near.row + dr);
+        for (let i = 0; i < 6; i++) {
+          const v = this.hexCorner(c.x, c.y, i);
+          const d = Math.hypot(x - v.x, y - v.y);
+          if (d < bestD) { bestD = d; best = v; }
+        }
+      }
+    }
+    return best;
+  },
+
+  // col,row -> coordenada axial (conversão padrão do esquema de offset "odd-r").
+  toAxial(col, row) {
+    return { q: col - (row - (row & 1)) / 2, r: row };
+  },
+
+  // Distância em "passos de célula": Chebyshev no quadrado (regra 5e — toda diagonal
+  // custa 1 quadrado), fórmula de distância em hexágono no hex (sem essa ambiguidade).
+  distance(map, colA, rowA, colB, rowB) {
+    if (!this.isHex(map)) return Math.max(Math.abs(colB - colA), Math.abs(rowB - rowA));
+    const a = this.toAxial(colA, rowA);
+    const b = this.toAxial(colB, rowB);
+    const dq = b.q - a.q, dr = b.r - a.r;
+    return (Math.abs(dq) + Math.abs(dq + dr) + Math.abs(dr)) / 2;
+  },
+
+  // Tamanho do grid inteiro em pixels — usado pra enquadrar a câmera e desenhar o fundo.
+  mapPixelSize(map) {
+    if (!this.isHex(map)) return { w: map.cols * CELL, h: map.rows * CELL };
+    return { w: map.cols * CELL + CELL / 2, h: (map.rows - 1) * HEX_ROW + HEX_SIZE * 2 };
+  },
+};
+
 const imgCache = new Map();
 function loadImg(src, onLoad) {
   if (!src) return null;
@@ -333,10 +422,11 @@ class BattleMap {
     const dpr = window.devicePixelRatio || 1;
     const w = width / dpr;
     const h = height / dpr;
-    const zoom = Math.min(w / (this.map.cols * CELL), h / (this.map.rows * CELL)) * 0.95;
+    const { w: gw, h: gh } = Grid.mapPixelSize(this.map);
+    const zoom = Math.min(w / gw, h / gh) * 0.95;
     this.cam.zoom = zoom;
-    this.cam.x = (w - this.map.cols * CELL * zoom) / 2;
-    this.cam.y = (h - this.map.rows * CELL * zoom) / 2;
+    this.cam.x = (w - gw * zoom) / 2;
+    this.cam.y = (h - gh * zoom) / 2;
     this.draw();
   }
 
@@ -349,8 +439,9 @@ class BattleMap {
   // { type: 'fire'|'ice'|'lightning'|'holy'|'poison'|'impact'|'heal', col, row, size, text }
   playFx({ type = 'impact', col = 0, row = 0, size = 1, text = '', textCol = '' } = {}) {
     const preset = FX_PRESETS[type] || FX_PRESETS.impact;
-    const cx = col * CELL + CELL * size / 2;
-    const cy = row * CELL + CELL * size / 2;
+    const center = Grid.center(this.map, col, row, size);
+    const cx = center.x;
+    const cy = center.y;
     const spread = CELL * (0.4 + size * 0.25);
     const particles = [];
     for (let i = 0; i < (preset.n || 0); i++) {
@@ -370,8 +461,9 @@ class BattleMap {
     const dpr = window.devicePixelRatio || 1;
     const w = this.canvas.width / dpr;
     const h = this.canvas.height / dpr;
-    this.cam.x = w / 2 - (col * CELL + CELL / 2) * this.cam.zoom;
-    this.cam.y = h / 2 - (row * CELL + CELL / 2) * this.cam.zoom;
+    const c = Grid.center(this.map, col, row);
+    this.cam.x = w / 2 - c.x * this.cam.zoom;
+    this.cam.y = h / 2 - c.y * this.cam.zoom;
     this.draw();
   }
 
@@ -390,8 +482,8 @@ class BattleMap {
   // Centraliza a câmera num token (usa o centro dele, respeitando o tamanho).
   focusToken(t, opts) {
     if (!t) return;
-    const size = t.size || 1;
-    this.focusPx(t.col * CELL + size * CELL / 2, t.row * CELL + size * CELL / 2, opts);
+    const c = Grid.center(this.map, t.col, t.row, t.size || 1);
+    this.focusPx(c.x, c.y, opts);
   }
 
   _camAnimate() {
@@ -433,6 +525,9 @@ class BattleMap {
   tokensInAoe(aoe = this.aoe) {
     if (!aoe || !this.map) return [];
     const m = this.map.cellSize || 1.5;
+    if (Grid.isHex(this.map)) {
+      return this.battle.tokens.filter((t) => Grid.distance(this.map, aoe.col, aoe.row, t.col, t.row) * m <= aoe.radius);
+    }
     return this.battle.tokens.filter((t) => {
       const size = t.size || 1;
       const tc = t.col + size / 2;
@@ -442,14 +537,12 @@ class BattleMap {
     });
   }
 
-  // Distância percorrida no arrasto: no 5e a diagonal custa um quadrado.
+  // Distância percorrida no arrasto: no 5e a diagonal custa um quadrado; no hex não tem
+  // essa ambiguidade, é a contagem de passos de hexágono mesmo.
   _dragDistance() {
     const d = this.drag;
     if (!d || d.mode !== 'token') return null;
-    const squares = Math.max(
-      Math.abs(d.ghost.col - d.from.col),
-      Math.abs(d.ghost.row - d.from.row),
-    );
+    const squares = Grid.distance(this.map, d.from.col, d.from.row, d.ghost.col, d.ghost.row);
     const meters = squares * (this.map.cellSize || 1.5);
     const speed = d.token.speed ?? 9;
     return { squares, meters, speed, over: meters > speed };
@@ -465,11 +558,16 @@ class BattleMap {
   }
   _toCell(clientX, clientY) {
     const g = this._toGrid(clientX, clientY);
-    return { col: Math.floor(g.x / CELL), row: Math.floor(g.y / CELL) };
+    return Grid.pointToCell(this.map, g.x, g.y);
   }
-  // Quina do grid mais próxima, em unidades de célula (parede sempre encosta nas quinas).
+  // Quina do grid mais próxima, em unidades de célula (parede sempre encosta nas quinas —
+  // quina de quadrado no grid quadrado, vértice de hexágono no grid hex).
   _toCorner(clientX, clientY) {
     const g = this._toGrid(clientX, clientY);
+    if (Grid.isHex(this.map)) {
+      const v = Grid.hexVertexNear(this.map, g.x, g.y);
+      return { x: v.x / CELL, y: v.y / CELL };
+    }
     return { x: Math.round(g.x / CELL), y: Math.round(g.y / CELL) };
   }
   // Parede mais perto do clique, dentro de uma folga em pixels de tela (independente do zoom).
@@ -485,13 +583,13 @@ class BattleMap {
   }
   _tokenAt(clientX, clientY) {
     const g = this._toGrid(clientX, clientY);
-    // De trás para frente: o token desenhado por cima ganha o clique
+    // De trás para frente: o token desenhado por cima ganha o clique. Testa um círculo
+    // (o token sempre é desenhado redondo) em vez de uma caixa — funciona igual nos dois grids.
     for (let i = this.battle.tokens.length - 1; i >= 0; i--) {
       const t = this.battle.tokens[i];
       const size = t.size || 1;
-      const x = t.col * CELL;
-      const y = t.row * CELL;
-      if (g.x >= x && g.x < x + size * CELL && g.y >= y && g.y < y + size * CELL) return t;
+      const c = Grid.center(this.map, t.col, t.row, size);
+      if (Math.hypot(g.x - c.x, g.y - c.y) <= (size * CELL) / 2) return t;
     }
     return null;
   }
@@ -598,9 +696,9 @@ class BattleMap {
         d.to = this._toCorner(e.clientX, e.clientY);
       } else if (d.mode === 'aoe') {
         const g = this._toGrid(e.clientX, e.clientY);
-        const dx = g.x / CELL - (this.aoe.col + 0.5);
-        const dy = g.y / CELL - (this.aoe.row + 0.5);
-        this.aoe.radius = Math.hypot(dx, dy) * (this.map.cellSize || 1.5);
+        const origin = Grid.center(this.map, this.aoe.col, this.aoe.row);
+        const distPx = Math.hypot(g.x - origin.x, g.y - origin.y);
+        this.aoe.radius = (distPx / CELL) * (this.map.cellSize || 1.5);
       }
       this.draw();
     });
@@ -611,8 +709,11 @@ class BattleMap {
       if (!d) return;
       if (d.mode === 'token') {
         const { col, row } = d.ghost;
-        const maxC = this.map.cols - (d.token.size || 1);
-        const maxR = this.map.rows - (d.token.size || 1);
+        // No hex, um token grande continua ancorado em 1 hexágono (só fica maior visualmente),
+        // então o limite do tabuleiro não precisa "sobrar espaço" pro tamanho dele.
+        const sizeSlack = Grid.isHex(this.map) ? 1 : (d.token.size || 1);
+        const maxC = this.map.cols - sizeSlack;
+        const maxR = this.map.rows - sizeSlack;
         const nc = Math.max(0, Math.min(maxC, col));
         const nr = Math.max(0, Math.min(maxR, row));
         if (nc !== d.from.col || nr !== d.from.row) {
@@ -705,8 +806,7 @@ class BattleMap {
     ctx.translate(this.cam.x, this.cam.y);
     ctx.scale(this.cam.zoom, this.cam.zoom);
 
-    const gw = this.map.cols * CELL;
-    const gh = this.map.rows * CELL;
+    const { w: gw, h: gh } = Grid.mapPixelSize(this.map);
 
     // Fundo do tabuleiro
     ctx.fillStyle = '#17171d';
@@ -720,14 +820,7 @@ class BattleMap {
       ctx.drawImage(img, this.map.img?.x || 0, this.map.img?.y || 0, img.naturalWidth * s, img.naturalHeight * s);
     }
 
-    // Grid
-    ctx.strokeStyle = 'rgba(196,167,71,0.35)';
-    ctx.lineWidth = 1 / this.cam.zoom;
-    ctx.beginPath();
-    for (let c = 0; c <= this.map.cols; c++) { ctx.moveTo(c * CELL, 0); ctx.lineTo(c * CELL, gh); }
-    for (let r = 0; r <= this.map.rows; r++) { ctx.moveTo(0, r * CELL); ctx.lineTo(gw, r * CELL); }
-    ctx.stroke();
-
+    this._drawGrid(gw, gh);
     this._drawWalls();
     this._reveal = this._computeReveal(); // reaproveitado por _drawFog e _isVisible
     this._drawFog(gw, gh);
@@ -741,22 +834,66 @@ class BattleMap {
     ctx.restore();
   }
 
-  // Área de efeito: círculo + os quadrados que ela pega + quem está dentro
+  _drawGrid(gw, gh) {
+    const { ctx } = this;
+    ctx.strokeStyle = 'rgba(196,167,71,0.35)';
+    ctx.lineWidth = 1 / this.cam.zoom;
+    if (!Grid.isHex(this.map)) {
+      ctx.beginPath();
+      for (let c = 0; c <= this.map.cols; c++) { ctx.moveTo(c * CELL, 0); ctx.lineTo(c * CELL, gh); }
+      for (let r = 0; r <= this.map.rows; r++) { ctx.moveTo(0, r * CELL); ctx.lineTo(gw, r * CELL); }
+      ctx.stroke();
+      return;
+    }
+    ctx.beginPath();
+    for (let row = 0; row < this.map.rows; row++) {
+      for (let col = 0; col < this.map.cols; col++) {
+        const c = Grid.center(this.map, col, row);
+        for (let i = 0; i < 6; i++) {
+          const v = Grid.hexCorner(c.x, c.y, i);
+          if (i === 0) ctx.moveTo(v.x, v.y); else ctx.lineTo(v.x, v.y);
+        }
+        ctx.closePath();
+      }
+    }
+    ctx.stroke();
+  }
+
+  // Área de efeito: círculo + os quadrados/hexágonos que ela pega + quem está dentro
   _drawAoe() {
     if (!this.aoe || !this.map) return;
     const { ctx } = this;
     const m = this.map.cellSize || 1.5;
     const rCells = this.aoe.radius / m;
-    const cx = (this.aoe.col + 0.5) * CELL;
-    const cy = (this.aoe.row + 0.5) * CELL;
+    const center = Grid.center(this.map, this.aoe.col, this.aoe.row);
+    const cx = center.x;
+    const cy = center.y;
+    const hex = Grid.isHex(this.map);
 
     ctx.save();
-    // Quadrados afetados: o centro do quadrado dentro do círculo
+    // Células afetadas: o centro da célula dentro do círculo
     ctx.fillStyle = 'rgba(224,82,82,0.22)';
-    for (let c = 0; c < this.map.cols; c++) {
-      for (let r = 0; r < this.map.rows; r++) {
-        if (Math.hypot(c + 0.5 - (this.aoe.col + 0.5), r + 0.5 - (this.aoe.row + 0.5)) <= rCells) {
-          ctx.fillRect(c * CELL, r * CELL, CELL, CELL);
+    if (hex) {
+      for (let row = 0; row < this.map.rows; row++) {
+        for (let col = 0; col < this.map.cols; col++) {
+          if (Grid.distance(this.map, this.aoe.col, this.aoe.row, col, row) <= rCells) {
+            const c = Grid.center(this.map, col, row);
+            ctx.beginPath();
+            for (let i = 0; i < 6; i++) {
+              const v = Grid.hexCorner(c.x, c.y, i);
+              if (i === 0) ctx.moveTo(v.x, v.y); else ctx.lineTo(v.x, v.y);
+            }
+            ctx.closePath();
+            ctx.fill();
+          }
+        }
+      }
+    } else {
+      for (let c = 0; c < this.map.cols; c++) {
+        for (let r = 0; r < this.map.rows; r++) {
+          if (Math.hypot(c + 0.5 - (this.aoe.col + 0.5), r + 0.5 - (this.aoe.row + 0.5)) <= rCells) {
+            ctx.fillRect(c * CELL, r * CELL, CELL, CELL);
+          }
         }
       }
     }
@@ -771,8 +908,9 @@ class BattleMap {
     const pulse = 0.55 + 0.45 * Math.abs(Math.sin(performance.now() / 300));
     for (const t of dentro) {
       const size = t.size || 1;
-      const tcx = t.col * CELL + size * CELL / 2;
-      const tcy = t.row * CELL + size * CELL / 2;
+      const tc = Grid.center(this.map, t.col, t.row, size);
+      const tcx = tc.x;
+      const tcy = tc.y;
       const rr = size * CELL / 2 + 2;
       ctx.save();
       ctx.globalAlpha = pulse;
@@ -804,10 +942,9 @@ class BattleMap {
     if (!info || info.squares === 0) return;
     const { ctx } = this;
     const d = this.drag;
-    const ax = d.from.col * CELL + CELL / 2;
-    const ay = d.from.row * CELL + CELL / 2;
-    const bx = d.ghost.col * CELL + CELL / 2;
-    const by = d.ghost.row * CELL + CELL / 2;
+    const a = Grid.center(this.map, d.from.col, d.from.row);
+    const b = Grid.center(this.map, d.ghost.col, d.ghost.row);
+    const ax = a.x, ay = a.y, bx = b.x, by = b.y;
     const cor = info.over ? '#c05650' : '#4a9d6f';
 
     ctx.save();
@@ -820,7 +957,8 @@ class BattleMap {
     ctx.stroke();
     ctx.setLineDash([]);
 
-    const text = `${info.squares} qd · ${info.meters.toFixed(1)}/${info.speed} m${info.over ? ' (excedido)' : ''}`;
+    const unidade = Grid.isHex(this.map) ? 'hex' : 'qd';
+    const text = `${info.squares} ${unidade} · ${info.meters.toFixed(1)}/${info.speed} m${info.over ? ' (excedido)' : ''}`;
     ctx.font = `bold ${13 / this.cam.zoom}px Segoe UI, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -884,24 +1022,31 @@ class BattleMap {
     const set = new Set();
     if (manualOn) for (const cell of this.map.fog.revealed || []) set.add(cell);
     if (visionOn) {
+      const hex = Grid.isHex(this.map);
       const rCells = Math.max(1, (this.battle.vision.radius || 12) / (this.map.cellSize || 1.5));
       for (const t of this.battle.tokens) {
         if (t.kind !== 'pc' || t.hidden) continue; // só personagens dos jogadores enxergam
         const size = t.size || 1;
-        const cc = t.col + size / 2;
-        const cr = t.row + size / 2;
         const R = rCells + (size - 1) / 2;
-        const minC = Math.max(0, Math.floor(cc - R));
-        const maxC = Math.min(this.map.cols - 1, Math.ceil(cc + R));
-        const minR = Math.max(0, Math.floor(cr - R));
-        const maxR = Math.min(this.map.rows - 1, Math.ceil(cr + R));
+        // Caixa de busca generosa em unidades de col/row — o teste de distância real
+        // por célula é que decide de verdade quem entra, isso aqui só limita a varredura.
+        const reach = Math.ceil(R) + 1;
+        const minC = Math.max(0, t.col - reach);
+        const maxC = Math.min(this.map.cols - 1, t.col + reach);
+        const minR = Math.max(0, t.row - reach);
+        const maxR = Math.min(this.map.rows - 1, t.row + reach);
+        const cc = t.col + size / 2, cr = t.row + size / 2; // só o ramo quadrado usa
+        const origin = Grid.center(this.map, t.col, t.row, size);
         for (let c = minC; c <= maxC; c++) {
           for (let r = minR; r <= maxR; r++) {
             const key = `${c},${r}`;
             if (set.has(key)) continue;
-            const dc = (c + 0.5) - cc;
-            const dr = (r + 0.5) - cr;
-            if (Math.hypot(dc, dr) <= R && this._hasLineOfSight(cc, cr, c + 0.5, r + 0.5)) set.add(key);
+            const within = hex
+              ? Grid.distance(this.map, t.col, t.row, c, r) <= R
+              : Math.hypot((c + 0.5) - cc, (r + 0.5) - cr) <= R;
+            if (!within) continue;
+            const cell = Grid.center(this.map, c, r);
+            if (this._hasLineOfSight(origin.x / CELL, origin.y / CELL, cell.x / CELL, cell.y / CELL)) set.add(key);
           }
         }
       }
@@ -916,6 +1061,22 @@ class BattleMap {
     // Para o Mestre a névoa é translúcida (ele vê tudo e sabe o que os jogadores enxergam);
     // para o jogador é opaca — só aparece o que está dentro do campo de visão.
     ctx.fillStyle = this.isDm ? 'rgba(10,8,16,0.55)' : '#0a0810';
+    if (Grid.isHex(this.map)) {
+      for (let row = 0; row < this.map.rows; row++) {
+        for (let col = 0; col < this.map.cols; col++) {
+          if (revealed.has(`${col},${row}`)) continue;
+          const c = Grid.center(this.map, col, row);
+          ctx.beginPath();
+          for (let i = 0; i < 6; i++) {
+            const v = Grid.hexCorner(c.x, c.y, i);
+            if (i === 0) ctx.moveTo(v.x, v.y); else ctx.lineTo(v.x, v.y);
+          }
+          ctx.closePath();
+          ctx.fill();
+        }
+      }
+      return;
+    }
     for (let c = 0; c < this.map.cols; c++) {
       for (let r = 0; r < this.map.rows; r++) {
         if (!revealed.has(`${c},${r}`)) ctx.fillRect(c * CELL, r * CELL, CELL, CELL);
@@ -928,6 +1089,9 @@ class BattleMap {
     if (this.isDm) return true;
     const revealed = this._reveal;
     if (!revealed) return true;
+    // No hex o token sempre mora em 1 hexágono só (mesmo os "grandes", que só ficam
+    // maiores visualmente), então basta checar essa única célula.
+    if (Grid.isHex(this.map)) return revealed.has(`${t.col},${t.row}`);
     const size = t.size || 1;
     for (let c = t.col; c < t.col + size; c++) {
       for (let r = t.row; r < t.row + size; r++) {
@@ -953,11 +1117,12 @@ class BattleMap {
       const col = isDragged ? dragging.ghost.col : t.col;
       const row = isDragged ? dragging.ghost.row : t.row;
       const size = t.size || 1;
-      const px = col * CELL;
-      const py = row * CELL;
       const d = size * CELL;
-      const cx = px + d / 2;
-      const cy = py + d / 2;
+      const center = Grid.center(this.map, col, row, size);
+      const cx = center.x;
+      const cy = center.y;
+      const px = cx - d / 2;
+      const py = cy - d / 2;
       const radius = d / 2 - 4;
       const isPlayer = !this.isDm; // na tela dos jogadores, HUD maior e legível
 
@@ -1086,12 +1251,12 @@ class BattleMap {
     const { ctx } = this;
     const a = this.ruler.from;
     const b = this.ruler.to;
-    const ax = a.col * CELL + CELL / 2;
-    const ay = a.row * CELL + CELL / 2;
-    const bx = b.col * CELL + CELL / 2;
-    const by = b.row * CELL + CELL / 2;
-    // D&D 5e: a diagonal conta como 1 quadrado (distância de Chebyshev)
-    const squares = Math.max(Math.abs(b.col - a.col), Math.abs(b.row - a.row));
+    const pa = Grid.center(this.map, a.col, a.row);
+    const pb = Grid.center(this.map, b.col, b.row);
+    const ax = pa.x, ay = pa.y, bx = pb.x, by = pb.y;
+    // D&D 5e: a diagonal conta como 1 quadrado (distância de Chebyshev); no hex é a
+    // contagem de passos de hexágono, sem essa ambiguidade.
+    const squares = Grid.distance(this.map, a.col, a.row, b.col, b.row);
     const meters = squares * (this.map.cellSize || 1.5);
 
     ctx.save();
@@ -1104,7 +1269,8 @@ class BattleMap {
     ctx.stroke();
     ctx.setLineDash([]);
 
-    const text = `${squares} qd · ${meters.toFixed(1)} m`;
+    const unidade = Grid.isHex(this.map) ? 'hex' : 'qd';
+    const text = `${squares} ${unidade} · ${meters.toFixed(1)} m`;
     ctx.font = `bold ${14 / this.cam.zoom}px Segoe UI, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -1122,8 +1288,9 @@ class BattleMap {
     const { ctx } = this;
     for (const p of this.pings) {
       const age = (performance.now() - p.t) / 2000; // 0 → 1
-      const cx = p.col * CELL + CELL / 2;
-      const cy = p.row * CELL + CELL / 2;
+      const center = Grid.center(this.map, p.col, p.row);
+      const cx = center.x;
+      const cy = center.y;
       ctx.save();
       ctx.globalAlpha = 1 - age;
       ctx.strokeStyle = '#ffd75e';
@@ -1241,6 +1408,7 @@ class BattleMap {
 }
 
 window.BattleMap = BattleMap;
+window.Grid = Grid;
 window.MAP_CELL = CELL;
 window.CONDITION_ICON = CONDITION_ICON;
 window.condIcon = condIcon;
