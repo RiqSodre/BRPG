@@ -106,18 +106,6 @@ function loadImg(src, onLoad) {
 const KIND_COLOR = { pc: '#4a9d6f', npc: '#b8925a', enemy: '#c05650' };
 
 // ---------- Paredes (bloqueiam a visão automática) ----------
-// Interseção de dois segmentos abertos (sem contar os extremos, pra um raio que passa
-// exatamente por uma quina de parede não "piscar" como bloqueado).
-function segmentsIntersect(p0x, p0y, p1x, p1y, p2x, p2y, p3x, p3y) {
-  const s1x = p1x - p0x, s1y = p1y - p0y;
-  const s2x = p3x - p2x, s2y = p3y - p2y;
-  const denom = -s2x * s1y + s1x * s2y;
-  if (denom === 0) return false; // paralelas
-  const s = (-s1y * (p0x - p2x) + s1x * (p0y - p2y)) / denom;
-  const t = (s2x * (p0y - p2y) - s2y * (p0x - p2x)) / denom;
-  return s > 0 && s < 1 && t > 0 && t < 1;
-}
-
 // Menor distância de um ponto a um segmento — usado pra "clicar numa parede" e apagar.
 function distToSegment(px, py, x1, y1, x2, y2) {
   const dx = x2 - x1, dy = y2 - y1;
@@ -125,6 +113,65 @@ function distToSegment(px, py, x1, y1, x2, y2) {
   let t = lenSq ? ((px - x1) * dx + (py - y1) * dy) / lenSq : 0;
   t = Math.max(0, Math.min(1, t));
   return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+}
+
+// ---------- Polígono de visibilidade (sombra "de verdade", estilo Roll20) ----------
+// Onde a distância a de cada parede vira uma sombra nítida em vez de só decidir
+// célula-por-célula se está visível — a mesma técnica clássica de "shadowcasting" 2D.
+
+// Distância (ao longo do raio, com dx/dy unitários) até onde o raio de (ox,oy) na
+// direção (dx,dy) cruza o segmento (ax,ay)-(bx,by). null se não cruzar à frente.
+function rayVsSegment(ox, oy, dx, dy, ax, ay, bx, by) {
+  const v1x = ox - ax, v1y = oy - ay;
+  const v2x = bx - ax, v2y = by - ay;
+  const v3x = -dy, v3y = dx;
+  const denom = v2x * v3x + v2y * v3y;
+  if (Math.abs(denom) < 1e-9) return null; // raio paralelo à parede
+  const t = (v2x * v1y - v2y * v1x) / denom;
+  const u = (v1x * v3x + v1y * v3y) / denom;
+  return (t >= 0 && u >= 0 && u <= 1) ? t : null;
+}
+
+// Devolve os vértices (em pixels do grid) do polígono visível a partir de (ox,oy) até
+// `radius` pixels, considerando as `walls` como obstáculos opacos. Lança um raio pra
+// cada quina de parede (mais um grausinho pra cada lado — é o que faz a sombra "colar"
+// certinho bem atrás da quina, sem vazar) e mais alguns de segurança pra fechar o
+// círculo direitinho quando não há parede nenhuma por perto.
+function visibilityPolygon(ox, oy, radius, walls) {
+  const EPS = 0.00035;
+  const angles = new Set();
+  for (let i = 0; i < 48; i++) angles.add((i / 48) * Math.PI * 2);
+  for (const w of walls) {
+    for (const [px, py] of [[w.x1 * CELL, w.y1 * CELL], [w.x2 * CELL, w.y2 * CELL]]) {
+      const dist = Math.hypot(px - ox, py - oy);
+      if (dist > radius * 1.5) continue; // parede longe demais pra importar aqui
+      const a = Math.atan2(py - oy, px - ox);
+      angles.add(a - EPS); angles.add(a); angles.add(a + EPS);
+    }
+  }
+  const pts = [];
+  for (const a of angles) {
+    const dx = Math.cos(a), dy = Math.sin(a);
+    let best = radius;
+    for (const w of walls) {
+      const t = rayVsSegment(ox, oy, dx, dy, w.x1 * CELL, w.y1 * CELL, w.x2 * CELL, w.y2 * CELL);
+      if (t !== null && t < best) best = t;
+    }
+    pts.push({ a, x: ox + dx * best, y: oy + dy * best });
+  }
+  pts.sort((p, q) => p.a - q.a);
+  return pts;
+}
+
+// Ponto dentro de um polígono (ray casting clássico) — usado pra saber se um token está
+// dentro da área iluminada, agora que ela não é mais um conjunto de células.
+function pointInPolygon(x, y, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const xi = poly[i].x, yi = poly[i].y, xj = poly[j].x, yj = poly[j].y;
+    if (((yi > y) !== (yj > y)) && (x < ((xj - xi) * (y - yi)) / (yj - yi) + xi)) inside = !inside;
+  }
+  return inside;
 }
 
 // ---------- Efeitos visuais de combate (elementais) ----------
@@ -822,7 +869,9 @@ class BattleMap {
 
     this._drawGrid(gw, gh);
     this._drawWalls();
-    this._reveal = this._computeReveal(); // reaproveitado por _drawFog e _isVisible
+    // Reaproveitados por _drawFog e _isVisible neste mesmo frame.
+    this._manualReveal = this._computeManualReveal();
+    this._visionPolys = this._computeVisionPolygons();
     this._drawFog(gw, gh);
     this._drawAoe();
     this._drawTokens();
@@ -972,18 +1021,8 @@ class BattleMap {
     ctx.restore();
   }
 
-  // Linha reta entre dois pontos (em unidades de célula) sem cruzar nenhuma parede.
-  _hasLineOfSight(x1, y1, x2, y2) {
-    const walls = this.map?.walls;
-    if (!walls || !walls.length) return true;
-    for (const w of walls) {
-      if (segmentsIntersect(x1, y1, x2, y2, w.x1, w.y1, w.x2, w.y2)) return false;
-    }
-    return true;
-  }
-
   // Paredes desenhadas pelo Mestre — só ele vê a linha; para o jogador elas só existem
-  // como matemática (bloqueiam a visão automática em _computeReveal).
+  // como matemática (bloqueiam a visão automática em _computeVisionPolygons).
   _drawWalls() {
     if (!this.isDm) return;
     const { ctx } = this;
@@ -1012,90 +1051,122 @@ class BattleMap {
     ctx.restore();
   }
 
-  // Conjunto de células reveladas: névoa pintada à mão (map.fog) unida com o campo de
-  // visão automático (raio ao redor de cada PC, bloqueado por paredes). Devolve null
-  // quando nada esconde nada.
-  _computeReveal() {
-    const visionOn = this.battle?.vision?.enabled;
-    const manualOn = this.map?.fog?.enabled;
-    if (!visionOn && !manualOn) return null;
-    const set = new Set();
-    if (manualOn) for (const cell of this.map.fog.revealed || []) set.add(cell);
-    if (visionOn) {
-      const hex = Grid.isHex(this.map);
-      const rCells = Math.max(1, (this.battle.vision.radius || 12) / (this.map.cellSize || 1.5));
-      for (const t of this.battle.tokens) {
-        if (t.kind !== 'pc' || t.hidden) continue; // só personagens dos jogadores enxergam
-        const size = t.size || 1;
-        const R = rCells + (size - 1) / 2;
-        // Caixa de busca generosa em unidades de col/row — o teste de distância real
-        // por célula é que decide de verdade quem entra, isso aqui só limita a varredura.
-        const reach = Math.ceil(R) + 1;
-        const minC = Math.max(0, t.col - reach);
-        const maxC = Math.min(this.map.cols - 1, t.col + reach);
-        const minR = Math.max(0, t.row - reach);
-        const maxR = Math.min(this.map.rows - 1, t.row + reach);
-        const cc = t.col + size / 2, cr = t.row + size / 2; // só o ramo quadrado usa
-        const origin = Grid.center(this.map, t.col, t.row, size);
-        for (let c = minC; c <= maxC; c++) {
-          for (let r = minR; r <= maxR; r++) {
-            const key = `${c},${r}`;
-            if (set.has(key)) continue;
-            const within = hex
-              ? Grid.distance(this.map, t.col, t.row, c, r) <= R
-              : Math.hypot((c + 0.5) - cc, (r + 0.5) - cr) <= R;
-            if (!within) continue;
-            const cell = Grid.center(this.map, c, r);
-            if (this._hasLineOfSight(origin.x / CELL, origin.y / CELL, cell.x / CELL, cell.y / CELL)) set.add(key);
-          }
-        }
-      }
+  // Células pintadas à mão pelo Mestre (pincel Revelar/Cobrir) — continua em blocos,
+  // é um controle manual mesmo. null quando a névoa manual está desligada.
+  _computeManualReveal() {
+    if (!this.map?.fog?.enabled) return null;
+    return new Set(this.map.fog.revealed || []);
+  }
+
+  // Um polígono de luz por PC com visão (estilo Roll20): sombra nítida atrás de cada
+  // parede, em vez de decidir célula-por-célula quem está "perto o bastante". Enquanto
+  // o Mestre está arrastando um token, o dele já usa a posição-fantasma do arrasto —
+  // a sombra acompanha o token em tempo real antes mesmo de soltar.
+  _computeVisionPolygons() {
+    if (!this.battle?.vision?.enabled) return [];
+    const rPx = ((this.battle.vision.radius || 12) / (this.map.cellSize || 1.5)) * CELL;
+    const walls = this.map?.walls || [];
+    const dragging = this.drag?.mode === 'token' ? this.drag : null;
+    const polys = [];
+    for (const t of this.battle.tokens) {
+      if (t.kind !== 'pc' || t.hidden) continue; // só personagens dos jogadores enxergam
+      const size = t.size || 1;
+      const live = dragging && dragging.token.id === t.id ? dragging.ghost : t;
+      const c = Grid.center(this.map, live.col, live.row, size);
+      const R = rPx + ((size - 1) * CELL) / 2;
+      polys.push(visibilityPolygon(c.x, c.y, R, walls));
     }
-    return set;
+    return polys;
   }
 
   _drawFog(gw, gh) {
-    const revealed = this._reveal;
-    if (!revealed) return;
+    const manualOn = this.map?.fog?.enabled;
+    const visionOn = this.battle?.vision?.enabled;
+    if (!manualOn && !visionOn) return;
     const { ctx } = this;
+
+    // A névoa (escuro + "buracos" das áreas visíveis) é montada numa camada separada
+    // antes de ir pro canvas principal — "destination-out" direto no canvas principal
+    // apagaria o mapa e o grid já desenhados embaixo, não só a névoa.
+    const w = Math.max(1, Math.ceil(gw)), h = Math.max(1, Math.ceil(gh));
+    if (!this._fogCanvas) this._fogCanvas = document.createElement('canvas');
+    const fc = this._fogCanvas;
+    // Sempre redimensiona (mesmo pro mesmo tamanho) — isso já limpa o bitmap e reseta o
+    // estado do context (transform, composite operation) sozinho, sem sobra de um frame
+    // anterior interferir neste.
+    fc.width = w;
+    fc.height = h;
+    const fctx = fc.getContext('2d');
+
     // Para o Mestre a névoa é translúcida (ele vê tudo e sabe o que os jogadores enxergam);
     // para o jogador é opaca — só aparece o que está dentro do campo de visão.
-    ctx.fillStyle = this.isDm ? 'rgba(10,8,16,0.55)' : '#0a0810';
-    if (Grid.isHex(this.map)) {
-      for (let row = 0; row < this.map.rows; row++) {
-        for (let col = 0; col < this.map.cols; col++) {
-          if (revealed.has(`${col},${row}`)) continue;
-          const c = Grid.center(this.map, col, row);
-          ctx.beginPath();
-          for (let i = 0; i < 6; i++) {
-            const v = Grid.hexCorner(c.x, c.y, i);
-            if (i === 0) ctx.moveTo(v.x, v.y); else ctx.lineTo(v.x, v.y);
+    fctx.fillStyle = this.isDm ? 'rgba(10,8,16,0.55)' : '#0a0810';
+    fctx.fillRect(0, 0, w, h);
+
+    // "Recorta" as áreas visíveis da escuridão — cada polígono/célula revelada vira um
+    // buraco na névoa. Várias fontes se somam naturalmente (não importa a ordem).
+    fctx.globalCompositeOperation = 'destination-out';
+    fctx.fillStyle = '#000';
+
+    for (const poly of this._visionPolys) {
+      if (poly.length < 3) continue;
+      fctx.beginPath();
+      fctx.moveTo(poly[0].x, poly[0].y);
+      for (let i = 1; i < poly.length; i++) fctx.lineTo(poly[i].x, poly[i].y);
+      fctx.closePath();
+      fctx.fill();
+    }
+
+    if (this._manualReveal) {
+      if (Grid.isHex(this.map)) {
+        for (let row = 0; row < this.map.rows; row++) {
+          for (let col = 0; col < this.map.cols; col++) {
+            if (!this._manualReveal.has(`${col},${row}`)) continue;
+            const c = Grid.center(this.map, col, row);
+            fctx.beginPath();
+            for (let i = 0; i < 6; i++) {
+              const v = Grid.hexCorner(c.x, c.y, i);
+              if (i === 0) fctx.moveTo(v.x, v.y); else fctx.lineTo(v.x, v.y);
+            }
+            fctx.closePath();
+            fctx.fill();
           }
-          ctx.closePath();
-          ctx.fill();
+        }
+      } else {
+        for (let c = 0; c < this.map.cols; c++) {
+          for (let r = 0; r < this.map.rows; r++) {
+            if (this._manualReveal.has(`${c},${r}`)) fctx.fillRect(c * CELL, r * CELL, CELL, CELL);
+          }
         }
       }
-      return;
     }
-    for (let c = 0; c < this.map.cols; c++) {
-      for (let r = 0; r < this.map.rows; r++) {
-        if (!revealed.has(`${c},${r}`)) ctx.fillRect(c * CELL, r * CELL, CELL, CELL);
-      }
-    }
+
+    ctx.drawImage(fc, 0, 0);
   }
 
   _isVisible(t) {
-    // Token em célula não revelada não aparece para o jogador
+    // Token não revelado não aparece para o jogador
     if (this.isDm) return true;
-    const revealed = this._reveal;
-    if (!revealed) return true;
-    // No hex o token sempre mora em 1 hexágono só (mesmo os "grandes", que só ficam
-    // maiores visualmente), então basta checar essa única célula.
-    if (Grid.isHex(this.map)) return revealed.has(`${t.col},${t.row}`);
+    const manualOn = this.map?.fog?.enabled;
+    const visionOn = this.battle?.vision?.enabled;
+    if (!manualOn && !visionOn) return true;
     const size = t.size || 1;
-    for (let c = t.col; c < t.col + size; c++) {
-      for (let r = t.row; r < t.row + size; r++) {
-        if (revealed.has(`${c},${r}`)) return true;
+    if (visionOn) {
+      const c = Grid.center(this.map, t.col, t.row, size);
+      for (const poly of this._visionPolys) {
+        if (poly.length >= 3 && pointInPolygon(c.x, c.y, poly)) return true;
+      }
+    }
+    if (manualOn && this._manualReveal) {
+      // No hex o token sempre mora em 1 hexágono só (mesmo os "grandes", que só ficam
+      // maiores visualmente), então basta checar essa única célula.
+      if (Grid.isHex(this.map)) { if (this._manualReveal.has(`${t.col},${t.row}`)) return true; }
+      else {
+        for (let c = t.col; c < t.col + size; c++) {
+          for (let r = t.row; r < t.row + size; r++) {
+            if (this._manualReveal.has(`${c},${r}`)) return true;
+          }
+        }
       }
     }
     return false;
