@@ -441,6 +441,7 @@ class BattleMap {
     this.onSelect = null;     // (token|null) => void
     this.onAoe = null;        // (aoe|null) => void
     this.onWallsChange = null; // (walls) => void — parede desenhada, apagada ou movida
+    this._hoverWall = -1;      // índice da parede sob o cursor no modo "apagar parede"
 
     this._bindEvents();
     this._resize();
@@ -695,14 +696,18 @@ class BattleMap {
         this.draw();
         return;
       }
-      if (this.isDm && this.tool === 'wall') {
+      // Ferramentas separadas pra desenhar e apagar parede — juntar as duas no mesmo
+      // clique fazia apagar sem querer bem na hora de desenhar uma parede vizinha.
+      if (this.isDm && this.tool === 'wall-erase') {
         const hit = this._wallAt(e.clientX, e.clientY);
         if (hit !== -1) {
           this.map.walls.splice(hit, 1);
           if (this.onWallsChange) this.onWallsChange(this.map.walls);
           this.draw();
-          return;
         }
+        return;
+      }
+      if (this.isDm && this.tool === 'wall') {
         const corner = this._toCorner(e.clientX, e.clientY);
         this.drag = { mode: 'wall', from: corner, to: corner };
         this.draw();
@@ -728,6 +733,11 @@ class BattleMap {
     });
 
     c.addEventListener('pointermove', (e) => {
+      // Mostra qual parede vai sair antes do clique — evita apagar a errada.
+      if (this.isDm && this.tool === 'wall-erase' && !this.drag) {
+        const hit = this._wallAt(e.clientX, e.clientY);
+        if (hit !== this._hoverWall) { this._hoverWall = hit; this.draw(); }
+      }
       if (!this.drag) return;
       const d = this.drag;
       if (d.mode === 'pan') {
@@ -1027,7 +1037,7 @@ class BattleMap {
     if (!this.isDm) return;
     const { ctx } = this;
     const walls = this.map.walls || [];
-    if (!walls.length && this.tool !== 'wall') return;
+    if (!walls.length && this.tool !== 'wall' && this.tool !== 'wall-erase') return;
     ctx.save();
     ctx.strokeStyle = 'rgba(94,200,255,0.85)';
     ctx.lineWidth = 3 / this.cam.zoom;
@@ -1038,6 +1048,16 @@ class BattleMap {
       ctx.lineTo(w.x2 * CELL, w.y2 * CELL);
     }
     ctx.stroke();
+    // Modo apagar: destaca em vermelho a parede que sairia com o clique
+    if (this.tool === 'wall-erase' && this._hoverWall != null && this._hoverWall !== -1 && walls[this._hoverWall]) {
+      const w = walls[this._hoverWall];
+      ctx.strokeStyle = '#e05252';
+      ctx.lineWidth = 5 / this.cam.zoom;
+      ctx.beginPath();
+      ctx.moveTo(w.x1 * CELL, w.y1 * CELL);
+      ctx.lineTo(w.x2 * CELL, w.y2 * CELL);
+      ctx.stroke();
+    }
     // Parede em desenho: prévia pontilhada acompanhando o arrasto
     if (this.tool === 'wall' && this.drag?.mode === 'wall') {
       const d = this.drag;

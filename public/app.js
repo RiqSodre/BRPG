@@ -1030,7 +1030,8 @@ function renderMapTab() {
               <button class="ov-btn tool" data-tool="aoe" title="Área de efeito (arraste do centro)"><svg class="icon"><use href="#i-target"/></svg>Área</button>
               <button class="ov-btn tool" data-tool="reveal" title="Pincel: revelar névoa"><svg class="icon"><use href="#i-flashlight"/></svg>Revelar</button>
               <button class="ov-btn tool" data-tool="hide" title="Pincel: cobrir de névoa"><svg class="icon"><use href="#i-cloud-fog"/></svg>Cobrir</button>
-              <button class="ov-btn tool" data-tool="wall" title="Parede: arraste entre duas quinas do grid pra bloquear a visão; clique numa parede pra apagar"><svg class="icon"><use href="#i-wall"/></svg>Parede</button>
+              <button class="ov-btn tool" data-tool="wall" title="Parede: arraste entre duas quinas do grid pra bloquear a visão"><svg class="icon"><use href="#i-wall"/></svg>Parede</button>
+              <button class="ov-btn tool" data-tool="wall-erase" title="Apagar parede: clique numa parede pra remover"><svg class="icon"><use href="#i-eraser"/></svg>Apagar parede</button>
               <button class="ov-btn" id="btn-map-fit" title="Enquadrar o mapa na tela"><svg class="icon"><use href="#i-arrows-out"/></svg>Enquadrar</button>
               <button class="ov-btn" id="ov-help" title="Clique num token para agir sobre ele · arraste para mover (mostra o deslocamento) · Espaço passa o turno · setas movem o selecionado · Del remove · Esc limpa a seleção"><svg class="icon"><use href="#i-question"/></svg>Ajuda</button>
             </div>
