@@ -666,15 +666,23 @@ function charModal(c = {}) {
     </div>
     <div class="field">
       <label>Proficiência em testes de resistência</label>
-      <div class="row" style="flex-wrap:wrap;gap:4px 14px;">
+      <div style="display:flex;flex-wrap:wrap;gap:4px 14px;">
         ${ABILITIES.map((a) => `<label class="tool-check"><input type="checkbox" id="charm-save-${a.key}" ${c.saveProf?.[a.key] ? 'checked' : ''} /> ${a.label}</label>`).join('')}
       </div>
     </div>
     <div class="field">
       <label>Perícias</label>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:4px 10px;">
-        ${SKILLS.map((s) => `<label class="tool-check"><input type="checkbox" id="charm-skill-${s.key}" ${c.skillProf?.[s.key] ? 'checked' : ''} /> ${esc(s.label)} <small style="color:var(--muted);">(${abilLabel(s.ability)})</small></label>`).join('')}
-      </div>
+      ${ABILITIES.map((a) => {
+        const group = SKILLS.filter((s) => s.ability === a.key);
+        if (!group.length) return '';
+        return `
+          <div style="margin-bottom:6px;">
+            <div style="font-size:10px;font-weight:700;letter-spacing:0.05em;color:var(--muted);text-transform:uppercase;margin-bottom:2px;">${a.label}</div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:2px 10px;">
+              ${group.map((s) => `<label class="tool-check"><input type="checkbox" id="charm-skill-${s.key}" ${c.skillProf?.[s.key] ? 'checked' : ''} /> ${esc(s.label)}</label>`).join('')}
+            </div>
+          </div>`;
+      }).join('')}
     </div>
     ${isPc ? '' : fieldSelect('Tipo de NPC', 'npcType', [
       { value: 'inimigo',   label: 'Inimigo — combate e antagonistas' },
@@ -725,41 +733,59 @@ function characterSheetModal(ch) {
   const saveLines = ABILITIES.map((a) => {
     const prof = Boolean(ch.saveProf?.[a.key]);
     const total = abilityMod(scoreOf(ch, a.key)) + (prof ? pb : 0);
-    return `<div class="srd-block-item">${prof ? '●' : '○'} <b>${a.label}</b> ${fmtSigned(total)}</div>`;
+    return `<div class="sheet-row${prof ? ' on' : ''}"><span class="dot"></span><span class="val">${fmtSigned(total)}</span> ${a.label}</div>`;
   }).join('');
 
   const skillLines = SKILLS.map((s) => {
     const prof = Boolean(ch.skillProf?.[s.key]);
     const total = abilityMod(scoreOf(ch, s.ability)) + (prof ? pb : 0);
-    return `<div class="srd-block-item">${prof ? '●' : '○'} ${esc(s.label)} <small style="color:var(--muted);">(${abilLabel(s.ability)})</small> ${fmtSigned(total)}</div>`;
+    return `<div class="sheet-row${prof ? ' on' : ''}"><span class="dot"></span><span class="val">${fmtSigned(total)}</span> ${esc(s.label)} <span class="abbr">(${abilLabel(s.ability)})</span></div>`;
   }).join('');
 
   const passivePerception = 10 + abilityMod(scoreOf(ch, 'wis')) + (ch.skillProf?.perception ? pb : 0);
+  const hpFrac = ch.maxHp > 0 ? Math.max(0, Math.min(1, (ch.hp ?? 0) / ch.maxHp)) : null;
+  const initials = (ch.name || '?').trim().slice(0, 1).toUpperCase();
 
   openModal(`${esc(ch.name)} — Ficha`, `
-    ${ch.imageUrl ? `<div class="srd-hero"><img src="${esc(ch.imageUrl)}" alt="${esc(ch.name)}" onerror="this.closest('.srd-hero').remove()" /></div>` : ''}
-    <i style="display:block;font-size:13px;color:var(--muted);margin-bottom:8px;">${esc([ch.race, ch.klass, ch.level ? `nível ${ch.level}` : ''].filter(Boolean).join(' · ')) || '—'}${isPc && ch.player ? ` · joga ${esc(ch.player)}` : ''}</i>
-    <div class="srd-stat-bar">
-      <span><b>CA</b> ${esc(ch.ac ?? '?')}</span>
-      <span><b>PV</b> ${esc(ch.hp ?? '?')}/${esc(ch.maxHp ?? '?')}</span>
-      <span><b>Iniciativa</b> ${fmtSigned(dexMod)}</span>
-      <span><b>Prof.</b> ${fmtSigned(pb)}</span>
-      <span><b>Percepção passiva</b> ${passivePerception}</span>
+    <div class="sheet-header">
+      ${ch.imageUrl
+        ? `<img class="sheet-portrait" src="${esc(ch.imageUrl)}" alt="${esc(ch.name)}" onerror="this.classList.add('placeholder');this.removeAttribute('src');this.textContent='${esc(initials)}';" />`
+        : `<div class="sheet-portrait placeholder">${esc(initials)}</div>`}
+      <div class="sheet-title">
+        <h4>${esc(ch.name)}</h4>
+        <div class="sheet-subtitle">${esc([ch.race, ch.klass, ch.level ? `nível ${ch.level}` : ''].filter(Boolean).join(' · ')) || '—'}${isPc && ch.player ? ` · joga ${esc(ch.player)}` : ''}</div>
+      </div>
     </div>
-    <div class="srd-ability-row">
-      ${ABILITIES.map((a) => `<div class="srd-ability"><div class="srd-ab-label">${a.label}</div><div class="srd-ab-val">${scoreOf(ch, a.key)} (${fmtSigned(abilityMod(scoreOf(ch, a.key)))})</div></div>`).join('')}
+    <div class="sheet-stats">
+      <div class="sheet-stat ac"><div class="sheet-stat-label">CA</div><div class="sheet-stat-val">${esc(ch.ac ?? '—')}</div></div>
+      <div class="sheet-stat hp">
+        <div class="sheet-stat-label">PV</div>
+        <div class="sheet-stat-val">${esc(ch.hp ?? '?')}/${esc(ch.maxHp ?? '?')}</div>
+        ${hpFrac !== null ? `<div class="hp-bar"><span style="width:${hpFrac * 100}%;background:${hpFrac > 0.5 ? '#4a9d6f' : hpFrac > 0.25 ? '#b8925a' : '#c05650'}"></span></div>` : ''}
+      </div>
+      <div class="sheet-stat"><div class="sheet-stat-label">Iniciativa</div><div class="sheet-stat-val">${fmtSigned(dexMod)}</div></div>
+      <div class="sheet-stat"><div class="sheet-stat-label">Prof.</div><div class="sheet-stat-val">${fmtSigned(pb)}</div></div>
+      <div class="sheet-stat"><div class="sheet-stat-label">Perc. passiva</div><div class="sheet-stat-val">${passivePerception}</div></div>
     </div>
-    <div class="field-row" style="align-items:flex-start;margin-top:12px;">
-      <div style="flex:1;">
-        <div class="srd-block-title">Testes de resistência</div>
+    <div class="sheet-abilities">
+      ${ABILITIES.map((a) => `
+        <div class="sheet-abil">
+          <div class="sheet-abil-label">${a.label}</div>
+          <div class="sheet-abil-mod">${fmtSigned(abilityMod(scoreOf(ch, a.key)))}</div>
+          <div class="sheet-abil-score">${scoreOf(ch, a.key)}</div>
+        </div>`).join('')}
+    </div>
+    <div class="sheet-cols">
+      <div class="sheet-col">
+        <div class="sheet-col-title">Testes de resistência</div>
         ${saveLines}
       </div>
-      <div style="flex:1;">
-        <div class="srd-block-title">Perícias</div>
+      <div class="sheet-col">
+        <div class="sheet-col-title">Perícias</div>
         ${skillLines}
       </div>
     </div>
-    ${ch.description ? `<div class="srd-block-title">Descrição</div><div class="srd-block-item">${esc(ch.description).replace(/\n/g, '<br>')}</div>` : ''}
+    ${ch.description ? `<div class="sheet-desc">${esc(ch.description).replace(/\n/g, '<br>')}</div>` : ''}
   `, async () => {}, 'Fechar');
 
   // Botão "Editar" fora do form/submit do modal — se fosse o botão principal, o
