@@ -286,6 +286,7 @@ function renderCharacters() {
           <button class="btn small" data-speak="${c.id}"><svg class="icon"><use href="#i-chat-circle-text"/></svg>Falar</button>
           <button class="btn small ghost" data-embody="${c.id}"><svg class="icon"><use href="#i-microphone"/></svg>Encarnar</button>
           <button class="btn small ghost" data-inv="${c.id}" title="Mochila deste NPC"><svg class="icon"><use href="#i-backpack"/></svg>${(c.inventory || []).length ? ` ${c.inventory.length}` : ''}</button>
+          <button class="btn small ghost" data-sheet-char="${c.id}" title="Ver ficha"><svg class="icon"><use href="#i-clipboard-text"/></svg></button>
           <button class="btn small ghost" data-edit-char="${c.id}"><svg class="icon"><use href="#i-pencil-simple"/></svg></button>
           <button class="btn small danger" data-del-char="${c.id}"><svg class="icon"><use href="#i-trash"/></svg></button>
         </div>
@@ -304,6 +305,7 @@ function renderCharacters() {
       <div class="desc">${esc(c.description || '')}</div>
       <div class="row">
         <button class="btn small gold" data-inv="${c.id}" title="Abrir a mochila e entregar itens"><svg class="icon"><use href="#i-backpack"/></svg>Mochila${(c.inventory || []).length ? ` (${c.inventory.length})` : ''}</button>
+        <button class="btn small ghost" data-sheet-char="${c.id}" title="Ver ficha"><svg class="icon"><use href="#i-clipboard-text"/></svg>Ficha</button>
         <button class="btn small ghost" data-edit-char="${c.id}"><svg class="icon"><use href="#i-pencil-simple"/></svg>Editar</button>
         <button class="btn small danger" data-del-char="${c.id}"><svg class="icon"><use href="#i-trash"/></svg></button>
       </div>
@@ -361,6 +363,7 @@ function renderCharacters() {
   $('#btn-new-npc').onclick = () => charModal({ type: 'npc' });
   $('#btn-handout').onclick = () => handoutModal();
   $$('#tab-characters [data-edit-char]').forEach((b) => b.onclick = () => charModal(chars.find((c) => c.id === b.dataset.editChar)));
+  $$('#tab-characters [data-sheet-char]').forEach((b) => b.onclick = () => characterSheetModal(chars.find((c) => c.id === b.dataset.sheetChar)));
   $$('#tab-characters [data-del-char]').forEach((b) => b.onclick = async () => {
     if (confirm('Excluir este personagem?')) { await api(`/characters/${b.dataset.delChar}`, { method: 'DELETE' }); refresh(); }
   });
@@ -650,7 +653,29 @@ function charModal(c = {}) {
       ${field('PV atual', 'hp', c.hp, 'number')}
       ${field('PV máximo', 'maxHp', c.maxHp, 'number')}
     </div>
-    ${field('Atributos (texto livre)', 'stats', c.stats, 'text', 'FOR 16, DES 12, CON 14, INT 10, SAB 13, CAR 8')}
+    <div class="field">
+      <label>Atributos</label>
+      <div class="srd-ability-row">
+        ${ABILITIES.map((a) => `
+          <div class="srd-ability">
+            <div class="srd-ab-label">${a.label}</div>
+            <input type="number" id="charm-abil-${a.key}" min="1" max="30" value="${scoreOf(c, a.key)}" style="width:100%;text-align:center;padding:4px;margin-top:2px;" />
+            <div class="srd-ab-val" id="charm-abil-mod-${a.key}">${fmtSigned(abilityMod(scoreOf(c, a.key)))}</div>
+          </div>`).join('')}
+      </div>
+    </div>
+    <div class="field">
+      <label>Proficiência em testes de resistência</label>
+      <div class="row" style="flex-wrap:wrap;gap:4px 14px;">
+        ${ABILITIES.map((a) => `<label class="tool-check"><input type="checkbox" id="charm-save-${a.key}" ${c.saveProf?.[a.key] ? 'checked' : ''} /> ${a.label}</label>`).join('')}
+      </div>
+    </div>
+    <div class="field">
+      <label>Perícias</label>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:4px 10px;">
+        ${SKILLS.map((s) => `<label class="tool-check"><input type="checkbox" id="charm-skill-${s.key}" ${c.skillProf?.[s.key] ? 'checked' : ''} /> ${esc(s.label)} <small style="color:var(--muted);">(${abilLabel(s.ability)})</small></label>`).join('')}
+      </div>
+    </div>
     ${isPc ? '' : fieldSelect('Tipo de NPC', 'npcType', [
       { value: 'inimigo',   label: 'Inimigo — combate e antagonistas' },
       { value: 'quest',     label: 'Quest — dão missões ou são objetivos' },
@@ -668,9 +693,83 @@ function charModal(c = {}) {
     ${fieldImage('Retrato (aparece no token e na tela dos jogadores)', 'imageUrl', c.imageUrl)}
   `, async (data) => {
     data.imageUrl = await resolveImage('imageUrl', data);
+    // Checkbox desmarcado não aparece no FormData — monta os três objetos na mão em
+    // vez de confiar na coleta genérica, senão desmarcar uma proficiência não "gruda".
+    data.abilities = {};
+    data.saveProf = {};
+    ABILITIES.forEach((a) => {
+      data.abilities[a.key] = Math.max(1, Math.min(30, Number($(`#charm-abil-${a.key}`)?.value) || 10));
+      data.saveProf[a.key] = Boolean($(`#charm-save-${a.key}`)?.checked);
+    });
+    data.skillProf = {};
+    SKILLS.forEach((s) => { data.skillProf[s.key] = Boolean($(`#charm-skill-${s.key}`)?.checked); });
     if (c.id) await api(`/characters/${c.id}`, { method: 'PUT', body: data });
     else await api('/characters', { method: 'POST', body: data });
   });
+  // Mostra o modificador atualizando junto enquanto o Mestre digita o atributo.
+  ABILITIES.forEach((a) => {
+    const inp = $(`#charm-abil-${a.key}`);
+    const out = $(`#charm-abil-mod-${a.key}`);
+    if (inp && out) inp.oninput = () => { out.textContent = fmtSigned(abilityMod(inp.value)); };
+  });
+}
+
+// Ficha completa, só de leitura — acesso rápido do Mestre durante a batalha, sem sair
+// do mapa. Reaproveita o mesmo visual da ficha de monstro do bestiário (srd-*).
+function characterSheetModal(ch) {
+  if (!ch) return;
+  const isPc = ch.type === 'pc';
+  const pb = profBonus(ch.level || 1);
+  const dexMod = abilityMod(scoreOf(ch, 'dex'));
+
+  const saveLines = ABILITIES.map((a) => {
+    const prof = Boolean(ch.saveProf?.[a.key]);
+    const total = abilityMod(scoreOf(ch, a.key)) + (prof ? pb : 0);
+    return `<div class="srd-block-item">${prof ? '●' : '○'} <b>${a.label}</b> ${fmtSigned(total)}</div>`;
+  }).join('');
+
+  const skillLines = SKILLS.map((s) => {
+    const prof = Boolean(ch.skillProf?.[s.key]);
+    const total = abilityMod(scoreOf(ch, s.ability)) + (prof ? pb : 0);
+    return `<div class="srd-block-item">${prof ? '●' : '○'} ${esc(s.label)} <small style="color:var(--muted);">(${abilLabel(s.ability)})</small> ${fmtSigned(total)}</div>`;
+  }).join('');
+
+  const passivePerception = 10 + abilityMod(scoreOf(ch, 'wis')) + (ch.skillProf?.perception ? pb : 0);
+
+  openModal(`${esc(ch.name)} — Ficha`, `
+    ${ch.imageUrl ? `<div class="srd-hero"><img src="${esc(ch.imageUrl)}" alt="${esc(ch.name)}" onerror="this.closest('.srd-hero').remove()" /></div>` : ''}
+    <i style="display:block;font-size:13px;color:var(--muted);margin-bottom:8px;">${esc([ch.race, ch.klass, ch.level ? `nível ${ch.level}` : ''].filter(Boolean).join(' · ')) || '—'}${isPc && ch.player ? ` · joga ${esc(ch.player)}` : ''}</i>
+    <div class="srd-stat-bar">
+      <span><b>CA</b> ${esc(ch.ac ?? '?')}</span>
+      <span><b>PV</b> ${esc(ch.hp ?? '?')}/${esc(ch.maxHp ?? '?')}</span>
+      <span><b>Iniciativa</b> ${fmtSigned(dexMod)}</span>
+      <span><b>Prof.</b> ${fmtSigned(pb)}</span>
+      <span><b>Percepção passiva</b> ${passivePerception}</span>
+    </div>
+    <div class="srd-ability-row">
+      ${ABILITIES.map((a) => `<div class="srd-ability"><div class="srd-ab-label">${a.label}</div><div class="srd-ab-val">${scoreOf(ch, a.key)} (${fmtSigned(abilityMod(scoreOf(ch, a.key)))})</div></div>`).join('')}
+    </div>
+    <div class="field-row" style="align-items:flex-start;margin-top:12px;">
+      <div style="flex:1;">
+        <div class="srd-block-title">Testes de resistência</div>
+        ${saveLines}
+      </div>
+      <div style="flex:1;">
+        <div class="srd-block-title">Perícias</div>
+        ${skillLines}
+      </div>
+    </div>
+    ${ch.description ? `<div class="srd-block-title">Descrição</div><div class="srd-block-item">${esc(ch.description).replace(/\n/g, '<br>')}</div>` : ''}
+  `, async () => {}, 'Fechar');
+
+  // Botão "Editar" fora do form/submit do modal — se fosse o botão principal, o
+  // closeModal()+refresh() que o openModal roda depois do onSave fecharia a ficha de
+  // edição que acabou de abrir.
+  const actions = $('#modal-form .modal-actions');
+  if (actions) {
+    actions.insertAdjacentHTML('afterbegin', '<button type="button" class="btn ghost" id="sheet-edit"><svg class="icon"><use href="#i-pencil-simple"/></svg>Editar</button>');
+    $('#sheet-edit').onclick = () => { closeModal(); charModal(ch); };
+  }
 }
 
 function handoutModal() {
@@ -1452,6 +1551,13 @@ const charDoEntry = (e) => (e?.charId && state.characters.find((c) => c.id === e
   || state.characters.find((c) => c.name === e?.name)
   || null;
 
+// Personagem vinculado a um token do mapa — via o entry da iniciativa, o charId do
+// próprio token, ou o nome como último recurso (token solto, ainda fora do combate).
+const charDoToken = (t) => charDoEntry(entryOf(t))
+  || (t?.charId && state.characters.find((c) => c.id === t.charId))
+  || state.characters.find((c) => c.name === (t?.combatName || t?.name))
+  || null;
+
 // A partir de um entry da iniciativa, monta os campos do token (tipo, retrato...).
 async function tokenSeed(e) {
   const ch = charDoEntry(e);
@@ -1700,6 +1806,7 @@ function renderTokenPanel() {
   const cor = frac > 0.5 ? '#4a9d6f' : frac > 0.25 ? '#b8925a' : '#c05650';
   const conds = fonte.conditions || [];
   const conc = fonte.concentration || false;
+  const personagem = charDoToken(t);
 
   el.innerHTML = `
     <div class="act-panel">
@@ -1707,6 +1814,7 @@ function renderTokenPanel() {
         ${t.imageUrl ? `<img class="token-avatar" src="${esc(t.imageUrl)}" alt="" onerror="this.remove()" />` : ''}
         <div class="act-name">
           <b>${esc(t.name)}</b>
+          ${personagem ? `<button type="button" class="btn small gold" id="act-sheet" title="Ver a ficha completa" style="padding:1px 7px;margin-left:6px;"><svg class="icon"><use href="#i-clipboard-text"/></svg>Ficha</button>` : ''}
           ${entry ? `<small style="color:var(--muted);font-size:11px;"><svg class="icon"><use href="#i-sword"/></svg> na iniciativa</small>` : ''}
           ${frac !== null ? `
             <div class="hp-bar"><span style="width:${frac * 100}%; background:${cor}"></span></div>
@@ -1736,6 +1844,7 @@ function renderTokenPanel() {
       </div>
     </div>`;
 
+  if (personagem) $('#act-sheet').onclick = () => characterSheetModal(personagem);
   const valor = () => Math.abs(Number($('#act-amount').value) || 0);
   $('#act-dmg').onclick = () => applyHp([t], -valor());
   $('#act-heal').onclick = () => applyHp([t], valor());
@@ -2085,11 +2194,14 @@ function looseToCombat(tokenId) {
   const c = state.combat;
   const nome = t.combatName || t.name;
   if (c.entries.some((e) => e.name === nome)) return toast(`${nome} já está no combate.`, true);
+  const ch = t.charId ? state.characters.find((x) => x.id === t.charId) : state.characters.find((x) => x.name === nome);
+  const dexMod = abilityMod(scoreOf(ch, 'dex'));
   c.entries.push({
-    name: nome, init: 10,
+    name: nome, init: d20() + dexMod, initMod: dexMod,
     hp: t.hp ?? 0, maxHp: t.maxHp ?? 0,
     conditions: [], deathSaves: { s: 0, f: 0 },
     isPc: t.kind === 'pc',
+    charId: ch?.id,
     imageUrl: t.imageUrl || '',
   });
   // Garante o vínculo pelo combatName, mesmo que o token seja renomeado depois.
@@ -2454,6 +2566,37 @@ const condImg = (cd, cls = '') => `<img class="cond-icon${cls ? ` ${cls}` : ''}"
 const d20 = () => 1 + Math.floor(Math.random() * 20);
 const abilityMod = (score) => Math.floor((Number(score) - 10) / 2);
 
+// ---------- Ficha de personagem: atributos, testes de resistência e perícias ----------
+const ABILITIES = [
+  { key: 'str', label: 'FOR' }, { key: 'dex', label: 'DES' }, { key: 'con', label: 'CON' },
+  { key: 'int', label: 'INT' }, { key: 'wis', label: 'SAB' }, { key: 'cha', label: 'CAR' },
+];
+const SKILLS = [
+  { key: 'athletics', label: 'Atletismo', ability: 'str' },
+  { key: 'acrobatics', label: 'Acrobacia', ability: 'dex' },
+  { key: 'sleightOfHand', label: 'Prestidigitação', ability: 'dex' },
+  { key: 'stealth', label: 'Furtividade', ability: 'dex' },
+  { key: 'arcana', label: 'Arcanismo', ability: 'int' },
+  { key: 'history', label: 'História', ability: 'int' },
+  { key: 'investigation', label: 'Investigação', ability: 'int' },
+  { key: 'nature', label: 'Natureza', ability: 'int' },
+  { key: 'religion', label: 'Religião', ability: 'int' },
+  { key: 'animalHandling', label: 'Lidar com Animais', ability: 'wis' },
+  { key: 'insight', label: 'Intuição', ability: 'wis' },
+  { key: 'medicine', label: 'Medicina', ability: 'wis' },
+  { key: 'perception', label: 'Percepção', ability: 'wis' },
+  { key: 'survival', label: 'Sobrevivência', ability: 'wis' },
+  { key: 'deception', label: 'Enganação', ability: 'cha' },
+  { key: 'intimidation', label: 'Intimidação', ability: 'cha' },
+  { key: 'performance', label: 'Atuação', ability: 'cha' },
+  { key: 'persuasion', label: 'Persuasão', ability: 'cha' },
+];
+const abilLabel = (key) => ABILITIES.find((a) => a.key === key)?.label || key;
+// Bônus de proficiência pelo nível — tabela padrão do 5e (1-4 → +2, 5-8 → +3, ...).
+const profBonus = (level) => Math.floor((Math.max(1, Number(level) || 1) - 1) / 4) + 2;
+const fmtSigned = (n) => (n >= 0 ? `+${n}` : `${n}`);
+const scoreOf = (ch, key) => Number(ch?.abilities?.[key]) || 10;
+
 // ---------- Bestiário (aba dedicada — mesma ficha/ações do modal SRD da Batalha) ----------
 let bestiarioMonsters = null; // cache: null = ainda não carregado
 let bestiarioFiltered = [];
@@ -2683,10 +2826,12 @@ async function addCharacter(charId, aoMapa) {
   const iguais = c.entries.filter((e) => e.name === ch.name || e.name.startsWith(`${ch.name} `)).length;
   const nome = iguais ? `${ch.name} ${iguais + 1}` : ch.name;
   const isPc = ch.type === 'pc';
+  const dexMod = abilityMod(scoreOf(ch, 'dex'));
 
   c.entries.push({
     name: nome,
-    init: 10,
+    init: d20() + dexMod,
+    initMod: dexMod,
     hp: Number(ch.hp) || 0, maxHp: Number(ch.maxHp) || 0,
     conditions: [], deathSaves: { s: 0, f: 0 },
     isPc,
@@ -2801,8 +2946,9 @@ function charPickerModal() {
     const c = state.combat;
     for (const pc of pcs) {
       if (!c.entries.some((e) => e.name === pc.name)) {
+        const dexMod = abilityMod(scoreOf(pc, 'dex'));
         c.entries.push({
-          name: pc.name, init: 10, hp: pc.hp ?? 0, maxHp: pc.maxHp ?? 0,
+          name: pc.name, init: d20() + dexMod, initMod: dexMod, hp: pc.hp ?? 0, maxHp: pc.maxHp ?? 0,
           conditions: [], deathSaves: { s: 0, f: 0 }, isPc: true,
           charId: pc.id, imageUrl: pc.imageUrl || '',
         });
