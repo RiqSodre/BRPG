@@ -1238,27 +1238,34 @@ function renderMapTab() {
           <!-- Barra de ferramentas flutuante no topo (quebra linha em telas estreitas) -->
           <div class="map-overlay ov-top">
             <div class="ov-panel">
+              <span class="ov-group-label">Ferramentas</span>
               <button class="ov-btn tool active" data-tool="select" title="Arrastar tokens"><svg class="icon"><use href="#i-hand-palm"/></svg>Mover</button>
               <button class="ov-btn tool" data-tool="ruler" title="Medir distância (diagonal 5e)"><svg class="icon"><use href="#i-ruler"/></svg>Medir</button>
               <button class="ov-btn tool" data-tool="ping" title="Piscar um ponto na tela dos jogadores"><svg class="icon"><use href="#i-map-pin"/></svg>Ping</button>
               <button class="ov-btn tool" data-tool="aoe" title="Área de efeito (arraste do centro)"><svg class="icon"><use href="#i-target"/></svg>Área</button>
+              <span class="ov-sep"></span>
               <button class="ov-btn tool" data-tool="reveal" title="Pincel: revelar névoa"><svg class="icon"><use href="#i-flashlight"/></svg>Revelar</button>
               <button class="ov-btn tool" data-tool="hide" title="Pincel: cobrir de névoa"><svg class="icon"><use href="#i-cloud-fog"/></svg>Cobrir</button>
+              <span class="ov-sep"></span>
               <button class="ov-btn tool" data-tool="wall" title="Parede: arraste entre duas quinas do grid pra bloquear a visão"><svg class="icon"><use href="#i-wall"/></svg>Parede</button>
               <button class="ov-btn tool" data-tool="wall-erase" title="Apagar parede: clique numa parede pra remover"><svg class="icon"><use href="#i-eraser"/></svg>Apagar parede</button>
-              <button class="ov-btn" id="btn-map-fit" title="Enquadrar o mapa na tela"><svg class="icon"><use href="#i-arrows-out"/></svg>Enquadrar</button>
+              <span class="ov-sep"></span>
               <button class="ov-btn" id="ov-help" title="Clique num token para agir sobre ele · arraste para mover (mostra o deslocamento) · Espaço passa o turno · setas movem o selecionado · Del remove · Esc limpa a seleção"><svg class="icon"><use href="#i-question"/></svg>Ajuda</button>
             </div>
             <div class="ov-panel">
+              <span class="ov-group-label">Mapa</span>
               <select id="map-select" title="Mapa em jogo"></select>
               <button class="ov-btn gold" id="btn-map-activate" title="Colocar este mapa em jogo">▶ Em jogo</button>
               <button class="ov-btn" id="btn-new-map" title="Criar um novo mapa">+ Novo</button>
               <button class="ov-btn" id="btn-sample-maps" title="Mapas prontos de exemplo"><svg class="icon"><use href="#i-books"/></svg>Exemplos</button>
               <button class="ov-btn" id="btn-edit-map" title="Editar o grid do mapa"><svg class="icon"><use href="#i-grid-four"/></svg>Grid</button>
+              <button class="ov-btn" id="btn-img-toggle" title="Ajustar a imagem do mapa ao grid"><svg class="icon"><use href="#i-image"/></svg>Imagem</button>
+              <span class="ov-sep"></span>
+              <button class="ov-btn" id="btn-map-fit" title="Enquadrar o mapa na tela"><svg class="icon"><use href="#i-arrows-out"/></svg>Enquadrar</button>
               <button class="ov-btn danger" id="btn-del-map" title="Excluir este mapa"><svg class="icon"><use href="#i-trash"/></svg>Excluir</button>
-              <a class="ov-btn" href="/mesa.html" target="_blank" title="Abrir a tela dos jogadores (segunda tela / Discord)"><svg class="icon"><use href="#i-desktop"/></svg>Jogadores</a>
             </div>
             <div class="ov-panel">
+              <span class="ov-group-label">Visão dos jogadores</span>
               <label class="tool-check" title="Névoa de guerra pintada à mão"><input type="checkbox" id="fog-enabled" /> <svg class="icon"><use href="#i-cloud-fog"/></svg> Névoa</label>
               <button class="ov-btn" id="btn-fog-all" title="Revelar o mapa inteiro"><svg class="icon"><use href="#i-sun"/></svg>Revelar tudo</button>
               <button class="ov-btn" id="btn-fog-none" title="Cobrir o mapa inteiro"><svg class="icon"><use href="#i-moon"/></svg>Cobrir tudo</button>
@@ -1267,11 +1274,14 @@ function renderMapTab() {
               <input type="number" id="vision-radius" min="3" max="60" step="1" class="vision-radius-input" title="Raio de visão dos personagens (metros)" /><span class="ov-label">m</span>
               <span class="ov-sep"></span>
               <label class="tool-check" title="Mostrar os números de PV dos inimigos aos jogadores"><input type="checkbox" id="show-enemy-hp" /> <svg class="icon"><use href="#i-heart-straight"/></svg> PV inimigos</label>
+            </div>
+            <div class="ov-panel">
+              <span class="ov-group-label">Jogadores</span>
+              <a class="ov-btn" href="/mesa.html" target="_blank" title="Abrir a tela dos jogadores (segunda tela / Discord)"><svg class="icon"><use href="#i-desktop"/></svg>Tela dos jogadores</a>
               <span class="ov-sep"></span>
               <label class="tool-check" title="Manda uma DM no Discord pro jogador vinculado quando chega a vez dele — com PV, CA, condições e as magias/habilidades da ficha"><input type="checkbox" id="turn-dm" /> <svg class="icon"><use href="#i-paper-plane-tilt"/></svg> Avisar turno por DM</label>
               <span class="ov-sep"></span>
               <button class="ov-btn" id="btn-sound-toggle" title="Soundboard: solta efeitos no canal de voz (atalhos 1-9)"><svg class="icon"><use href="#i-speaker-high"/></svg>Sons</button>
-              <button class="ov-btn" id="btn-img-toggle" title="Ajustar a imagem do mapa ao grid"><svg class="icon"><use href="#i-image"/></svg>Imagem</button>
             </div>
             <div class="ov-panel ov-img hidden" id="img-align">
               <span class="ov-label">Ajustar imagem:</span>

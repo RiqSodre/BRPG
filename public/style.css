@@ -570,6 +570,10 @@ textarea { resize: vertical; min-height: 80px; }
 .ov-btn.danger:hover { background: var(--danger); border-color: var(--danger); color: #fff; }
 .ov-sep { width: 1px; height: 18px; background: var(--border); margin: 0 1px; }
 .ov-label { font-size: 11px; color: var(--muted); padding-left: 2px; }
+.ov-group-label {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase;
+  color: var(--muted); opacity: 0.75; padding: 0 6px 0 4px; white-space: nowrap; flex-shrink: 0;
+}
 .ov-top select { max-width: 120px; padding: 3px 5px; font-size: 12px; border-radius: 6px; }
 .tool-check { font-size: 14px; color: var(--muted); display: flex; align-items: center; gap: 3px; cursor: pointer; }
 .tool-check input { accent-color: var(--accent); }
