@@ -491,6 +491,51 @@ export async function sendHandout({ characterIds = [], toChannel = false, title,
   return { sent, failed };
 }
 
+// Avisa o jogador por DM que chegou a vez dele — PV, CA, condições ativas e, se
+// tiver, as magias/habilidades cadastradas na ficha (pra ele saber o que pode fazer
+// sem precisar abrir mais nada). Best-effort: nunca lança erro, o turno segue de
+// qualquer jeito mesmo se a DM falhar (bloqueada, bot fora do ar, etc).
+export async function notifyTurn(character, { round, entry } = {}) {
+  if (!client || !character?.discordUserId) return false;
+  try {
+    const hp = entry?.hp ?? character.hp;
+    const maxHp = entry?.maxHp ?? character.maxHp;
+    const fields = [];
+    if (maxHp) fields.push({ name: '❤️ PV', value: `${hp ?? '?'}/${maxHp}`, inline: true });
+    if (character.ac != null && character.ac !== '') fields.push({ name: '🛡️ CA', value: String(character.ac), inline: true });
+    const conds = entry?.conditions || [];
+    if (conds.length) fields.push({ name: '⚠️ Condições ativas', value: conds.join(', '), inline: false });
+    const spells = character.spells || [];
+    if (spells.length) {
+      fields.push({
+        name: '✨ Magias',
+        value: spells.map((s) => `**${s.name}** ${s.level ? `(nível ${s.level})` : '(truque)'}`).join('\n').slice(0, 1000),
+        inline: false,
+      });
+    }
+    const feats = character.features || [];
+    if (feats.length) {
+      fields.push({
+        name: '⭐ Habilidades',
+        value: feats.map((f) => `**${f.name}**${f.source ? ` _(${f.source})_` : ''}`).join('\n').slice(0, 1000),
+        inline: false,
+      });
+    }
+    const embed = new EmbedBuilder()
+      .setTitle(`🎲 É a sua vez, ${character.name}!`)
+      .setColor(0x6e5bc4)
+      .setFooter({ text: 'Ação, ação bônus (se tiver), movimento e reação quando fizer sentido.' });
+    if (round) embed.setDescription(`Rodada ${round}`);
+    if (fields.length) embed.addFields(fields);
+    if (/^https?:\/\//i.test(character.imageUrl || '')) embed.setThumbnail(character.imageUrl);
+    const user = await client.users.fetch(character.discordUserId);
+    await user.send({ embeds: [embed] });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function botStatus() {
   return {
     connected: Boolean(client),

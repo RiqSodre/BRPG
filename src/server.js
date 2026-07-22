@@ -525,10 +525,27 @@ export function startServer() {
 
   // ---- Combate / iniciativa ----
   app.put('/api/combat', wrap(async (req, res) => {
-    getDb().combat = req.body;
+    const db = getDb();
+    const antes = db.combat || {};
+    const chaveAntes = `${antes.round}:${antes.turn}`;
+    db.combat = req.body;
     save();
     broadcastTable(); // a mesa mostra de quem é o turno e os PV
-    res.json(getDb().combat);
+
+    // Avisa o jogador por DM quando a vez muda de combatente — nunca trava o save
+    // do combate se a DM falhar (best-effort, ver notifyTurn em bot.js).
+    if (db.battle?.turnDm && db.combat.active) {
+      const chaveDepois = `${db.combat.round}:${db.combat.turn}`;
+      if (chaveDepois !== chaveAntes) {
+        const entry = db.combat.entries[db.combat.turn];
+        const ch = entry?.charId && db.characters.find((c) => c.id === entry.charId);
+        if (ch?.type === 'pc' && ch.discordUserId) {
+          bot.notifyTurn(ch, { round: db.combat.round, entry }).catch(() => {});
+        }
+      }
+    }
+
+    res.json(db.combat);
   }));
   app.post('/api/combat/announce', wrap(async (req, res) => {
     const reason = bot.postBlockedReason();

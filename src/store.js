@@ -45,7 +45,8 @@ const DEFAULTS = {
   maps: [],       // { id, name, cols, rows, cellSize, filename, imageUrl, img: { x, y, scale }, fog: { enabled, revealed: ['c,r'] } }
   // showEnemyHp: quando falso, os jogadores veem só a barra e o estado dos inimigos, não os números.
   // vision: campo de visão automático — cada PC revela um raio (em metros) ao redor de si.
-  battle: { mapId: null, tokens: [], ping: null, showEnemyHp: false, vision: { enabled: false, radius: 12 } },
+  // turnDm: quando ligado, o bot manda uma DM pro jogador vinculado sempre que chega a vez dele.
+  battle: { mapId: null, tokens: [], ping: null, showEnemyHp: false, vision: { enabled: false, radius: 12 }, turnDm: false },
   // tokens: { id, name, kind: 'pc'|'npc'|'enemy', col, row, size, color, imageUrl, hp, maxHp, hidden, charId, combatName }
   activeSceneId: null,
 };

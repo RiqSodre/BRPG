@@ -1268,6 +1268,8 @@ function renderMapTab() {
               <span class="ov-sep"></span>
               <label class="tool-check" title="Mostrar os números de PV dos inimigos aos jogadores"><input type="checkbox" id="show-enemy-hp" /> <svg class="icon"><use href="#i-heart-straight"/></svg> PV inimigos</label>
               <span class="ov-sep"></span>
+              <label class="tool-check" title="Manda uma DM no Discord pro jogador vinculado quando chega a vez dele — com PV, CA, condições e as magias/habilidades da ficha"><input type="checkbox" id="turn-dm" /> <svg class="icon"><use href="#i-paper-plane-tilt"/></svg> Avisar turno por DM</label>
+              <span class="ov-sep"></span>
               <button class="ov-btn" id="btn-sound-toggle" title="Soundboard: solta efeitos no canal de voz (atalhos 1-9)"><svg class="icon"><use href="#i-speaker-high"/></svg>Sons</button>
               <button class="ov-btn" id="btn-img-toggle" title="Ajustar a imagem do mapa ao grid"><svg class="icon"><use href="#i-image"/></svg>Imagem</button>
             </div>
@@ -1428,6 +1430,14 @@ function renderMapTab() {
         : 'Os jogadores voltam a ver só o estado dos inimigos (Ferido, Quase morto...).');
     };
 
+    $('#turn-dm').onchange = (e) => {
+      state.battle.turnDm = e.target.checked;
+      pushBattle();
+      toast(e.target.checked
+        ? 'Vou avisar cada jogador por DM quando chegar a vez dele.'
+        : 'Aviso de turno por DM desligado.');
+    };
+
     // Botão de som mostra/esconde o soundboard de batalha
     $('#btn-sound-toggle').onclick = () => {
       const p = $('#soundboard-panel');
@@ -1520,6 +1530,7 @@ function renderMapTab() {
   const map = activeMap();
   $('#fog-enabled').checked = Boolean(map?.fog?.enabled);
   $('#show-enemy-hp').checked = Boolean(state.battle.showEnemyHp);
+  $('#turn-dm').checked = Boolean(state.battle.turnDm);
   $('#vision-enabled').checked = Boolean(state.battle.vision?.enabled);
   $('#vision-radius').value = state.battle.vision?.radius ?? 12;
   bmap.setData({ map, battle: state.battle, combat: state.combat });
