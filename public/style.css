@@ -483,6 +483,12 @@ textarea { resize: vertical; min-height: 80px; }
 .list-row .lr-remove { flex-shrink: 0; }
 
 /* ---------- Áudio ---------- */
+.audio-section-title {
+  display: flex; align-items: center; gap: 6px;
+  margin: 20px 0 8px; padding-top: 12px; border-top: 1px solid var(--border);
+  font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted);
+}
+.audio-section-title:first-of-type { border-top: none; padding-top: 0; }
 .audio-row {
   display: flex; align-items: center; gap: 10px;
   background: var(--bg2); border: 1px solid var(--border);
@@ -490,6 +496,22 @@ textarea { resize: vertical; min-height: 80px; }
 }
 .audio-row .name { flex: 1; }
 .audio-row audio { height: 30px; max-width: 220px; }
+.audio-row-badge {
+  display: flex; align-items: center; gap: 5px; flex-shrink: 0;
+  min-width: 90px; font-size: 12px; color: var(--accent2);
+}
+
+/* Barra de categorias de efeitos (biblioteca e soundboard) */
+.sfx-cat-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-bottom: 10px; }
+.sfx-cat-chip {
+  display: flex; align-items: center; gap: 4px;
+  background: var(--bg2); border: 1px solid var(--border); color: var(--muted);
+  border-radius: 999px; padding: 4px 10px; font-size: 12px; cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.sfx-cat-chip:hover { border-color: var(--accent2); color: var(--text); }
+.sfx-cat-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.sfx-cat-chip .icon { width: 13px; height: 13px; }
 
 /* ---------- Cabine ---------- */
 .booth-sliders { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; margin: 14px 0; }
@@ -516,27 +538,41 @@ textarea { resize: vertical; min-height: 80px; }
 .ov-top { top: 10px; left: 10px; right: 10px; flex-wrap: wrap; align-items: flex-start; }
 .ov-img.hidden { display: none; }
 
-/* Rodapé flutuante: empilha o soundboard ACIMA do HUD de turno.
-   Como é uma coluna flex, os dois nunca se sobrepõem, por mais que cresçam. */
+/* Rodapé flutuante: pilha soundboard+dados (esquerda) e HUD de turno (direita) na
+   mesma linha de base — crescem pra cima, nunca um em cima do outro. Se o mapa for
+   estreito demais pros dois lado a lado, o wrap empilha em vez de sobrepor. */
 .ov-bottom {
   left: 10px; right: 10px; bottom: 10px;
-  flex-direction: column; align-items: center; gap: 8px; z-index: 6;
+  flex-direction: row; align-items: flex-end; flex-wrap: wrap; gap: 8px; z-index: 6;
 }
 .ov-bottom > * { pointer-events: auto; }
+/* HUD sempre gruda na direita — independe de quais painéis da esquerda estão visíveis. */
+.combat-hud { margin-left: auto; }
+/* Soundboard e painel de dados empilham em coluna: som sempre ACIMA dos dados, com
+   espaçamento consistente entre os dois, e a pilha inteira alinhada à base do HUD. */
+.ov-bottom-stack { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0; }
 .ov-sounds {
-  align-self: flex-start; max-width: 100%;
-  flex-direction: column; align-items: stretch; gap: 5px;
+  width: 440px; height: 260px;
+  min-width: 300px; min-height: 160px; max-width: 92%; max-height: 70vh;
+  flex-direction: column; align-items: stretch; gap: 8px; padding: 10px 12px 14px;
+  resize: both; overflow: auto;
 }
 .ov-sounds.hidden { display: none; }
-.sb-head { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+/* O corpo do painel (busca, categorias, lista, resultados do Freesound) fica num único
+   bloco que rola junto — assim arrastar o canto do painel (resize nativo do navegador)
+   simplesmente mostra mais desse bloco, sem precisar de barras de rolagem aninhadas. */
+.sb-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; flex-shrink: 0; }
 .sb-search {
-  flex: 1; min-width: 130px; padding: 4px 8px; font-size: 12px;
+  flex: 1; min-width: 150px; padding: 6px 10px; font-size: 13px;
   border-radius: 6px; border: 1px solid var(--border);
   background: var(--bg); color: var(--text);
 }
 .sb-search:focus { outline: none; border-color: var(--accent); }
-.sb-list { display: flex; flex-wrap: wrap; gap: 4px; max-height: 96px; overflow-y: auto; }
-.sb-fs-results { display: flex; flex-direction: column; gap: 4px; max-height: 190px; overflow-y: auto; }
+.sb-cat-bar { margin: 0; gap: 4px; flex-shrink: 0; }
+.sb-cat-bar .sfx-cat-chip { padding: 3px 8px; font-size: 11px; }
+.sb-cat-bar .sfx-cat-chip .icon { width: 12px; height: 12px; }
+.sb-list { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 6px; }
+.sb-fs-results { display: flex; flex-direction: column; gap: 5px; }
 .sb-fs-results:empty { display: none; }
 .sb-fs-row {
   display: flex; align-items: center; gap: 5px;
@@ -551,6 +587,43 @@ textarea { resize: vertical; min-height: 80px; }
   padding: 0 4px; font-size: 10px; font-weight: 700; color: var(--accent2);
   font-family: inherit; line-height: 1.5;
 }
+
+/* ---------- Painel de dados 3D ---------- */
+.dice-panel { max-width: 100%; }
+.dice-face-row { display: flex; gap: 3px; }
+.dice-face { min-width: 34px; padding: 5px 6px; font-weight: 700; }
+.dice-face.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.dice-num {
+  width: 46px; padding: 5px 6px; font-size: 13px; text-align: center;
+  border-radius: 6px; border: 1px solid var(--border);
+  background: var(--bg); color: var(--text);
+}
+
+/* Palco onde os dados tombam por cima do mapa. Fica sempre no DOM com opacity:0 (nunca
+   display:none) — a lib 3D lê o tamanho do container no primeiro init e perderia essa
+   medida se o elemento sumisse do layout entre uma rolagem e outra. */
+.dice-tray-stage {
+  position: absolute; inset: 0; z-index: 8;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none; transition: opacity 0.25s ease;
+}
+.dice-tray-stage.show { opacity: 1; pointer-events: auto; }
+.dice-tray-box {
+  width: min(480px, 90%); height: min(360px, 60%);
+  display: flex; flex-direction: column;
+  background: rgba(13,13,17,0.55); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
+  border: 1px solid var(--border); border-radius: 16px; overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+}
+#dice-tray-canvas { flex: 1; min-height: 0; }
+#dice-tray-canvas canvas { display: block; width: 100%; height: 100%; }
+.dice-tray-result {
+  flex-shrink: 0; padding: 10px 16px; font-size: 15px; text-align: center;
+  background: rgba(13,13,17,0.85); color: var(--text); border-top: 1px solid var(--border);
+}
+.dice-tray-result:empty { display: none; }
+.dice-tray-result b { color: var(--accent2); }
+
 .ov-panel {
   display: flex; align-items: center; gap: 3px; flex-wrap: wrap;
   background: rgba(13,13,17,0.82); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
@@ -817,7 +890,7 @@ textarea { resize: vertical; min-height: 80px; }
 .player-title { display: flex; align-items: center; gap: 8px; color: var(--accent2); }
 .player-turn { font-size: 16px; color: var(--text); }
 .player-conn { font-size: 12px; color: var(--muted); }
-.player-stage { flex: 1; display: flex; min-height: 0; padding: 12px; gap: 12px; }
+.player-stage { position: relative; flex: 1; display: flex; min-height: 0; padding: 12px; gap: 12px; }
 .player-stage canvas {
   flex: 1; min-width: 0;
   /* O mapa é sempre uma "mesa" escura, desenhada pelo battlemap.js — não segue o tema do app. */

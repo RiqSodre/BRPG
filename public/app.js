@@ -961,7 +961,51 @@ const TYPE_LABEL = {
   sfx: '<svg class="icon"><use href="#i-waveform"/></svg>Efeito',
 };
 
+// Categorias só se aplicam a efeitos (sfx) — ambiente/música continuam soltos por cena.
+// 'geral' é o catch-all pra efeitos antigos sem categoria ou que não se encaixam nas outras.
+const SFX_CATEGORIES = [
+  { value: 'combate', label: 'Combate', icon: 'sword' },
+  { value: 'criaturas', label: 'Criaturas', icon: 'skull' },
+  { value: 'objetos', label: 'Objetos', icon: 'package' },
+  { value: 'ambiente', label: 'Ambiente', icon: 'waves' },
+  { value: 'magia', label: 'Magia', icon: 'sparkle' },
+  { value: 'social', label: 'Social', icon: 'mask-happy' },
+  { value: 'geral', label: 'Geral', icon: 'waveform' },
+];
+const sfxCategory = (value) => SFX_CATEGORIES.find((c) => c.value === value) || SFX_CATEGORIES[SFX_CATEGORIES.length - 1];
+// 'Geral' primeiro nos selects de cadastro — evita que tudo caia em 'Combate' por padrão
+// só porque é a primeira opção da lista; o mestre escolhe uma categoria específica de propósito.
+const sfxCategoryOptions = () => [SFX_CATEGORIES[SFX_CATEGORIES.length - 1], ...SFX_CATEGORIES.slice(0, -1)]
+  .map((c) => ({ value: c.value, label: c.label }));
+const sfxCategoryChip = (c, active) =>
+  `<button class="sfx-cat-chip${active ? ' active' : ''}" data-cat="${c.value}" title="${esc(c.label)}">
+    <svg class="icon"><use href="#i-${c.icon}"/></svg>${esc(c.label)}
+  </button>`;
+
+let libCategoria = 'todos';
+let libFiltro = '';
+let libSearchWasFocused = false;
+
+const audioRowHtml = (a) => `
+  <div class="audio-row">
+    <span class="audio-row-badge">${a.type === 'sfx'
+      ? `<svg class="icon"><use href="#i-${sfxCategory(a.category).icon}"/></svg>${esc(sfxCategory(a.category).label)}`
+      : TYPE_LABEL[a.type] || a.type}</span>
+    <span class="name"><b>${esc(a.name)}</b><br/><small style="color:var(--muted)">${(a.tags || []).map((t) => `#${esc(t)}`).join(' ')}</small></span>
+    <audio controls preload="none" src="/audio-files/${esc(a.filename)}"></audio>
+    <button class="btn small gold" data-play-discord="${a.id}" title="Tocar no canal de voz do Discord"><svg class="icon"><use href="#i-broadcast"/></svg>Discord</button>
+    <button class="btn small ghost" data-edit-audio="${a.id}"><svg class="icon"><use href="#i-pencil-simple"/></svg></button>
+    <button class="btn small danger" data-del-audio="${a.id}"><svg class="icon"><use href="#i-trash"/></svg></button>
+  </div>`;
+
 function renderAudio() {
+  const ambientes = state.audio.filter((a) => a.type === 'ambient');
+  const musicas = state.audio.filter((a) => a.type === 'music');
+  const todosSfx = state.audio.filter((a) => a.type === 'sfx');
+  const q = libFiltro.trim().toLowerCase();
+  const sfx = todosSfx.filter((a) => (libCategoria === 'todos' || sfxCategory(a.category).value === libCategoria)
+    && (!q || a.name.toLowerCase().includes(q) || (a.tags || []).some((t) => t.toLowerCase().includes(q))));
+
   $('#tab-audio').innerHTML = `
     <div class="tab-header">
       <h2><svg class="icon"><use href="#i-music-notes"/></svg>Biblioteca de Áudio</h2>
@@ -971,15 +1015,18 @@ function renderAudio() {
       <form id="audio-upload-form" class="row" style="align-items:center;">
         <input type="file" name="file" accept=".mp3,.ogg,.wav,.m4a,.webm,.flac" required />
         <input name="name" placeholder="Nome (opcional)" />
-        <select name="type">
+        <select name="type" id="up-type">
           <option value="ambient">Ambiente (loop)</option>
           <option value="music">Música (loop)</option>
-          <option value="sfx">Efeito (uma vez)</option>
+          <option value="sfx" selected>Efeito (uma vez)</option>
+        </select>
+        <select name="category" id="up-category">
+          ${sfxCategoryOptions().map((o) => `<option value="${o.value}">${esc(o.label)}</option>`).join('')}
         </select>
         <input name="tags" placeholder="tags: taverna, chuva, combate..." />
         <button class="btn" type="submit"><svg class="icon"><use href="#i-upload-simple"/></svg>Enviar</button>
       </form>
-      <p class="help-text">Dica: use tags descritivas — é por elas que a IA escolhe os sons certos para cada cena.</p>
+      <p class="help-text">A categoria só vale para efeitos — é por ela (e pelas tags) que o soundboard de batalha filtra rápido.</p>
     </div>
     <div class="card" style="margin-bottom:16px;">
       <h3 style="display:flex;align-items:center;gap:8px;"><svg class="icon"><use href="#i-magnifying-glass"/></svg>Buscar no Freesound</h3>
@@ -990,20 +1037,42 @@ function renderAudio() {
           <option value="music">Música</option>
           <option value="sfx" selected>Efeito</option>
         </select>
+        <select id="fs-category">
+          ${sfxCategoryOptions().map((o) => `<option value="${o.value}">${esc(o.label)}</option>`).join('')}
+        </select>
         <button class="btn" id="btn-fs-search"><svg class="icon"><use href="#i-magnifying-glass"/></svg>Buscar</button>
       </div>
       <div id="fs-results"></div>
       <p class="help-text">Requer FREESOUND_API_KEY no .env (grátis em freesound.org). O som é baixado direto para a sua biblioteca, já com as tags.</p>
     </div>
-    ${state.audio.map((a) => `
-      <div class="audio-row">
-        <span>${TYPE_LABEL[a.type] || a.type}</span>
-        <span class="name"><b>${esc(a.name)}</b><br/><small style="color:var(--muted)">${(a.tags || []).map((t) => `#${esc(t)}`).join(' ')}</small></span>
-        <audio controls preload="none" src="/audio-files/${esc(a.filename)}"></audio>
-        <button class="btn small gold" data-play-discord="${a.id}" title="Tocar no canal de voz do Discord"><svg class="icon"><use href="#i-broadcast"/></svg>Discord</button>
-        <button class="btn small ghost" data-edit-audio="${a.id}"><svg class="icon"><use href="#i-pencil-simple"/></svg></button>
-        <button class="btn small danger" data-del-audio="${a.id}"><svg class="icon"><use href="#i-trash"/></svg></button>
-      </div>`).join('') || '<div class="empty">Envie áudios de ambiente (chuva, taverna, floresta), músicas e efeitos (porta, espadas, trovão).</div>'}`;
+    ${ambientes.length ? `<h3 class="audio-section-title">${TYPE_LABEL.ambient}</h3>${ambientes.map(audioRowHtml).join('')}` : ''}
+    ${musicas.length ? `<h3 class="audio-section-title">${TYPE_LABEL.music}</h3>${musicas.map(audioRowHtml).join('')}` : ''}
+    <h3 class="audio-section-title">${TYPE_LABEL.sfx}</h3>
+    <div class="sfx-cat-bar">
+      ${sfxCategoryChip({ value: 'todos', label: `Todos (${todosSfx.length})`, icon: 'waveform' }, libCategoria === 'todos')}
+      ${SFX_CATEGORIES.map((c) => sfxCategoryChip(c, libCategoria === c.value)).join('')}
+      <input id="lib-sfx-search" class="sb-search" style="max-width:220px;" placeholder="filtrar por nome ou tag..." value="${esc(libFiltro)}" />
+    </div>
+    ${sfx.length ? sfx.map(audioRowHtml).join('')
+      : `<div class="empty">${todosSfx.length ? 'Nenhum efeito nessa categoria/filtro.' : 'Envie efeitos (porta, espadas, trovão) e organize por categoria.'}</div>`}
+    ${!ambientes.length && !musicas.length && !todosSfx.length ? '<div class="empty">Envie áudios de ambiente (chuva, taverna, floresta), músicas e efeitos.</div>' : ''}`;
+
+  $('#up-type').onchange = (e) => { $('#up-category').style.display = e.target.value === 'sfx' ? '' : 'none'; };
+  $('#up-type').dispatchEvent(new Event('change'));
+  $('#fs-type').onchange = (e) => { $('#fs-category').style.display = e.target.value === 'sfx' ? '' : 'none'; };
+  $('#fs-type').dispatchEvent(new Event('change'));
+
+  $$('#tab-audio .sfx-cat-bar [data-cat]').forEach((b) => b.onclick = () => { libCategoria = b.dataset.cat; renderAudio(); });
+  const libSearch = $('#lib-sfx-search');
+  if (libSearch) {
+    libSearch.oninput = (e) => { libFiltro = e.target.value; renderAudio(); };
+    if (libSearchWasFocused) {
+      libSearch.focus({ preventScroll: true });
+      libSearch.setSelectionRange(libSearch.value.length, libSearch.value.length);
+    }
+    libSearch.onfocus = () => { libSearchWasFocused = true; };
+    libSearch.onblur = () => { libSearchWasFocused = false; };
+  }
 
   const fsSearch = async () => {
     const q = $('#fs-query').value.trim();
@@ -1022,9 +1091,10 @@ function renderAudio() {
     $$('#fs-results [data-fs-import]').forEach((b) => b.onclick = async () => {
       const s = results[Number(b.dataset.fsImport)];
       b.disabled = true; b.textContent = 'Baixando...';
+      const type = $('#fs-type').value;
       const r = await tryApi(() => api('/freesound/import', {
         method: 'POST',
-        body: { name: s.name, previewUrl: s.previewUrl, type: $('#fs-type').value, tags: s.tags },
+        body: { name: s.name, previewUrl: s.previewUrl, type, category: type === 'sfx' ? $('#fs-category').value : undefined, tags: s.tags },
       }), `"${s.name}" importado para a biblioteca!`);
       if (r) refresh();
       else { b.disabled = false; b.textContent = 'Importar'; }
@@ -1053,11 +1123,17 @@ function renderAudio() {
         { value: 'music', label: 'Música (loop)' },
         { value: 'sfx', label: 'Efeito (uma vez)' },
       ], a.type)}
+      ${fieldSelect('Categoria (efeitos)', 'category', sfxCategoryOptions(), a.category || 'geral')}
       ${field('Tags (separadas por vírgula)', 'tags', (a.tags || []).join(', '))}
     `, async (data) => {
       data.tags = data.tags.split(',').map((t) => t.trim()).filter(Boolean);
       await api(`/audio/${a.id}`, { method: 'PUT', body: data });
     });
+    const typeSel = $('#modal-form [name="type"]');
+    const catField = $('#modal-form [name="category"]').closest('.field');
+    const toggleCat = () => { catField.style.display = typeSel.value === 'sfx' ? '' : 'none'; };
+    typeSel.onchange = toggleCat;
+    toggleCat();
   });
 }
 
@@ -1250,6 +1326,7 @@ function renderMapTab() {
               <button class="ov-btn tool" data-tool="wall" title="Parede: arraste entre duas quinas do grid pra bloquear a visão"><svg class="icon"><use href="#i-wall"/></svg>Parede</button>
               <button class="ov-btn tool" data-tool="wall-erase" title="Apagar parede: clique numa parede pra remover"><svg class="icon"><use href="#i-eraser"/></svg>Apagar parede</button>
               <span class="ov-sep"></span>
+              <button class="ov-btn" id="btn-dice-toggle" title="Painel de dados 3D — rola pra todo mundo ver"><svg class="icon"><use href="#i-dice-six"/></svg>Dados</button>
               <button class="ov-btn" id="ov-help" title="Clique num token para agir sobre ele · arraste para mover (mostra o deslocamento) · Espaço passa o turno · setas movem o selecionado · Del remove · Esc limpa a seleção"><svg class="icon"><use href="#i-question"/></svg>Ajuda</button>
             </div>
             <div class="ov-panel">
@@ -1295,10 +1372,24 @@ function renderMapTab() {
             </div>
           </div>
 
-          <!-- Rodapé flutuante: soundboard empilhado ACIMA do HUD, nunca se sobrepõem -->
+          <!-- Rodapé flutuante: soundboard sempre empilhado ACIMA da barra de dados (nunca
+               ao lado, mesmo se o soundboard for redimensionado) — e o HUD de turno alinhado
+               com a base desse empilhado, no canto inferior direito. -->
           <div class="map-overlay ov-bottom">
-            <div class="ov-panel ov-sounds hidden" id="soundboard-panel"></div>
+            <div class="ov-bottom-stack">
+              <div class="ov-panel ov-sounds hidden" id="soundboard-panel"></div>
+              <div class="ov-panel dice-panel hidden" id="dice-panel"></div>
+            </div>
             <div id="combat-hud" class="combat-hud"></div>
+          </div>
+
+          <!-- Palco dos dados 3D — some quando não há rolagem ativa (só troca opacidade,
+               nunca display:none, senão a biblioteca perde o tamanho do canvas). -->
+          <div class="dice-tray-stage" id="dice-tray">
+            <div class="dice-tray-box">
+              <div id="dice-tray-canvas"></div>
+              <div class="dice-tray-result" id="dice-tray-result"></div>
+            </div>
           </div>
         </div>
         <div class="map-resize-handle" id="map-resize-handle"></div>
@@ -1455,6 +1546,13 @@ function renderMapTab() {
       $('#btn-sound-toggle').classList.toggle('active', !p.classList.contains('hidden'));
     };
 
+    // Botão de dados mostra/esconde o painel de rolagem 3D
+    $('#btn-dice-toggle').onclick = () => {
+      const p = $('#dice-panel');
+      p.classList.toggle('hidden');
+      $('#btn-dice-toggle').classList.toggle('active', !p.classList.contains('hidden'));
+    };
+
     // Botão de imagem mostra/esconde os controles de alinhar a imagem do mapa
     $('#btn-img-toggle').onclick = () => {
       const p = $('#img-align');
@@ -1545,21 +1643,25 @@ function renderMapTab() {
   $('#vision-radius').value = state.battle.vision?.radius ?? 12;
   bmap.setData({ map, battle: state.battle, combat: state.combat });
   renderSoundboard();
+  renderDicePanel();
   renderMapSide();
 }
 
 // ---------- Soundboard de batalha ----------
-// Efeitos one-shot no canal de voz, sem sair do mapa. O filtro busca na biblioteca
-// e, se não achar, o mesmo termo vai ao Freesound: importa e já toca. Os 9 primeiros
-// da lista visível ganham atalho numérico — filtrar e apertar 1 é o caminho rápido.
+// Efeitos one-shot no canal de voz, sem sair do mapa. As abas de categoria filtram por
+// contexto (combate, criaturas...) e o campo de busca refina por nome/tag dentro dela.
+// Se não achar, o mesmo termo vai ao Freesound: importa (já na categoria da aba aberta)
+// e toca na hora. Os 9 primeiros da lista visível ganham atalho numérico.
 let sbFiltro = '';
+let sbCategoria = 'todos';
 let sbPreview = null;
 
 const sbVisiveis = () => {
-  const todos = (state.audio || []).filter((a) => a.type === 'sfx');
+  const porCategoria = (state.audio || []).filter((a) => a.type === 'sfx'
+    && (sbCategoria === 'todos' || sfxCategory(a.category).value === sbCategoria));
   const q = sbFiltro.trim().toLowerCase();
-  if (!q) return todos;
-  return todos.filter((a) => a.name.toLowerCase().includes(q)
+  if (!q) return porCategoria;
+  return porCategoria.filter((a) => a.name.toLowerCase().includes(q)
     || (a.tags || []).some((t) => t.toLowerCase().includes(q)));
 };
 
@@ -1603,7 +1705,7 @@ async function sbBuscarFreesound() {
     b.disabled = true; b.textContent = 'Baixando…';
     const r = await tryApi(() => api('/freesound/import', {
       method: 'POST',
-      body: { name: s.name, previewUrl: s.previewUrl, type: 'sfx', tags: s.tags },
+      body: { name: s.name, previewUrl: s.previewUrl, type: 'sfx', category: sbCategoria === 'todos' ? 'geral' : sbCategoria, tags: s.tags },
     }));
     if (!r) { b.disabled = false; b.textContent = 'Usar'; return; }
     if (sbPreview) { sbPreview.pause(); sbPreview = null; }
@@ -1629,12 +1731,23 @@ function renderSoundboard() {
         <button class="ov-btn" id="sb-fs" title="Buscar este termo no Freesound e usar na hora"><svg class="icon"><use href="#i-magnifying-glass"/></svg>Freesound</button>
         <button class="ov-btn danger" id="sb-stop" title="Parar tudo que está tocando"><svg class="icon"><use href="#i-stop"/></svg></button>
       </div>
+      <div class="sfx-cat-bar sb-cat-bar" id="sb-cat-bar"></div>
       <div class="sb-list" id="sb-list"></div>
       <div class="sb-fs-results" id="sb-fs-results"></div>`;
     $('#sb-search').oninput = (e) => { sbFiltro = e.target.value; renderSbList(); };
     $('#sb-search').onkeydown = (e) => { if (e.key === 'Enter') sbBuscarFreesound(); };
     $('#sb-fs').onclick = () => sbBuscarFreesound();
     $('#sb-stop').onclick = () => tryApi(() => api('/sound/stop', { method: 'POST' }), 'Som parado.');
+
+    $('#sb-cat-bar').innerHTML = [{ value: 'todos', label: 'Todos', icon: 'waveform' }, ...SFX_CATEGORIES]
+      .map((c) => sfxCategoryChip(c, sbCategoria === c.value)).join('');
+    $('#sb-cat-bar').onclick = (e) => {
+      const b = e.target.closest('[data-cat]');
+      if (!b) return;
+      sbCategoria = b.dataset.cat;
+      $$('#sb-cat-bar [data-cat]').forEach((x) => x.classList.toggle('active', x.dataset.cat === sbCategoria));
+      renderSbList();
+    };
   }
   renderSbList();
 }
@@ -1650,11 +1763,59 @@ function renderSbList() {
         ${i < 9 ? `<kbd class="sfx-key">${i + 1}</kbd>` : ''}${esc(a.name.replace(/_/g, ' ').slice(0, 22))}${a.name.length > 22 ? '…' : ''}
       </button>`).join('')
     : `<span class="ov-label">${total
-        ? `Nenhum som com “${esc(sbFiltro)}” — use o Freesound para achar um novo.`
+        ? `Nenhum som ${sbFiltro ? `com “${esc(sbFiltro)}” ` : ''}${sbCategoria !== 'todos' ? `em ${esc(sfxCategory(sbCategoria).label)} ` : ''}— use o Freesound para achar um novo.`
         : 'Biblioteca vazia — busque um som no Freesound.'}</span>`;
 
   $$('#sb-list [data-sfx-play]').forEach((b) => b.onclick = () =>
     tocarSfx(sfx.find((a) => a.id === b.dataset.sfxPlay)));
+}
+
+// ---------- Dados 3D ----------
+// Painel de rolagem rápida sobre o mapa: escolhe o dado, ajusta quantidade/modificador
+// e rola. O resultado sai do mesmo /api/roll da rolagem rápida da barra de som — o dado
+// 3D nunca mostra um número diferente do que foi de fato sorteado (e, se marcado,
+// anunciado no Discord). A animação 3D é só a "pele": physics real em cada tela, mas
+// forçada (via Dice3D) a pousar nos valores que o servidor já sorteou.
+const DICE_SET = [4, 6, 8, 10, 12, 20, 100];
+let diceSides = 20;
+let diceQty = 1;
+let diceMod = 0;
+
+function renderDicePanel() {
+  const el = $('#dice-panel');
+  if (!el) return;
+  if (!el.dataset.built) {
+    el.dataset.built = '1';
+    el.innerHTML = `
+      <span class="ov-label"><svg class="icon"><use href="#i-dice-six"/></svg> Dados</span>
+      <div class="dice-face-row">
+        ${DICE_SET.map((s) => `<button class="ov-btn dice-face${s === diceSides ? ' active' : ''}" data-sides="${s}">d${s}</button>`).join('')}
+      </div>
+      <input type="number" id="dice-qty" class="dice-num" min="1" max="20" value="${diceQty}" title="Quantidade de dados" />
+      <span class="ov-label">×</span>
+      <input type="number" id="dice-mod" class="dice-num" value="${diceMod}" title="Modificador (+/-)" />
+      <label class="tool-check" title="Também posta o resultado no canal de texto do Discord"><input type="checkbox" id="dice-announce" /> Discord</label>
+      <button class="ov-btn gold" id="dice-roll-btn"><svg class="icon"><use href="#i-dice-six"/></svg>Rolar</button>`;
+
+    $$('#dice-panel .dice-face').forEach((b) => b.onclick = () => {
+      diceSides = Number(b.dataset.sides);
+      $$('#dice-panel .dice-face').forEach((x) => x.classList.toggle('active', Number(x.dataset.sides) === diceSides));
+    });
+    $('#dice-qty').onchange = (e) => { diceQty = Math.max(1, Math.min(20, Number(e.target.value) || 1)); e.target.value = diceQty; };
+    $('#dice-mod').onchange = (e) => { diceMod = Number(e.target.value) || 0; };
+    $('#dice-roll-btn').onclick = rollDice3d;
+  }
+}
+
+async function rollDice3d() {
+  const sinal = diceMod > 0 ? '+' : '';
+  const expr = `${diceQty}d${diceSides}${diceMod ? `${sinal}${diceMod}` : ''}`;
+  const announce = Boolean($('#dice-announce')?.checked);
+  const r = await tryApi(() => api('/roll', { method: 'POST', body: { expr, announce } }));
+  if (!r) return;
+  const dice = { sides: diceSides, count: diceQty, rolls: r.rolls, mod: r.mod, total: r.total, roller: 'Mestre' };
+  Dice3D.roll(dice);
+  if (mesaWs?.readyState === WebSocket.OPEN) mesaWs.send(JSON.stringify({ type: 'diceRoll', dice }));
 }
 
 // ---------- Gerenciamento do combate pelo mapa ----------

@@ -38,7 +38,8 @@ const DEFAULTS = {
   // characters[].inventory = [{ itemId, qty }] — a mochila aponta para o catálogo
   characters: [], // { id, name, type: 'pc'|'npc', player, race, klass, level, ac, hp, maxHp, stats, description, secrets, voice, imageUrl, inventory }
   scenes: [],     // { id, title, readAloud, gmNotes, imageUrl, ambientAudioId, musicAudioId, sfxIds, npcIds }
-  audio: [],      // { id, name, filename, type: 'ambient'|'music'|'sfx', tags, volume }
+  audio: [],      // { id, name, filename, type: 'ambient'|'music'|'sfx', category, tags, volume }
+                  // category só se aplica a sfx: 'combate'|'criaturas'|'objetos'|'ambiente'|'magia'|'social'|'geral'
   sessions: [],   // { id, date, title, notes, recap }
   combat: { active: false, round: 1, turn: 0, entries: [] },
   // Mapas de batalha: grid + imagem opcional. cellSize = metros por quadrado.

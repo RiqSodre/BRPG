@@ -91,6 +91,8 @@ function connect() {
       bmap.playFx(msg.fx);
     } else if (msg.type === 'aoe') {
       bmap.setAoe(msg.aoe || null);
+    } else if (msg.type === 'diceRoll' && msg.dice) {
+      Dice3D.roll(msg.dice);
     }
   };
   ws.onclose = () => {

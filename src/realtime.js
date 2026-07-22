@@ -155,6 +155,10 @@ export function createMesaWss() {
       } else if (msg.type === 'aoe') {
         // Área de efeito (o template) — repassa; null limpa nas telas.
         broadcastEvent({ type: 'aoe', aoe: msg.aoe || null });
+      } else if (msg.type === 'diceRoll' && msg.dice) {
+        // Rolagem 3D do Mestre — repassa os valores já sorteados pra todo mundo animar
+        // o mesmo resultado (cada tela roda sua própria física, mas pousa nos mesmos números).
+        broadcastEvent({ type: 'diceRoll', dice: msg.dice });
       }
     });
 

@@ -151,10 +151,12 @@ export function startServer() {
   // ---- Biblioteca de áudio ----
   app.get('/api/audio', wrap(async (req, res) => res.json(listItems('audio'))));
   app.post('/api/audio', upload.single('file'), wrap(async (req, res) => {
+    const type = req.body.type || 'sfx';
     const item = addItem('audio', {
       name: req.body.name || path.parse(req.file.originalname).name,
       filename: req.file.filename,
-      type: req.body.type || 'sfx',
+      type,
+      category: type === 'sfx' ? (req.body.category || 'geral') : undefined,
       tags: (req.body.tags || '').split(',').map((t) => t.trim()).filter(Boolean),
       volume: 1,
     });
@@ -325,7 +327,7 @@ export function startServer() {
     })));
   }));
   app.post('/api/freesound/import', wrap(async (req, res) => {
-    const { name, previewUrl, type, tags } = req.body;
+    const { name, previewUrl, type, category, tags } = req.body;
     const host = new URL(previewUrl).hostname;
     if (!host.endsWith('freesound.org')) throw new Error('URL inválida.');
     const r = await fetch(`${previewUrl}${previewUrl.includes('?') ? '&' : '?'}token=${fsKey()}`);
@@ -336,6 +338,7 @@ export function startServer() {
       name: name || 'Som do Freesound',
       filename,
       type: type || 'sfx',
+      category: (type || 'sfx') === 'sfx' ? (category || 'geral') : undefined,
       tags: Array.isArray(tags) ? tags : [],
       volume: 1,
     });
