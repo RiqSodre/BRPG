@@ -460,6 +460,28 @@ textarea { resize: vertical; min-height: 80px; }
 
 .sheet-desc { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 13px; line-height: 1.6; color: var(--muted); white-space: pre-wrap; }
 
+.sheet-feature { margin: 8px 0; font-size: 13px; }
+.sheet-feature b { color: var(--text); }
+.sheet-feature-tag {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--accent2); background: var(--bg3); border-radius: 8px; padding: 1px 7px; margin-left: 2px;
+}
+.sheet-feature-desc { font-size: 12.5px; color: var(--muted); line-height: 1.55; margin-top: 2px; white-space: pre-wrap; }
+
+/* Editor de lista dinâmica (habilidades, magias) dentro dos modais de personagem */
+.list-row {
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 8px;
+  padding: 8px; margin-bottom: 8px;
+}
+.list-row .field-row { margin-bottom: 6px; gap: 6px; }
+.list-row textarea { min-height: 48px; }
+/* Mesma especificidade de ".modal .field input" (width:100% genérico) — sem isso, os
+   campos de nome/fonte/nível brigam com o próprio flex/max-width que já têm. */
+.modal .field .list-row .field-row input { width: auto; }
+.list-row .lr-name { flex: 2; min-width: 0; }
+.list-row .lr-source, .list-row .lr-level { max-width: 150px; flex-shrink: 0; }
+.list-row .lr-remove { flex-shrink: 0; }
+
 /* ---------- Áudio ---------- */
 .audio-row {
   display: flex; align-items: center; gap: 10px;

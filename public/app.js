@@ -78,6 +78,53 @@ const fieldSelect = (label, name, options, selected) =>
   `<div class="field"><label>${esc(label)}</label><select name="${name}">${options.map((o) =>
     `<option value="${esc(o.value)}" ${o.value === selected ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}</select></div>`;
 
+// Editor de lista dinâmica (habilidades, magias...) dentro de um modal: cada linha tem
+// nome + uma "tag" (fonte, pra habilidade; nível, pra magia) + descrição. O array
+// (`list`) é a fonte da verdade pra estrutura (quantas linhas, em que ordem); o texto
+// de cada campo é lido direto do DOM na hora de salvar, não fica sincronizado a cada
+// tecla — evita perder o foco/cursor ao re-renderizar.
+const listRowHtml = (item, kind) => `
+  <div class="list-row">
+    <div class="field-row">
+      <input class="lr-name" placeholder="Nome" value="${esc(item.name || '')}" />
+      ${kind === 'spell'
+        ? `<input class="lr-level" type="number" min="0" max="9" placeholder="Nível (0=truque)" value="${item.level ?? ''}" />`
+        : `<input class="lr-source" placeholder="Fonte (raça, classe...)" value="${esc(item.source || '')}" />`}
+      <button type="button" class="btn small danger lr-remove" title="Remover"><svg class="icon"><use href="#i-x"/></svg></button>
+    </div>
+    <textarea class="lr-desc" placeholder="Descrição">${esc(item.description || '')}</textarea>
+  </div>`;
+// Uma habilidade/característica ou magia, na ficha somente-leitura: nome + uma tag
+// (fonte, ou nível pra magia) + descrição.
+const sheetFeatureHtml = (item, kind) => {
+  const tag = kind === 'spell' ? (item.level ? `Nível ${item.level}` : 'Truque') : (item.source || '');
+  return `<div class="sheet-feature"><b>${esc(item.name)}</b>${tag ? ` <span class="sheet-feature-tag">${esc(tag)}</span>` : ''}${item.description ? `<div class="sheet-feature-desc">${esc(item.description).replace(/\n/g, '<br>')}</div>` : ''}</div>`;
+};
+// Copia pro array o que já foi digitado nas linhas atuais — chamado sempre antes de
+// mexer na estrutura (adicionar/remover), senão o re-render reconstrói a partir do
+// array desatualizado e apaga o texto que ainda não tinha "voltado" pra ele.
+function syncListRows(containerId, list, kind) {
+  [...document.querySelectorAll(`#${containerId} .list-row`)].forEach((row, i) => {
+    if (!list[i]) return;
+    list[i].name = row.querySelector('.lr-name').value;
+    list[i].description = row.querySelector('.lr-desc').value;
+    if (kind === 'spell') list[i].level = Number(row.querySelector('.lr-level').value) || 0;
+    else list[i].source = row.querySelector('.lr-source').value;
+  });
+}
+function renderListRows(containerId, list, kind) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  el.innerHTML = list.length
+    ? list.map((item) => listRowHtml(item, kind)).join('')
+    : '<p class="help-text" style="margin:2px 0 6px;">Nada cadastrado ainda.</p>';
+  el.querySelectorAll('.lr-remove').forEach((btn, i) => btn.onclick = () => {
+    syncListRows(containerId, list, kind);
+    list.splice(i, 1);
+    renderListRows(containerId, list, kind);
+  });
+}
+
 // Campo de retrato: aceita arquivo do computador ou URL colada.
 const fieldImage = (label, name, value = '') => `
   <div class="field">
@@ -684,6 +731,16 @@ function charModal(c = {}) {
           </div>`;
       }).join('')}
     </div>
+    <div class="field">
+      <label>Habilidades e Características</label>
+      <div id="charm-features-list"></div>
+      <button type="button" class="btn small ghost" id="charm-add-feature"><svg class="icon"><use href="#i-plus"/></svg>Adicionar habilidade</button>
+    </div>
+    <div class="field">
+      <label>Magias</label>
+      <div id="charm-spells-list"></div>
+      <button type="button" class="btn small ghost" id="charm-add-spell"><svg class="icon"><use href="#i-plus"/></svg>Adicionar magia</button>
+    </div>
     ${isPc ? '' : fieldSelect('Tipo de NPC', 'npcType', [
       { value: 'inimigo',   label: 'Inimigo — combate e antagonistas' },
       { value: 'quest',     label: 'Quest — dão missões ou são objetivos' },
@@ -711,6 +768,16 @@ function charModal(c = {}) {
     });
     data.skillProf = {};
     SKILLS.forEach((s) => { data.skillProf[s.key] = Boolean($(`#charm-skill-${s.key}`)?.checked); });
+    data.features = [...$$('#charm-features-list .list-row')].map((row) => ({
+      name: row.querySelector('.lr-name').value.trim(),
+      source: row.querySelector('.lr-source').value.trim(),
+      description: row.querySelector('.lr-desc').value.trim(),
+    })).filter((f) => f.name);
+    data.spells = [...$$('#charm-spells-list .list-row')].map((row) => ({
+      name: row.querySelector('.lr-name').value.trim(),
+      level: Math.max(0, Math.min(9, Number(row.querySelector('.lr-level').value) || 0)),
+      description: row.querySelector('.lr-desc').value.trim(),
+    })).filter((s) => s.name);
     if (c.id) await api(`/characters/${c.id}`, { method: 'PUT', body: data });
     else await api('/characters', { method: 'POST', body: data });
   });
@@ -720,6 +787,22 @@ function charModal(c = {}) {
     const out = $(`#charm-abil-mod-${a.key}`);
     if (inp && out) inp.oninput = () => { out.textContent = fmtSigned(abilityMod(inp.value)); };
   });
+  // Listas dinâmicas de habilidades e magias — o array local é a fonte da verdade da
+  // estrutura (quantas linhas), o texto de cada uma é lido do DOM na hora de salvar.
+  const featuresDraft = JSON.parse(JSON.stringify(c.features || []));
+  const spellsDraft = JSON.parse(JSON.stringify(c.spells || []));
+  renderListRows('charm-features-list', featuresDraft, 'feature');
+  renderListRows('charm-spells-list', spellsDraft, 'spell');
+  $('#charm-add-feature').onclick = () => {
+    syncListRows('charm-features-list', featuresDraft, 'feature');
+    featuresDraft.push({ name: '', source: '', description: '' });
+    renderListRows('charm-features-list', featuresDraft, 'feature');
+  };
+  $('#charm-add-spell').onclick = () => {
+    syncListRows('charm-spells-list', spellsDraft, 'spell');
+    spellsDraft.push({ name: '', level: 0, description: '' });
+    renderListRows('charm-spells-list', spellsDraft, 'spell');
+  };
 }
 
 // Ficha completa, só de leitura — acesso rápido do Mestre durante a batalha, sem sair
@@ -785,6 +868,12 @@ function characterSheetModal(ch) {
         ${skillLines}
       </div>
     </div>
+    ${(ch.features || []).length ? `
+      <div class="sheet-col-title" style="margin-top:14px;">Habilidades e Características</div>
+      ${ch.features.map((f) => sheetFeatureHtml(f, 'feature')).join('')}` : ''}
+    ${(ch.spells || []).length ? `
+      <div class="sheet-col-title" style="margin-top:14px;">Magias</div>
+      ${ch.spells.map((s) => sheetFeatureHtml(s, 'spell')).join('')}` : ''}
     ${ch.description ? `<div class="sheet-desc">${esc(ch.description).replace(/\n/g, '<br>')}</div>` : ''}
   `, async () => {}, 'Fechar');
 

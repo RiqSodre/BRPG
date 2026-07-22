@@ -89,10 +89,12 @@ async function registerCommands() {
       .addStringOption((o) => o.setName('personagem').setDescription('Seu personagem').setRequired(true).setAutocomplete(true)),
     new SlashCommandBuilder().setName('desvincular').setDescription('Remove o vínculo entre seu usuário do Discord e seu personagem'),
     new SlashCommandBuilder().setName('inventario').setDescription('Abre a mochila do seu personagem'),
+    new SlashCommandBuilder().setName('magias').setDescription('Mostra as magias do seu personagem'),
+    new SlashCommandBuilder().setName('habilidades').setDescription('Mostra as habilidades e características do seu personagem'),
   ].map((c) => c.toJSON());
   const rest = new REST().setToken(process.env.DISCORD_TOKEN);
   await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), { body: commands });
-  console.log('[bot] Comandos /entrar, /sair, /rolar, /vincular, /desvincular e /inventario registrados.');
+  console.log('[bot] Comandos /entrar, /sair, /rolar, /vincular, /desvincular, /inventario, /magias e /habilidades registrados.');
 }
 
 async function onInteraction(interaction) {
@@ -185,6 +187,55 @@ async function onInteraction(interaction) {
         .setColor(0xc4a747)
         .setDescription(linhas.join('\n\n').slice(0, 4000))
         .setFooter({ text: `${inv.length} item(ns) · ${db.settings.campaignName}` });
+      if (/^https?:\/\//i.test(ch.imageUrl || '')) embed.setThumbnail(ch.imageUrl);
+      await interaction.reply({ embeds: [embed], ephemeral: true });
+    } else if (interaction.commandName === 'magias') {
+      const db = getDb();
+      const ch = db.characters.find((c) => c.discordUserId === interaction.user.id);
+      if (!ch) {
+        await interaction.reply({ content: 'Você ainda não vinculou seu personagem. Use `/vincular` primeiro.', ephemeral: true });
+        return;
+      }
+      const spells = ch.spells || [];
+      if (!spells.length) {
+        await interaction.reply({ content: `${ch.name} não tem nenhuma magia cadastrada ainda — peça ao Mestre pra registrar na ficha.`, ephemeral: true });
+        return;
+      }
+      const linhas = spells
+        .slice().sort((a, b) => (a.level || 0) - (b.level || 0))
+        .map((s) => {
+          const tag = s.level ? `Nível ${s.level}` : 'Truque';
+          const desc = s.description ? `\n${s.description.slice(0, 300)}${s.description.length > 300 ? '…' : ''}` : '';
+          return `**${s.name}** — _${tag}_${desc}`;
+        });
+      const embed = new EmbedBuilder()
+        .setTitle(`Magias de ${ch.name}`)
+        .setColor(0x6e5bc4)
+        .setDescription(linhas.join('\n\n').slice(0, 4000))
+        .setFooter({ text: `${spells.length} magia(s) · ${db.settings.campaignName}` });
+      if (/^https?:\/\//i.test(ch.imageUrl || '')) embed.setThumbnail(ch.imageUrl);
+      await interaction.reply({ embeds: [embed], ephemeral: true });
+    } else if (interaction.commandName === 'habilidades') {
+      const db = getDb();
+      const ch = db.characters.find((c) => c.discordUserId === interaction.user.id);
+      if (!ch) {
+        await interaction.reply({ content: 'Você ainda não vinculou seu personagem. Use `/vincular` primeiro.', ephemeral: true });
+        return;
+      }
+      const feats = ch.features || [];
+      if (!feats.length) {
+        await interaction.reply({ content: `${ch.name} não tem nenhuma habilidade cadastrada ainda — peça ao Mestre pra registrar na ficha.`, ephemeral: true });
+        return;
+      }
+      const linhas = feats.map((f) => {
+        const desc = f.description ? `\n${f.description.slice(0, 300)}${f.description.length > 300 ? '…' : ''}` : '';
+        return `**${f.name}**${f.source ? ` _(${f.source})_` : ''}${desc}`;
+      });
+      const embed = new EmbedBuilder()
+        .setTitle(`Habilidades de ${ch.name}`)
+        .setColor(0xb8925a)
+        .setDescription(linhas.join('\n\n').slice(0, 4000))
+        .setFooter({ text: `${feats.length} habilidade(s) · ${db.settings.campaignName}` });
       if (/^https?:\/\//i.test(ch.imageUrl || '')) embed.setThumbnail(ch.imageUrl);
       await interaction.reply({ embeds: [embed], ephemeral: true });
     }
