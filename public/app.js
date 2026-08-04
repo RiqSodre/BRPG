@@ -93,12 +93,21 @@ const listRowHtml = (item, kind) => `
       <button type="button" class="btn small danger lr-remove" title="Remover"><svg class="icon"><use href="#i-x"/></svg></button>
     </div>
     <textarea class="lr-desc" placeholder="Descrição">${esc(item.description || '')}</textarea>
+    ${kind === 'spell' ? `
+    <div class="lr-image-row">
+      ${item.imageUrl ? `<img class="lr-image-preview" src="${esc(item.imageUrl)}" alt="" />` : ''}
+      <input type="text" class="lr-image-url" placeholder="URL da carta (opcional)" value="${esc(item.imageUrl || '')}" />
+      <input type="file" class="lr-image-file" accept=".png,.jpg,.jpeg,.webp,.gif" title="ou escolha um arquivo" />
+      ${item.imageUrl ? `<button type="button" class="btn small ghost lr-image-clear">Remover imagem</button>` : ''}
+    </div>` : ''}
   </div>`;
 // Uma habilidade/característica ou magia, na ficha somente-leitura: nome + uma tag
 // (fonte, ou nível pra magia) + descrição.
 const sheetFeatureHtml = (item, kind) => {
   const tag = kind === 'spell' ? (item.level ? `Nível ${item.level}` : 'Truque') : (item.source || '');
-  return `<div class="sheet-feature"><b>${esc(item.name)}</b>${tag ? ` <span class="sheet-feature-tag">${esc(tag)}</span>` : ''}${item.description ? `<div class="sheet-feature-desc">${esc(item.description).replace(/\n/g, '<br>')}</div>` : ''}</div>`;
+  const carta = kind === 'spell' && item.imageUrl
+    ? `<a href="${esc(item.imageUrl)}" target="_blank" title="Ver carta em tamanho maior"><img class="sheet-feature-card" src="${esc(item.imageUrl)}" alt="Carta de ${esc(item.name)}" /></a>` : '';
+  return `<div class="sheet-feature">${carta}<div class="sheet-feature-body"><b>${esc(item.name)}</b>${tag ? ` <span class="sheet-feature-tag">${esc(tag)}</span>` : ''}${item.description ? `<div class="sheet-feature-desc">${esc(item.description).replace(/\n/g, '<br>')}</div>` : ''}</div></div>`;
 };
 // Copia pro array o que já foi digitado nas linhas atuais — chamado sempre antes de
 // mexer na estrutura (adicionar/remover), senão o re-render reconstrói a partir do
@@ -108,8 +117,15 @@ function syncListRows(containerId, list, kind) {
     if (!list[i]) return;
     list[i].name = row.querySelector('.lr-name').value;
     list[i].description = row.querySelector('.lr-desc').value;
-    if (kind === 'spell') list[i].level = Number(row.querySelector('.lr-level').value) || 0;
-    else list[i].source = row.querySelector('.lr-source').value;
+    if (kind === 'spell') {
+      list[i].level = Number(row.querySelector('.lr-level').value) || 0;
+      // O arquivo escolhido (ainda não enviado) não sobrevive a um re-render — só a
+      // URL já salva é preservada. Enviar antes de mexer na estrutura evitaria isso,
+      // mas complicaria demais um editor que já resolve a imagem só no salvar da ficha.
+      list[i].imageUrl = row.querySelector('.lr-image-url')?.value || '';
+    } else {
+      list[i].source = row.querySelector('.lr-source').value;
+    }
   });
 }
 function renderListRows(containerId, list, kind) {
@@ -121,6 +137,13 @@ function renderListRows(containerId, list, kind) {
   el.querySelectorAll('.lr-remove').forEach((btn, i) => btn.onclick = () => {
     syncListRows(containerId, list, kind);
     list.splice(i, 1);
+    renderListRows(containerId, list, kind);
+  });
+  const rows = [...el.querySelectorAll('.list-row')];
+  el.querySelectorAll('.lr-image-clear').forEach((btn) => btn.onclick = () => {
+    const i = rows.indexOf(btn.closest('.list-row'));
+    syncListRows(containerId, list, kind);
+    list[i].imageUrl = '';
     renderListRows(containerId, list, kind);
   });
 }
@@ -753,6 +776,19 @@ function charModal(c = {}) {
       ${field('Ritmo % (-50 a 50)', 'ttsRate', c.ttsRate ?? 0, 'number')}
       ${field('Tom Hz (-50 a 50)', 'ttsPitch', c.ttsPitch ?? 0, 'number')}
     </div>`}
+    <div class="field">
+      <label>Interpretação (roleplay)</label>
+      ${fieldSelect('Alinhamento', 'alignment', [
+        { value: '', label: '— nenhum —' },
+        { value: 'LB', label: 'Leal e Bom' }, { value: 'NB', label: 'Neutro e Bom' }, { value: 'CB', label: 'Caótico e Bom' },
+        { value: 'LN', label: 'Leal e Neutro' }, { value: 'N', label: 'Neutro' }, { value: 'CN', label: 'Caótico e Neutro' },
+        { value: 'LM', label: 'Leal e Mau' }, { value: 'NM', label: 'Neutro e Mau' }, { value: 'CM', label: 'Caótico e Mau' },
+      ], c.alignment || '')}
+      ${fieldArea('Traços de personalidade', 'personalityTraits', c.personalityTraits, 'Sempre tem uma piada pronta, mesmo na hora errada...')}
+      ${fieldArea('Ideais', 'ideals', c.ideals, 'Liberdade acima de tudo. Ninguém deveria viver acorrentado.')}
+      ${fieldArea('Vínculos', 'bonds', c.bonds, 'Devo minha vida ao mestre que me criou.')}
+      ${fieldArea('Defeitos', 'flaws', c.flaws, 'Não resiste a uma boa aposta, mesmo perdendo sempre.')}
+    </div>
     ${fieldArea('Descrição', 'description', c.description)}
     ${isPc ? '' : fieldArea('Segredos (só o Mestre vê; a IA usa para coerência)', 'secrets', c.secrets)}
     ${fieldImage('Retrato (aparece no token e na tela dos jogadores)', 'imageUrl', c.imageUrl)}
@@ -773,11 +809,21 @@ function charModal(c = {}) {
       source: row.querySelector('.lr-source').value.trim(),
       description: row.querySelector('.lr-desc').value.trim(),
     })).filter((f) => f.name);
-    data.spells = [...$$('#charm-spells-list .list-row')].map((row) => ({
-      name: row.querySelector('.lr-name').value.trim(),
-      level: Math.max(0, Math.min(9, Number(row.querySelector('.lr-level').value) || 0)),
-      description: row.querySelector('.lr-desc').value.trim(),
-    })).filter((s) => s.name);
+    data.spells = (await Promise.all([...$$('#charm-spells-list .list-row')].map(async (row) => {
+      const file = row.querySelector('.lr-image-file')?.files?.[0];
+      let imageUrl = row.querySelector('.lr-image-url')?.value || '';
+      if (file) {
+        const fd = new FormData();
+        fd.append('file', file);
+        imageUrl = (await api('/images', { method: 'POST', body: fd })).url;
+      }
+      return {
+        name: row.querySelector('.lr-name').value.trim(),
+        level: Math.max(0, Math.min(9, Number(row.querySelector('.lr-level').value) || 0)),
+        description: row.querySelector('.lr-desc').value.trim(),
+        imageUrl,
+      };
+    }))).filter((s) => s.name);
     if (c.id) await api(`/characters/${c.id}`, { method: 'PUT', body: data });
     else await api('/characters', { method: 'POST', body: data });
   });
@@ -874,6 +920,7 @@ function characterSheetModal(ch) {
     ${(ch.spells || []).length ? `
       <div class="sheet-col-title" style="margin-top:14px;">Magias</div>
       ${ch.spells.map((s) => sheetFeatureHtml(s, 'spell')).join('')}` : ''}
+    ${sheetRoleplayHtml(ch)}
     ${ch.description ? `<div class="sheet-desc">${esc(ch.description).replace(/\n/g, '<br>')}</div>` : ''}
   `, async () => {}, 'Fechar');
 
@@ -1045,6 +1092,23 @@ function renderAudio() {
       <div id="fs-results"></div>
       <p class="help-text">Requer FREESOUND_API_KEY no .env (grátis em freesound.org). O som é baixado direto para a sua biblioteca, já com as tags.</p>
     </div>
+    <div class="card" style="margin-bottom:16px;">
+      <h3 style="display:flex;align-items:center;gap:8px;"><svg class="icon"><use href="#i-broadcast"/></svg>Buscar no YouTube</h3>
+      <div class="row" style="align-items:center;">
+        <input id="yt-query" placeholder="trilha de taverna medieval, batalha épica, chuva na floresta..." style="flex:1;" />
+        <select id="yt-type">
+          <option value="ambient">Ambiente</option>
+          <option value="music" selected>Música</option>
+          <option value="sfx">Efeito</option>
+        </select>
+        <select id="yt-category">
+          ${sfxCategoryOptions().map((o) => `<option value="${o.value}">${esc(o.label)}</option>`).join('')}
+        </select>
+        <button class="btn" id="btn-yt-search"><svg class="icon"><use href="#i-magnifying-glass"/></svg>Buscar</button>
+      </div>
+      <div id="yt-results"></div>
+      <p class="help-text">Baixa só o áudio do vídeo (via yt-dlp) e importa pra biblioteca, igual o Freesound — ótimo pra trilhas sonoras mais elaboradas que os loops curtos.</p>
+    </div>
     ${ambientes.length ? `<h3 class="audio-section-title">${TYPE_LABEL.ambient}</h3>${ambientes.map(audioRowHtml).join('')}` : ''}
     ${musicas.length ? `<h3 class="audio-section-title">${TYPE_LABEL.music}</h3>${musicas.map(audioRowHtml).join('')}` : ''}
     <h3 class="audio-section-title">${TYPE_LABEL.sfx}</h3>
@@ -1061,6 +1125,8 @@ function renderAudio() {
   $('#up-type').dispatchEvent(new Event('change'));
   $('#fs-type').onchange = (e) => { $('#fs-category').style.display = e.target.value === 'sfx' ? '' : 'none'; };
   $('#fs-type').dispatchEvent(new Event('change'));
+  $('#yt-type').onchange = (e) => { $('#yt-category').style.display = e.target.value === 'sfx' ? '' : 'none'; };
+  $('#yt-type').dispatchEvent(new Event('change'));
 
   $$('#tab-audio .sfx-cat-bar [data-cat]').forEach((b) => b.onclick = () => { libCategoria = b.dataset.cat; renderAudio(); });
   const libSearch = $('#lib-sfx-search');
@@ -1102,6 +1168,36 @@ function renderAudio() {
   };
   $('#btn-fs-search').onclick = fsSearch;
   $('#fs-query').addEventListener('keydown', (e) => { if (e.key === 'Enter') fsSearch(); });
+
+  const fmtDuration = (s) => s ? `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}` : '?:??';
+  const ytSearch = async () => {
+    const q = $('#yt-query').value.trim();
+    if (!q) return;
+    $('#yt-results').innerHTML = '<div class="help-text">Buscando no YouTube...</div>';
+    const results = await tryApi(() => api(`/youtube/search?q=${encodeURIComponent(q)}`));
+    if (!results) { $('#yt-results').innerHTML = ''; return; }
+    $('#yt-results').innerHTML = results.length ? results.map((v, i) => `
+      <div class="audio-row" style="margin-top:8px;">
+        ${v.thumbnailUrl ? `<img src="${esc(v.thumbnailUrl)}" alt="" style="width:64px;height:36px;object-fit:cover;border-radius:6px;flex-shrink:0;" />` : ''}
+        <span class="name"><b>${esc(v.title)}</b><br/>
+          <small style="color:var(--muted)">${fmtDuration(v.duration)} · ${esc(v.channel)}</small></span>
+        <button class="btn small gold" data-yt-import="${i}"><svg class="icon"><use href="#i-download-simple"/></svg>Importar</button>
+      </div>`).join('') : '<div class="help-text">Nada encontrado.</div>';
+
+    $$('#yt-results [data-yt-import]').forEach((b) => b.onclick = async () => {
+      const v = results[Number(b.dataset.ytImport)];
+      b.disabled = true; b.textContent = 'Baixando...';
+      const type = $('#yt-type').value;
+      const r = await tryApi(() => api('/youtube/import', {
+        method: 'POST',
+        body: { videoId: v.id, title: v.title, type, category: type === 'sfx' ? $('#yt-category').value : undefined },
+      }), `"${v.title}" importado para a biblioteca!`);
+      if (r) refresh();
+      else { b.disabled = false; b.textContent = 'Importar'; }
+    });
+  };
+  $('#btn-yt-search').onclick = ytSearch;
+  $('#yt-query').addEventListener('keydown', (e) => { if (e.key === 'Enter') ytSearch(); });
 
   $('#audio-upload-form').onsubmit = async (e) => {
     e.preventDefault();
@@ -1166,10 +1262,16 @@ function renderBoothTab() {
             <input type="range" id="booth-dist" min="0" max="1" step="0.05" value="0" /></label>
           <label>Ganho da voz <span id="booth-gain-val">2.0×</span>
             <input type="range" id="booth-gain" min="0.5" max="3.5" step="0.1" value="2" /></label>
+          <label>Robô <span id="booth-robot-val">0%</span>
+            <input type="range" id="booth-robot" min="0" max="1" step="0.05" value="0" /></label>
+          <label>Rádio/comunicador <span id="booth-radio-val">0%</span>
+            <input type="range" id="booth-radio" min="0" max="1" step="0.05" value="0" /></label>
+          <label>Eco <span id="booth-echo-val">0%</span>
+            <input type="range" id="booth-echo" min="0" max="1" step="0.05" value="0" /></label>
         </div>
         <label style="font-size:13px;"><input type="checkbox" id="booth-monitor" /> <svg class="icon"><use href="#i-headphones"/></svg> Ouvir minha voz transformada (só com fones!)</label>
         <button class="btn danger" id="booth-onair" style="margin-top:10px; font-size:16px;"><svg class="icon"><use href="#i-record"/></svg>ENTRAR NO AR</button>
-        <p class="help-text" style="margin-top:6px;">Dicas: ogro/gigante = tom -6 a -9 · gnomo/fada = +5 a +8 · fantasma = reverb alto + tom -2 · demônio = tom -7 + distorção 40%.</p>
+        <p class="help-text" style="margin-top:6px;">Dicas: ogro/gigante = tom -6 a -9 · gnomo/fada = +5 a +8 · fantasma = reverb alto + tom -2 · demônio = tom -7 + distorção 40% · autômato/construto = robô 60-100% · voz no rádio/magia de comunicação = rádio 70-100% · caverna/masmorra = eco 30-50%.</p>
       </div>`;
 
     booth.onStatus = (msg, isError) => {
@@ -1196,6 +1298,9 @@ function renderBoothTab() {
     bindSlider('#booth-reverb', '#booth-reverb-val', 'reverb', (v) => `${Math.round(v * 100)}%`);
     bindSlider('#booth-dist', '#booth-dist-val', 'distortion', (v) => `${Math.round(v * 100)}%`);
     bindSlider('#booth-gain', '#booth-gain-val', 'gain', (v) => `${v.toFixed(1)}×`);
+    bindSlider('#booth-robot', '#booth-robot-val', 'robot', (v) => `${Math.round(v * 100)}%`);
+    bindSlider('#booth-radio', '#booth-radio-val', 'radio', (v) => `${Math.round(v * 100)}%`);
+    bindSlider('#booth-echo', '#booth-echo-val', 'echo', (v) => `${Math.round(v * 100)}%`);
     $('#booth-monitor').onchange = (e) => boothSetMonitor(e.target.checked);
     $('#booth-onair').onclick = async () => {
       if (booth.onAir) { boothOffAir(); return; }
@@ -1210,7 +1315,10 @@ function renderBoothTab() {
       if (!id) return toast('Escolha um NPC primeiro.', true);
       await tryApi(() => api(`/characters/${id}`, {
         method: 'PUT',
-        body: { fxPitch: booth.fx.pitch, fxReverb: booth.fx.reverb, fxDist: booth.fx.distortion, fxGain: booth.fx.gain },
+        body: {
+          fxPitch: booth.fx.pitch, fxReverb: booth.fx.reverb, fxDist: booth.fx.distortion, fxGain: booth.fx.gain,
+          fxRobot: booth.fx.robot, fxRadio: booth.fx.radio, fxEcho: booth.fx.echo,
+        },
       }), 'Preset de voz salvo no NPC!');
       refresh();
     };
@@ -1228,14 +1336,23 @@ function boothLoadPreset(npc) {
   booth.fx.reverb = npc.fxReverb ?? 0;
   booth.fx.distortion = npc.fxDist ?? 0;
   booth.fx.gain = npc.fxGain ?? 2;
+  booth.fx.robot = npc.fxRobot ?? 0;
+  booth.fx.radio = npc.fxRadio ?? 0;
+  booth.fx.echo = npc.fxEcho ?? 0;
   $('#booth-pitch').value = booth.fx.pitch;
   $('#booth-reverb').value = booth.fx.reverb;
   $('#booth-dist').value = booth.fx.distortion;
   $('#booth-gain').value = booth.fx.gain;
+  $('#booth-robot').value = booth.fx.robot;
+  $('#booth-radio').value = booth.fx.radio;
+  $('#booth-echo').value = booth.fx.echo;
   $('#booth-pitch-val').textContent = `${booth.fx.pitch > 0 ? '+' : ''}${booth.fx.pitch} st`;
   $('#booth-reverb-val').textContent = `${Math.round(booth.fx.reverb * 100)}%`;
   $('#booth-dist-val').textContent = `${Math.round(booth.fx.distortion * 100)}%`;
   $('#booth-gain-val').textContent = `${booth.fx.gain.toFixed(1)}×`;
+  $('#booth-robot-val').textContent = `${Math.round(booth.fx.robot * 100)}%`;
+  $('#booth-radio-val').textContent = `${Math.round(booth.fx.radio * 100)}%`;
+  $('#booth-echo-val').textContent = `${Math.round(booth.fx.echo * 100)}%`;
   boothApplyFx();
   toast(`Preset de "${npc.name}" carregado.`);
 }
@@ -1871,13 +1988,11 @@ async function placeOnMap(entry) {
   if (!map) return toast('Coloque um mapa em jogo primeiro.', true);
   if (tokenOf(entry.name)) return; // já está no mapa
   const seed = await tokenSeed(entry);
-  const i = state.battle.tokens.length;
   state.battle.tokens.push({
     id: Math.random().toString(16).slice(2, 10),
     name: entry.name,
     combatName: entry.name,
-    col: i % map.cols,
-    row: Math.min(map.rows - 1, Math.floor(i / map.cols)),
+    ...nextTokenSlot(map, occupiedCells()),
     size: 1, hidden: false, color: '',
     hp: entry.hp, maxHp: entry.maxHp,
     ...seed,
@@ -2237,19 +2352,43 @@ function renderAoePanel() {
   $('#aoe-clear').onclick = () => bmap.setAoe(null);
 }
 
-// Coloca tokens novos no mapa, sem duplicar quem já está lá. Entram em fila na borda esquerda.
+// Anéis quadrados crescentes ao redor de um centro — usado pra achar onde encaixar um
+// token novo perto de onde o Mestre está olhando, sem empilhar em cima de quem já tá lá.
+function* spiralCells(centerCol, centerRow) {
+  yield [centerCol, centerRow];
+  for (let ring = 1; ring < 60; ring++) {
+    for (let dx = -ring; dx <= ring; dx++) { yield [centerCol + dx, centerRow - ring]; yield [centerCol + dx, centerRow + ring]; }
+    for (let dy = -ring + 1; dy <= ring - 1; dy++) { yield [centerCol - ring, centerRow + dy]; yield [centerCol + ring, centerRow + dy]; }
+  }
+}
+// Conjunto de células já ocupadas no mapa agora — pra próxima célula livre não pisar em ninguém.
+const occupiedCells = () => new Set(state.battle.tokens.map((t) => `${t.col},${t.row}`));
+// Próxima célula livre a partir do centro da área visível do mapa (onde o Mestre está
+// olhando/com zoom aplicado) — em vez de sempre encher a partir do canto superior esquerdo.
+// `occupied` é mutado: cada chamada dentro do mesmo lote já reserva a célula escolhida.
+function nextTokenSlot(map, occupied) {
+  const center = bmap?.map ? bmap.centerCell() : { col: Math.floor(map.cols / 2), row: Math.floor(map.rows / 2) };
+  for (const [col, row] of spiralCells(center.col, center.row)) {
+    if (col < 0 || row < 0 || col >= map.cols || row >= map.rows) continue;
+    const key = `${col},${row}`;
+    if (!occupied.has(key)) { occupied.add(key); return { col, row }; }
+  }
+  return { col: center.col, row: center.row }; // mapa lotado — improvável, mas não trava
+}
+
+// Coloca tokens novos no mapa, sem duplicar quem já está lá. Entram perto de onde o
+// Mestre está olhando no momento, em vez de sempre no canto superior esquerdo.
 function addTokens(defs) {
   const map = activeMap();
   if (!map) return toast('Coloque um mapa em jogo primeiro.', true);
   const tokens = state.battle.tokens;
+  const occupied = occupiedCells();
   let added = 0;
   for (const def of defs) {
     if (tokens.some((t) => t.name === def.name)) continue;
-    const i = tokens.length;
     tokens.push({
       id: Math.random().toString(16).slice(2, 10),
-      col: i % map.cols,
-      row: Math.min(map.rows - 1, Math.floor(i / map.cols)),
+      ...nextTokenSlot(map, occupied),
       size: 1, hidden: false, color: '', ...def,
     });
     added++;
@@ -2868,6 +3007,25 @@ const ABILITIES = [
   { key: 'str', label: 'FOR' }, { key: 'dex', label: 'DES' }, { key: 'con', label: 'CON' },
   { key: 'int', label: 'INT' }, { key: 'wis', label: 'SAB' }, { key: 'cha', label: 'CAR' },
 ];
+const ALIGNMENT_LABELS = {
+  LB: 'Leal e Bom', NB: 'Neutro e Bom', CB: 'Caótico e Bom',
+  LN: 'Leal e Neutro', N: 'Neutro', CN: 'Caótico e Neutro',
+  LM: 'Leal e Mau', NM: 'Neutro e Mau', CM: 'Caótico e Mau',
+};
+// Bloco de interpretação (traços/ideais/vínculos/defeitos) na ficha somente-leitura —
+// só entra se tiver pelo menos um campo preenchido, pra não poluir fichas sem isso.
+function sheetRoleplayHtml(ch) {
+  const rows = [
+    ['Traços de personalidade', ch.personalityTraits],
+    ['Ideais', ch.ideals],
+    ['Vínculos', ch.bonds],
+    ['Defeitos', ch.flaws],
+  ].filter(([, v]) => v);
+  if (!ch.alignment && !rows.length) return '';
+  return `
+    <div class="sheet-col-title" style="margin-top:14px;">Interpretação${ch.alignment ? ` <span class="sheet-feature-tag">${esc(ALIGNMENT_LABELS[ch.alignment] || ch.alignment)}</span>` : ''}</div>
+    ${rows.map(([label, v]) => `<div class="sheet-feature"><div class="sheet-feature-body"><b>${label}</b><div class="sheet-feature-desc">${esc(v).replace(/\n/g, '<br>')}</div></div></div>`).join('')}`;
+}
 const SKILLS = [
   { key: 'athletics', label: 'Atletismo', ability: 'str' },
   { key: 'acrobatics', label: 'Acrobacia', ability: 'dex' },
@@ -3088,12 +3246,10 @@ async function addMonster(index, aoMapa) {
   if (aoMapa) {
     const map = activeMap();
     if (!map) return toast('Entrou na iniciativa, mas não há mapa em jogo para receber o token.', true);
-    const i = state.battle.tokens.length;
     state.battle.tokens.push({
       id: Math.random().toString(16).slice(2, 10),
       name: nome, kind: 'enemy', combatName: nome,
-      col: Math.min(map.cols - 1, i % map.cols),
-      row: Math.min(map.rows - 1, Math.floor(i / map.cols)),
+      ...nextTokenSlot(map, occupiedCells()),
       size: SRD_SIZE[m.size] || 1,
       speed: metros,
       hp: m.hit_points, maxHp: m.hit_points,
@@ -3140,12 +3296,10 @@ async function addCharacter(charId, aoMapa) {
   if (aoMapa) {
     const map = activeMap();
     if (!map) { toast('Entrou na batalha, mas não há mapa em jogo para receber o token.', true); return refresh(); }
-    const i = state.battle.tokens.length;
     state.battle.tokens.push({
       id: Math.random().toString(16).slice(2, 10),
       name: nome, kind: kindDoPersonagem(ch), combatName: nome,
-      col: Math.min(map.cols - 1, i % map.cols),
-      row: Math.min(map.rows - 1, Math.floor(i / map.cols)),
+      ...nextTokenSlot(map, occupiedCells()),
       size: 1, speed: 9,
       hp: Number(ch.hp) || 0, maxHp: Number(ch.maxHp) || 0,
       hidden: false, color: '', imageUrl: ch.imageUrl || '', charId: ch.id,
@@ -3165,12 +3319,10 @@ function placeCharacterToken(charId) {
   if (!ch) return;
   const map = activeMap();
   if (!map) return toast('Coloque um mapa em jogo primeiro.', true);
-  const i = state.battle.tokens.length;
   state.battle.tokens.push({
     id: Math.random().toString(16).slice(2, 10),
     name: ch.name, kind: kindDoPersonagem(ch), combatName: '',
-    col: Math.min(map.cols - 1, i % map.cols),
-    row: Math.min(map.rows - 1, Math.floor(i / map.cols)),
+    ...nextTokenSlot(map, occupiedCells()),
     size: 1, speed: 9,
     hp: Number(ch.hp) || 0, maxHp: Number(ch.maxHp) || 0,
     hidden: false, color: '', imageUrl: ch.imageUrl || '', charId: ch.id,

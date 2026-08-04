@@ -33,6 +33,35 @@
       </div>
     </div>
     <aside class="player-initiative" id="player-initiative"></aside>
+
+    <!-- HUD de turno: só aparece quando é a vez de um personagem de jogador. -->
+    <div class="turn-hud hidden" id="turn-hud">
+      <div class="turn-hud-head">
+        <img class="turn-hud-portrait" id="turn-hud-portrait" src="" alt="" />
+        <div class="turn-hud-info">
+          <b id="turn-hud-name"></b>
+          <span id="turn-hud-sub"></span>
+        </div>
+      </div>
+      <div class="turn-hud-abilities" id="turn-hud-abilities"></div>
+      <div class="turn-hud-tabs">
+        <button class="turn-hud-tab active" data-hud-tab="features"><svg class="icon"><use href="#i-sparkle"/></svg>Habilidades</button>
+        <button class="turn-hud-tab" data-hud-tab="spells"><svg class="icon"><use href="#i-book-open-text"/></svg>Magias</button>
+        <button class="turn-hud-tab" data-hud-tab="inventory"><svg class="icon"><use href="#i-backpack"/></svg>Mochila</button>
+        <button class="turn-hud-tab" data-hud-tab="roleplay"><svg class="icon"><use href="#i-mask-happy"/></svg>Interpretação</button>
+      </div>
+      <div class="turn-hud-list" id="turn-hud-list"></div>
+    </div>
+  </div>
+
+  <!-- Popup da carta de magia -->
+  <div class="spell-popup hidden" id="spell-popup">
+    <div class="spell-popup-box">
+      <button class="spell-popup-close" id="spell-popup-close" type="button"><svg class="icon"><use href="#i-x"/></svg></button>
+      <img class="spell-popup-img hidden" id="spell-popup-img" src="" alt="" />
+      <h3 id="spell-popup-name"></h3>
+      <div id="spell-popup-desc"></div>
+    </div>
   </div>
   <script src="battlemap.js"></script>
   <script src="dice3d.js"></script>

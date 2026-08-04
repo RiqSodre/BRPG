@@ -1,18 +1,52 @@
-// Integração com IA via Groq (Llama 3.3 70B) — gratuito em groq.com.
-// Para configurar: crie uma conta em groq.com, gere uma API key e adicione
-// GROQ_API_KEY=sua_key no arquivo .env do projeto.
+// Integração com IA — GPT (OpenAI) ou Groq (Llama 3.3 70B, gratuito), à escolha.
+// As duas SDKs falam o mesmo formato "chat.completions", então o resto do arquivo
+// não precisa saber qual das duas está em uso.
+//
+// Configuração no .env:
+//   OPENAI_API_KEY=...   → usa GPT (https://platform.openai.com/api-keys), pago por uso
+//   GROQ_API_KEY=...     → usa Llama 3.3 70B (https://groq.com), gratuito
+// Se as duas estiverem definidas, o GPT é o padrão — use AI_PROVIDER=groq no .env pra forçar o Groq.
 import Groq from 'groq-sdk';
+import OpenAI from 'openai';
 import { getDb, getItem } from './store.js';
 
-const MODEL = 'llama-3.3-70b-versatile';
+const MODELS = { openai: 'gpt-4o-mini', groq: 'llama-3.3-70b-versatile' };
 
-let groq = null;
+let cached = null; // { client, provider, model }
 function getClient() {
-  if (!process.env.GROQ_API_KEY) {
-    throw new Error('GROQ_API_KEY não definida no .env — acesse groq.com, crie uma conta gratuita e gere uma API key.');
+  if (cached) return cached;
+
+  const forced = (process.env.AI_PROVIDER || '').toLowerCase();
+  const provider = forced === 'openai' || forced === 'groq' ? forced
+    : process.env.OPENAI_API_KEY ? 'openai'
+    : process.env.GROQ_API_KEY ? 'groq'
+    : null;
+
+  if (!provider) {
+    throw new Error('Nenhuma chave de IA configurada — defina OPENAI_API_KEY (GPT) ou GROQ_API_KEY (gratuito, groq.com) no .env.');
   }
-  if (!groq) groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-  return groq;
+  if (provider === 'openai' && !process.env.OPENAI_API_KEY) {
+    throw new Error('AI_PROVIDER=openai no .env, mas OPENAI_API_KEY não está definida.');
+  }
+  if (provider === 'groq' && !process.env.GROQ_API_KEY) {
+    throw new Error('AI_PROVIDER=groq no .env, mas GROQ_API_KEY não está definida — crie uma conta gratuita em groq.com.');
+  }
+
+  const client = provider === 'openai'
+    ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+    : new Groq({ apiKey: process.env.GROQ_API_KEY });
+  cached = { client, provider, model: MODELS[provider] };
+  return cached;
+}
+
+// Mensagens de erro cruas da SDK (ex.: "429 Too Many Requests") confundem mais do
+// que ajudam no meio de uma sessão — traduz os casos mais comuns.
+function friendlyAiError(e, provider) {
+  const status = e.status || e.statusCode;
+  if (status === 429) return new Error(`Limite de uso da IA (${provider}) atingido no momento — espere um pouco e tente de novo.`);
+  if (status === 401 || status === 403) return new Error(`Chave de API da IA (${provider}) inválida ou expirada — confira o .env.`);
+  if (status === 400 && /model/i.test(e.message || '')) return new Error(`O modelo de IA configurado (${provider}) não está mais disponível — avise o Mestre pra atualizar o código.`);
+  return e;
 }
 
 // Serializa toda a campanha em texto para servir de contexto à IA.
@@ -69,16 +103,21 @@ Quando inventar algo novo, sinalize com "(novo)" para o Mestre saber que não es
 </campanha>`;
 
 async function ask(messages, maxTokens = 1500) {
+  const { client, provider, model } = getClient();
   const system = SYSTEM_PROMPT.replace('{CONTEXT}', buildCampaignContext());
-  const resp = await getClient().chat.completions.create({
-    model: MODEL,
-    max_tokens: maxTokens,
-    messages: [
-      { role: 'system', content: system },
-      ...messages,
-    ],
-  });
-  return resp.choices[0]?.message?.content?.trim() ?? '';
+  try {
+    const resp = await client.chat.completions.create({
+      model,
+      max_tokens: maxTokens,
+      messages: [
+        { role: 'system', content: system },
+        ...messages,
+      ],
+    });
+    return resp.choices[0]?.message?.content?.trim() ?? '';
+  } catch (e) {
+    throw friendlyAiError(e, provider);
+  }
 }
 
 // Chat livre do Mestre com o assistente (history = [{role, content}])
@@ -115,28 +154,34 @@ export async function improviseNpc(npcId, situation) {
 // Sem contexto de campanha — é tradução pura, para ficar barato e consistente.
 export async function translateMonster(monsterName, blocks) {
   if (!blocks?.length) return [];
+  const { client, provider, model } = getClient();
   const payload = blocks.map((b, i) => `[${i}] ${b.name}\n${b.desc}`).join('\n\n');
-  const resp = await getClient().chat.completions.create({
-    model: MODEL,
-    max_tokens: 3000,
-    temperature: 0.2,
-    messages: [
-      {
-        role: 'system',
-        content: 'Você traduz blocos de ficha de monstro de D&D 5e do inglês para o português brasileiro, ' +
-          'com naturalidade e usando os termos OFICIAIS de D&D em PT-BR. Regras rígidas:\n' +
-          '- Mantenha a notação de dados intacta: 2d6+3, 1d20, 3d8 etc.\n' +
-          '- Converta pés para metros (1 pé ≈ 0,3 m; arredonde para valores redondos: 5 ft→1,5 m, 30 ft→9 m, 60 ft→18 m).\n' +
-          '- Termos: saving throw=teste de resistência, DC=CD, hit points=pontos de vida, ' +
-          'melee weapon attack=ataque de arma corpo a corpo, ranged=à distância, reach=alcance, Hit:=Acerto:, ' +
-          'condições: prone=caído, grappled=agarrado, restrained=contido, poisoned=envenenado, stunned=atordoado, ' +
-          'frightened=amedrontado, charmed=enfeitiçado, blinded=cego, prone=caído, unconscious=inconsciente.\n' +
-          'Responda APENAS com JSON válido: um array na mesma ordem e quantidade da entrada, ' +
-          'no formato [{"name":"...","desc":"..."}]. Sem markdown, sem comentários, sem texto fora do JSON.',
-      },
-      { role: 'user', content: `Monstro: ${monsterName}\n\nTraduza os ${blocks.length} blocos abaixo:\n\n${payload}` },
-    ],
-  });
+  let resp;
+  try {
+    resp = await client.chat.completions.create({
+      model,
+      max_tokens: 3000,
+      temperature: 0.2,
+      messages: [
+        {
+          role: 'system',
+          content: 'Você traduz blocos de ficha de monstro de D&D 5e do inglês para o português brasileiro, ' +
+            'com naturalidade e usando os termos OFICIAIS de D&D em PT-BR. Regras rígidas:\n' +
+            '- Mantenha a notação de dados intacta: 2d6+3, 1d20, 3d8 etc.\n' +
+            '- Converta pés para metros (1 pé ≈ 0,3 m; arredonde para valores redondos: 5 ft→1,5 m, 30 ft→9 m, 60 ft→18 m).\n' +
+            '- Termos: saving throw=teste de resistência, DC=CD, hit points=pontos de vida, ' +
+            'melee weapon attack=ataque de arma corpo a corpo, ranged=à distância, reach=alcance, Hit:=Acerto:, ' +
+            'condições: prone=caído, grappled=agarrado, restrained=contido, poisoned=envenenado, stunned=atordoado, ' +
+            'frightened=amedrontado, charmed=enfeitiçado, blinded=cego, prone=caído, unconscious=inconsciente.\n' +
+            'Responda APENAS com JSON válido: um array na mesma ordem e quantidade da entrada, ' +
+            'no formato [{"name":"...","desc":"..."}]. Sem markdown, sem comentários, sem texto fora do JSON.',
+        },
+        { role: 'user', content: `Monstro: ${monsterName}\n\nTraduza os ${blocks.length} blocos abaixo:\n\n${payload}` },
+      ],
+    });
+  } catch (e) {
+    throw friendlyAiError(e, provider);
+  }
   const text = resp.choices[0]?.message?.content?.trim() ?? '[]';
   const arr = JSON.parse(text.replace(/```json?|```/g, '').trim());
   if (!Array.isArray(arr)) throw new Error('Tradução da IA em formato inesperado.');
@@ -154,23 +199,29 @@ export async function suggestSceneAudio(sceneId) {
     `- id:${a.id} | ${a.name} | tipo:${a.type} | tags: ${(a.tags || []).join(', ') || '-'}`
   ).join('\n');
 
-  const resp = await getClient().chat.completions.create({
-    model: MODEL,
-    max_tokens: 500,
-    messages: [
-      {
-        role: 'system',
-        content: 'Você escolhe trilhas sonoras para cenas de RPG. Responda APENAS com JSON válido, sem markdown, sem explicação.',
-      },
-      {
-        role: 'user',
-        content: `Cena: "${scene.title}"\nDescrição: ${scene.readAloud || ''}\nNotas: ${scene.gmNotes || ''}\n\n` +
-          `Biblioteca de áudio disponível:\n${library}\n\n` +
-          `Escolha o que melhor combina com a cena. Responda SOMENTE com JSON no formato:\n` +
-          `{"ambientAudioId": "<id ou null>", "musicAudioId": "<id ou null>", "sfxIds": [], "reasoning": "<1 frase>"}`,
-      },
-    ],
-  });
+  const { client, provider, model } = getClient();
+  let resp;
+  try {
+    resp = await client.chat.completions.create({
+      model,
+      max_tokens: 500,
+      messages: [
+        {
+          role: 'system',
+          content: 'Você escolhe trilhas sonoras para cenas de RPG. Responda APENAS com JSON válido, sem markdown, sem explicação.',
+        },
+        {
+          role: 'user',
+          content: `Cena: "${scene.title}"\nDescrição: ${scene.readAloud || ''}\nNotas: ${scene.gmNotes || ''}\n\n` +
+            `Biblioteca de áudio disponível:\n${library}\n\n` +
+            `Escolha o que melhor combina com a cena. Responda SOMENTE com JSON no formato:\n` +
+            `{"ambientAudioId": "<id ou null>", "musicAudioId": "<id ou null>", "sfxIds": [], "reasoning": "<1 frase>"}`,
+        },
+      ],
+    });
+  } catch (e) {
+    throw friendlyAiError(e, provider);
+  }
 
   const text = resp.choices[0]?.message?.content?.trim() ?? '{}';
   let json;

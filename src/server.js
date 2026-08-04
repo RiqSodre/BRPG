@@ -5,6 +5,8 @@ import { fileURLToPath } from 'url';
 import express from 'express';
 import multer from 'multer';
 import { WebSocketServer } from 'ws';
+import youtubedl from 'youtube-dl-exec';
+import ffmpegPath from 'ffmpeg-static';
 import {
   getDb, save, listItems, getItem, addItem, updateItem, removeItem, newId,
   DATA_DIR, AUDIO_DIR, MAPS_DIR, IMAGES_DIR, SAMPLES_DIR,
@@ -75,14 +77,23 @@ export function startServer() {
   // ---- CRUD das coleções ----
   for (const col of ['story', 'characters', 'scenes', 'sessions', 'items']) {
     app.get(`/api/${col}`, wrap(async (req, res) => res.json(listItems(col))));
-    app.post(`/api/${col}`, wrap(async (req, res) => res.json(addItem(col, req.body))));
+    app.post(`/api/${col}`, wrap(async (req, res) => {
+      const item = addItem(col, req.body);
+      // A ficha do personagem (habilidades, magias, mochila, roleplay...) alimenta o
+      // HUD de turno na tela dos jogadores — sem isso, só atualizava na próxima ação
+      // de mapa/combate, o que podia deixar dados velhos na tela por um bom tempo.
+      if (col === 'characters') broadcastTable();
+      res.json(item);
+    }));
     app.put(`/api/${col}/:id`, wrap(async (req, res) => {
       const item = updateItem(col, req.params.id, req.body);
       if (!item) return res.status(404).json({ error: 'Não encontrado' });
+      if (col === 'characters') broadcastTable();
       res.json(item);
     }));
     app.delete(`/api/${col}/:id`, wrap(async (req, res) => {
       removeItem(col, req.params.id);
+      if (col === 'characters') broadcastTable();
       res.json({ ok: true });
     }));
   }
@@ -339,6 +350,56 @@ export function startServer() {
       filename,
       type: type || 'sfx',
       category: (type || 'sfx') === 'sfx' ? (category || 'geral') : undefined,
+      tags: Array.isArray(tags) ? tags : [],
+      volume: 1,
+    });
+    res.json(item);
+  }));
+
+  // ---- YouTube: buscar e importar áudio direto para a biblioteca (via yt-dlp) ----
+  // yt-dlp já veio pronto (baixado no npm install, sem precisar de Python instalado —
+  // no Windows é um .exe autocontido). Reaproveita o ffmpeg-static que o projeto já usa
+  // pra outras coisas, então não depende de nada além do que já está no repositório.
+  app.get('/api/youtube/search', wrap(async (req, res) => {
+    const q = String(req.query.q || '').trim();
+    if (!q) return res.json([]);
+    let data;
+    try {
+      data = await youtubedl(`ytsearch8:${q}`, {
+        dumpSingleJson: true, flatPlaylist: true, noWarnings: true, noCheckCertificates: true,
+      });
+    } catch (e) {
+      throw new Error(`Busca no YouTube falhou: ${(e.message || '').split('\n')[0] || e.message}`);
+    }
+    res.json((data.entries || []).map((v) => ({
+      id: v.id,
+      title: v.title,
+      duration: v.duration || 0,
+      channel: v.channel || v.uploader || '',
+      thumbnailUrl: v.thumbnails?.[v.thumbnails.length - 1]?.url || '',
+    })));
+  }));
+  app.post('/api/youtube/import', wrap(async (req, res) => {
+    const { videoId, title, type, category, tags } = req.body;
+    if (!videoId) throw new Error('videoId ausente.');
+    const filename = `${newId()}.mp3`;
+    try {
+      await youtubedl(`https://www.youtube.com/watch?v=${videoId}`, {
+        extractAudio: true,
+        audioFormat: 'mp3',
+        output: path.join(AUDIO_DIR, filename),
+        ffmpegLocation: ffmpegPath,
+        noCheckCertificates: true,
+        noWarnings: true,
+      });
+    } catch (e) {
+      throw new Error(`Falha ao baixar do YouTube: ${(e.message || '').split('\n')[0] || e.message}`);
+    }
+    const item = addItem('audio', {
+      name: title || 'Áudio do YouTube',
+      filename,
+      type: type || 'music',
+      category: (type || 'music') === 'sfx' ? (category || 'geral') : undefined,
       tags: Array.isArray(tags) ? tags : [],
       volume: 1,
     });

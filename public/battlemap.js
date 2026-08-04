@@ -478,6 +478,18 @@ class BattleMap {
     this.draw();
   }
 
+  // Célula do grid que está no centro da tela agora — usado pra colocar tokens novos
+  // ali (onde o Mestre está olhando), em vez de sempre no canto superior do mapa.
+  centerCell() {
+    if (!this.map) return { col: 0, row: 0 };
+    const dpr = window.devicePixelRatio || 1;
+    const w = this.canvas.width / dpr;
+    const h = this.canvas.height / dpr;
+    const gx = (w / 2 - this.cam.x) / this.cam.zoom;
+    const gy = (h / 2 - this.cam.y) / this.cam.zoom;
+    return Grid.pointToCell(this.map, gx, gy);
+  }
+
   addPing(col, row) {
     this.pings.push({ col, row, t: performance.now() });
     this._animate();

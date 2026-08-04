@@ -460,13 +460,18 @@ textarea { resize: vertical; min-height: 80px; }
 
 .sheet-desc { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 13px; line-height: 1.6; color: var(--muted); white-space: pre-wrap; }
 
-.sheet-feature { margin: 8px 0; font-size: 13px; }
+.sheet-feature { margin: 8px 0; font-size: 13px; display: flex; gap: 10px; align-items: flex-start; }
+.sheet-feature-body { flex: 1; min-width: 0; }
 .sheet-feature b { color: var(--text); }
 .sheet-feature-tag {
   font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
   color: var(--accent2); background: var(--bg3); border-radius: 8px; padding: 1px 7px; margin-left: 2px;
 }
 .sheet-feature-desc { font-size: 12.5px; color: var(--muted); line-height: 1.55; margin-top: 2px; white-space: pre-wrap; }
+.sheet-feature-card {
+  width: 64px; height: 88px; object-fit: cover; flex-shrink: 0;
+  border-radius: 6px; border: 1px solid var(--border); background: var(--bg3);
+}
 
 /* Editor de lista dinâmica (habilidades, magias) dentro dos modais de personagem */
 .list-row {
@@ -481,6 +486,13 @@ textarea { resize: vertical; min-height: 80px; }
 .list-row .lr-name { flex: 2; min-width: 0; }
 .list-row .lr-source, .list-row .lr-level { max-width: 150px; flex-shrink: 0; }
 .list-row .lr-remove { flex-shrink: 0; }
+.lr-image-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.lr-image-preview {
+  width: 40px; height: 55px; object-fit: cover; border-radius: 5px;
+  border: 1px solid var(--border); background: var(--bg2); flex-shrink: 0;
+}
+.lr-image-url { flex: 1; min-width: 90px; font-size: 12px; }
+.lr-image-file { flex: 1; min-width: 90px; font-size: 12px; }
 
 /* ---------- Áudio ---------- */
 .audio-section-title {
@@ -590,6 +602,7 @@ textarea { resize: vertical; min-height: 80px; }
 
 /* ---------- Painel de dados 3D ---------- */
 .dice-panel { max-width: 100%; }
+.dice-panel.hidden { display: none; }
 .dice-face-row { display: flex; gap: 3px; }
 .dice-face { min-width: 34px; padding: 5px 6px; font-weight: 700; }
 .dice-face.active { background: var(--accent); border-color: var(--accent); color: #fff; }
@@ -924,6 +937,81 @@ textarea { resize: vertical; min-height: 80px; }
   font-size: 10px; padding: 1px 5px; border-radius: 8px;
   background: var(--cond-color); border: 1px solid var(--cond-color); color: #fff;
 }
+
+/* HUD de turno (tela dos jogadores) — só a ficha do personagem cuja vez é agora,
+   nunca segredos nem dados de outros personagens (a fonte já vem filtrada do servidor). */
+.turn-hud {
+  position: absolute; left: 24px; bottom: 24px; z-index: 7;
+  width: 300px; max-width: calc(100% - 48px); max-height: calc(100% - 48px);
+  display: flex; flex-direction: column;
+  background: rgba(13,13,17,0.9); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--accent); border-radius: 14px; padding: 12px;
+  box-shadow: 0 10px 32px rgba(0,0,0,0.5); color: var(--text);
+}
+.turn-hud.hidden { display: none; }
+.turn-hud-head { display: flex; align-items: center; gap: 10px; }
+.turn-hud-portrait {
+  width: 46px; height: 46px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
+  border: 2px solid var(--accent2); background: var(--bg3);
+}
+.turn-hud-info { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.turn-hud-info b { font-size: 16px; color: var(--accent2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.turn-hud-info span { font-size: 11.5px; color: var(--muted); }
+.turn-hud-abilities { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; margin: 10px 0; }
+.hud-abil {
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 4px 2px;
+}
+.hud-abil-label { font-size: 9px; color: var(--muted); letter-spacing: 0.04em; }
+.hud-abil-val { font-size: 13px; font-weight: 700; color: var(--text); }
+.turn-hud-tabs { display: flex; gap: 3px; }
+.turn-hud-tab {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 4px;
+  background: var(--bg3); border: 1px solid var(--border); color: var(--muted);
+  border-radius: 7px; padding: 6px 4px; font-size: 11.5px; cursor: pointer;
+}
+.turn-hud-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.turn-hud-tab .icon { width: 13px; height: 13px; }
+.turn-hud-list { overflow-y: auto; margin-top: 8px; min-height: 0; }
+.hud-item {
+  padding: 7px 8px; border-radius: 7px; cursor: pointer; font-size: 13px;
+  border-bottom: 1px solid var(--border);
+}
+.hud-item:last-child { border-bottom: none; }
+.hud-item:hover { background: var(--bg3); }
+.hud-item-tag {
+  font-size: 10px; font-weight: 700; color: var(--accent2); background: var(--bg3);
+  border-radius: 8px; padding: 1px 7px; margin-left: 3px;
+}
+.hud-item-desc { font-size: 12px; color: var(--muted); line-height: 1.5; margin-top: 4px; white-space: pre-wrap; }
+.hud-item-desc.hidden { display: none; }
+.hud-empty { font-size: 12.5px; color: var(--muted); padding: 6px 2px; }
+
+/* Popup da carta de magia — clique fora ou no X fecha */
+.spell-popup {
+  position: fixed; inset: 0; z-index: 50;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.6); backdrop-filter: blur(2px);
+}
+.spell-popup.hidden { display: none; }
+.spell-popup-box {
+  position: relative; width: min(360px, 90vw); max-height: 85vh; overflow-y: auto;
+  background: var(--bg2); border: 1px solid var(--accent); border-radius: 14px;
+  padding: 20px; box-shadow: 0 16px 48px rgba(0,0,0,0.6);
+}
+.spell-popup-close {
+  position: absolute; top: 10px; right: 10px; width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 50%;
+  color: var(--text); cursor: pointer;
+}
+.spell-popup-img {
+  display: block; width: 100%; max-height: 320px; object-fit: contain;
+  border-radius: 10px; margin-bottom: 12px; background: var(--bg3);
+}
+.spell-popup-img.hidden { display: none; }
+.spell-popup-box h3 { color: var(--accent2); margin-bottom: 8px; padding-right: 24px; }
+#spell-popup-desc { font-size: 13.5px; color: var(--text); line-height: 1.6; white-space: pre-wrap; }
 
 .toast {
   position: fixed; bottom: 24px; right: 24px;

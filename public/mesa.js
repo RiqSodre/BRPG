@@ -23,6 +23,106 @@ function setStatus(ok, msg) {
   el('player-status').textContent = msg;
 }
 
+// ---------- HUD de turno: atributos + habilidades/magias/mochila de quem está jogando ----------
+const ABILITIES = [
+  { key: 'str', label: 'FOR' }, { key: 'dex', label: 'DES' }, { key: 'con', label: 'CON' },
+  { key: 'int', label: 'INT' }, { key: 'wis', label: 'SAB' }, { key: 'cha', label: 'CAR' },
+];
+const abilityMod = (score) => Math.floor((Number(score) - 10) / 2);
+const fmtSigned = (n) => (n >= 0 ? `+${n}` : `${n}`);
+const ALIGNMENT_LABELS = {
+  LB: 'Leal e Bom', NB: 'Neutro e Bom', CB: 'Caótico e Bom',
+  LN: 'Leal e Neutro', N: 'Neutro', CN: 'Caótico e Neutro',
+  LM: 'Leal e Mau', NM: 'Neutro e Mau', CM: 'Caótico e Mau',
+};
+
+let hudChar = null; // ficha pública (sem segredos) do personagem em foco no HUD
+let hudTab = 'features';
+
+function renderHudTab() {
+  const list = el('turn-hud-list');
+  if (!hudChar) { list.innerHTML = ''; return; }
+  if (hudTab === 'features') {
+    list.innerHTML = hudChar.features.length ? hudChar.features.map((f) => `
+      <div class="hud-item">
+        <div class="hud-item-name">${esc(f.name)}</div>
+        <div class="hud-item-desc hidden">${esc(f.description || '').replace(/\n/g, '<br>') || '<i>Sem descrição.</i>'}</div>
+      </div>`).join('') : '<div class="hud-empty">Nenhuma habilidade cadastrada.</div>';
+    list.querySelectorAll('.hud-item').forEach((row) => row.onclick = () => row.querySelector('.hud-item-desc').classList.toggle('hidden'));
+  } else if (hudTab === 'spells') {
+    list.innerHTML = hudChar.spells.length ? hudChar.spells.map((s, i) => `
+      <div class="hud-item" data-i="${i}">
+        <div class="hud-item-name">${esc(s.name)} <span class="hud-item-tag">${s.level ? `Nv ${s.level}` : 'Truque'}</span></div>
+      </div>`).join('') : '<div class="hud-empty">Nenhuma magia cadastrada.</div>';
+    list.querySelectorAll('.hud-item').forEach((row) => row.onclick = () => openSpellPopup(hudChar.spells[Number(row.dataset.i)]));
+  } else if (hudTab === 'inventory') {
+    list.innerHTML = hudChar.inventory.length ? hudChar.inventory.map((l) => `
+      <div class="hud-item">
+        <div class="hud-item-name">${esc(l.name)} <span class="hud-item-tag">×${l.qty}</span></div>
+        <div class="hud-item-desc hidden">${esc(l.description || '').replace(/\n/g, '<br>') || '<i>Sem descrição.</i>'}</div>
+      </div>`).join('') : '<div class="hud-empty">Mochila vazia.</div>';
+    list.querySelectorAll('.hud-item').forEach((row) => row.onclick = () => row.querySelector('.hud-item-desc').classList.toggle('hidden'));
+  } else {
+    const rows = [
+      ['Traços de personalidade', hudChar.personalityTraits],
+      ['Ideais', hudChar.ideals],
+      ['Vínculos', hudChar.bonds],
+      ['Defeitos', hudChar.flaws],
+    ].filter(([, v]) => v);
+    const alinhamento = hudChar.alignment
+      ? `<div class="hud-item"><div class="hud-item-name">Alinhamento <span class="hud-item-tag">${esc(ALIGNMENT_LABELS[hudChar.alignment] || hudChar.alignment)}</span></div></div>` : '';
+    list.innerHTML = alinhamento + (rows.length
+      ? rows.map(([label, v]) => `
+        <div class="hud-item">
+          <div class="hud-item-name">${esc(label)}</div>
+          <div class="hud-item-desc">${esc(v).replace(/\n/g, '<br>')}</div>
+        </div>`).join('')
+      : (alinhamento ? '' : '<div class="hud-empty">Nada cadastrado ainda.</div>'));
+  }
+}
+
+function openSpellPopup(spell) {
+  if (!spell) return;
+  el('spell-popup-name').textContent = spell.name;
+  el('spell-popup-desc').innerHTML = esc(spell.description || '').replace(/\n/g, '<br>') || '<i>Sem descrição.</i>';
+  const img = el('spell-popup-img');
+  if (spell.imageUrl) { img.src = spell.imageUrl; img.classList.remove('hidden'); } else { img.classList.add('hidden'); }
+  el('spell-popup').classList.remove('hidden');
+}
+
+document.querySelectorAll('.turn-hud-tab').forEach((b) => b.onclick = () => {
+  hudTab = b.dataset.hudTab;
+  document.querySelectorAll('.turn-hud-tab').forEach((x) => x.classList.toggle('active', x === b));
+  renderHudTab();
+});
+el('spell-popup-close').onclick = () => el('spell-popup').classList.add('hidden');
+el('spell-popup').onclick = (e) => { if (e.target.id === 'spell-popup') el('spell-popup').classList.add('hidden'); };
+
+// Só aparece quando é a vez de um personagem de jogador (o Mestre e os NPCs não têm ficha pública).
+function updateTurnHud(combat, characters) {
+  const hud = el('turn-hud');
+  const cur = combat?.entries?.[combat.turn];
+  const ch = cur ? (characters || []).find((c) => c.name === (cur.name)) : null;
+  if (!ch) { hud.classList.add('hidden'); hudChar = null; return; }
+
+  const mesmoPersonagem = hudChar?.id === ch.id;
+  hudChar = ch;
+  hud.classList.remove('hidden');
+  if (!mesmoPersonagem) {
+    hudTab = 'features';
+    document.querySelectorAll('.turn-hud-tab').forEach((x) => x.classList.toggle('active', x.dataset.hudTab === 'features'));
+  }
+  const portrait = el('turn-hud-portrait');
+  if (cur.imageUrl) { portrait.src = cur.imageUrl; portrait.style.visibility = 'visible'; } else { portrait.style.visibility = 'hidden'; }
+  el('turn-hud-name').textContent = ch.name;
+  el('turn-hud-sub').textContent = [ch.race, ch.klass, ch.level ? `nível ${ch.level}` : '', ch.ac ? `CA ${ch.ac}` : ''].filter(Boolean).join(' · ');
+  el('turn-hud-abilities').innerHTML = ABILITIES.map((a) => {
+    const score = Number(ch.abilities?.[a.key]) || 10;
+    return `<div class="hud-abil"><span class="hud-abil-label">${a.label}</span><span class="hud-abil-val">${fmtSigned(abilityMod(score))}</span></div>`;
+  }).join('');
+  renderHudTab();
+}
+
 function renderInitiative(combat) {
   const box = el('player-initiative');
   if (!combat?.entries?.length) {
@@ -76,6 +176,7 @@ function connect() {
       el('player-map').textContent = msg.map ? msg.map.name : '';
       bmap.setData({ map: msg.map, battle: msg.battle, combat: msg.combat });
       renderInitiative(msg.combat);
+      updateTurnHud(msg.combat, msg.characters);
       // Enquadra sozinho quando o Mestre troca de mapa
       if (msg.map && msg.map.id !== firstMapId) {
         firstMapId = msg.map.id;

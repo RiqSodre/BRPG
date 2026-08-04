@@ -1,11 +1,11 @@
 # 🐉 Mesa do Mestre
 
-Assistente do Mestre para campanhas de RPG jogadas via Discord. Centraliza **história, cenas, personagens, sessões e áudios** — e usa IA (Claude) que conhece toda a sua campanha para te ajudar a mestrar.
+Assistente do Mestre para campanhas de RPG jogadas via Discord. Centraliza **história, cenas, personagens, sessões e áudios** — e usa IA (GPT ou Llama, à sua escolha) que conhece toda a sua campanha para te ajudar a mestrar.
 
 ## O que ele faz
 
 - **🎭 Cenas com som automático** — ao ativar uma cena no painel, o bot posta a descrição + imagem no canal de texto do Discord e **toca o áudio ambiente/música automaticamente** no canal de voz, em loop, com **crossfade** entre cenas.
-- **🎵 Mixer de verdade** — efeitos sonoros tocam **por cima** do ambiente sem interrompê-lo; volume master ao vivo. Busque e importe sons direto do **Freesound** pelo painel.
+- **🎵 Mixer de verdade** — efeitos sonoros tocam **por cima** do ambiente sem interrompê-lo; volume master ao vivo. Busque e importe sons direto do **Freesound** ou do **YouTube** (via yt-dlp, já incluso) pelo painel — ótimo pra trilhas sonoras mais elaboradas que os loops curtos do Freesound.
 - **🗣️ Vozes de NPC (TTS)** — o bot **fala as falas dos NPCs** no canal de voz, com voz, tom e ritmo configuráveis por NPC (Edge TTS, gratuito). Ouça a prévia no navegador antes de soltar na mesa.
 - **🎙️ Cabine do Mestre** — fale pelos NPCs com **a sua voz transformada em tempo real** (pitch, reverb, distorção), com preset salvo por NPC. O painel captura seu microfone, aplica os efeitos e transmite pelo bot, por cima da música. Use fones e mute-se no Discord enquanto encarna. *Para os jogadores terem voz própria, cada um usa um modificador local (Voicemod/Clownfish) com microfone virtual — o Discord não permite que um bot transforme a voz de outros usuários.*
 - **✨ IA que entende a campanha** — chat do Mestre com acesso a toda a história, NPCs (e seus segredos), cenas e sessões. Pergunte "o que o taverneiro sabe sobre o culto?", improvise locais/NPCs/encontros, gere recaps épicos das sessões.
@@ -41,7 +41,10 @@ Edite o `.env` e preencha:
 
 - `DISCORD_TOKEN` — token do bot (passo 2)
 - `DISCORD_GUILD_ID` — ID do servidor
-- `ANTHROPIC_API_KEY` — chave criada em https://console.anthropic.com (a IA é paga por uso; uma sessão de jogo típica custa centavos)
+- `OPENAI_API_KEY` **ou** `GROQ_API_KEY` — pelo menos uma das duas, para o Assistente do Mestre funcionar:
+  - `OPENAI_API_KEY` — chave criada em https://platform.openai.com/api-keys (GPT, pago por uso — uma sessão típica custa centavos)
+  - `GROQ_API_KEY` — chave criada em https://groq.com (Llama 3.3 70B, **gratuito**)
+  - Se definir as duas, o GPT é usado por padrão; force uma com `AI_PROVIDER=openai` ou `AI_PROVIDER=groq`
 - `FREESOUND_API_KEY` — opcional, para buscar sons pelo painel (grátis em https://freesound.org/apiv2/apply)
 
 ### 4. Rodar
@@ -68,7 +71,7 @@ src/
   bot.js      # bot do Discord (voz, cenas, /rolar, /vincular, handouts)
   mixer.js    # mixer PCM: ambiente + efeitos + voz ao vivo, crossfade, loop
   tts.js      # vozes de NPC via Edge TTS
-  ai.js       # integração com Claude (contexto = campanha inteira)
+  ai.js       # integração com GPT/Groq (contexto = campanha inteira)
   store.js    # armazenamento em JSON (data/campaign.json)
   realtime.js # mesa em tempo real: painel do Mestre <-> tela dos jogadores (WebSocket)
 scripts/

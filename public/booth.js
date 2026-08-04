@@ -64,7 +64,7 @@ const booth = {
   ws: null,
   onAir: false,
   micReady: false,
-  fx: { pitch: 0, reverb: 0, distortion: 0, gain: 2 },
+  fx: { pitch: 0, reverb: 0, distortion: 0, gain: 2, robot: 0, radio: 0, echo: 0 },
   sendBuf: new Float32Array(960), // 20ms mono @48kHz
   sendLen: 0,
   onStatus: null, // callback da UI
@@ -123,10 +123,46 @@ async function boothInitMic() {
     n.monitor = booth.ctx.createGain();
     n.monitor.gain.value = 0;
 
+    // Robô: modulação em anel — um osciladorzinho conectado no AudioParam de ganho faz
+    // o sinal seguir sin(2πft), que é a definição de ring modulation. Nativo, sem
+    // precisar de worklet: a base do gain fica sempre em 0, e um gain intermediário
+    // (robotDepth) controla o quanto o osc "empurra" esse ganho — a intensidade do slider.
+    n.robotOsc = booth.ctx.createOscillator();
+    n.robotOsc.frequency.value = 45;
+    n.robotDepth = booth.ctx.createGain();
+    n.robotDepth.gain.value = 0;
+    n.robotGain = booth.ctx.createGain();
+    n.robotGain.gain.value = 0;
+    n.robotOsc.connect(n.robotDepth).connect(n.robotGain.gain);
+    n.robotOsc.start();
+    n.robotWet = booth.ctx.createGain();
+    n.robotWet.gain.value = 0;
+
+    // Rádio/comunicador: corta graves e agudos (banda estreita = "voz de rádio").
+    n.radioFilter = booth.ctx.createBiquadFilter();
+    n.radioFilter.type = 'bandpass';
+    n.radioFilter.frequency.value = 1500;
+    n.radioFilter.Q.value = 1.6;
+    n.radioWet = booth.ctx.createGain();
+    n.radioWet.gain.value = 0;
+
+    // Eco: delay curto com realimentação — repetições que vão sumindo.
+    n.echoDelay = booth.ctx.createDelay(1.0);
+    n.echoDelay.delayTime.value = 0.18;
+    n.echoFeedback = booth.ctx.createGain();
+    n.echoFeedback.gain.value = 0.35;
+    n.echoWet = booth.ctx.createGain();
+    n.echoWet.gain.value = 0;
+
     n.source.connect(n.pitch);
     n.pitch.connect(n.shaper);
     n.shaper.connect(n.dry).connect(n.bus);
     n.shaper.connect(n.convolver).connect(n.wet).connect(n.bus);
+    n.shaper.connect(n.robotGain).connect(n.robotWet).connect(n.bus);
+    n.shaper.connect(n.radioFilter).connect(n.radioWet).connect(n.bus);
+    n.shaper.connect(n.echoDelay);
+    n.echoDelay.connect(n.echoFeedback).connect(n.echoDelay);
+    n.echoDelay.connect(n.echoWet).connect(n.bus);
     n.bus.connect(n.capture);
     n.bus.connect(n.monitor).connect(booth.ctx.destination);
 
@@ -175,10 +211,16 @@ function boothOnAudio(chunk) {
 function boothApplyFx() {
   if (!booth.micReady) return;
   const n = booth.nodes;
-  n.pitch.parameters.get('pitch').setValueAtTime(booth.fx.pitch, booth.ctx.currentTime);
+  const t = booth.ctx.currentTime;
+  n.pitch.parameters.get('pitch').setValueAtTime(booth.fx.pitch, t);
   n.shaper.curve = distortionCurve(booth.fx.distortion);
-  n.wet.gain.setTargetAtTime(booth.fx.reverb * 1.2, booth.ctx.currentTime, 0.05);
-  n.dry.gain.setTargetAtTime(1 - booth.fx.reverb * 0.4, booth.ctx.currentTime, 0.05);
+  n.wet.gain.setTargetAtTime(booth.fx.reverb * 1.2, t, 0.05);
+  n.dry.gain.setTargetAtTime(1 - booth.fx.reverb * 0.4, t, 0.05);
+  n.robotDepth.gain.setTargetAtTime(booth.fx.robot, t, 0.02); // profundidade da modulação em anel
+  n.robotWet.gain.setTargetAtTime(booth.fx.robot, t, 0.05);
+  n.radioWet.gain.setTargetAtTime(booth.fx.radio * 1.4, t, 0.05);
+  n.echoFeedback.gain.setTargetAtTime(0.2 + booth.fx.echo * 0.3, t, 0.05); // mais eco = repete mais vezes
+  n.echoWet.gain.setTargetAtTime(booth.fx.echo, t, 0.05);
   if (booth.onAir && booth.ws?.readyState === 1) {
     booth.ws.send(JSON.stringify({ type: 'gain', gain: booth.fx.gain }));
   }

@@ -43,6 +43,34 @@ function portraitOf(name, db) {
   return t?.imageUrl || c?.imageUrl || '';
 }
 
+// Ficha "segura" pro jogador: só o que é público durante o jogo (pro HUD de turno) —
+// nunca os segredos, a voz/TTS (é coisa de NPC mesmo) ou dados internos do Discord.
+function publicSheet(c, db) {
+  return {
+    id: c.id,
+    name: c.name,
+    race: c.race,
+    klass: c.klass,
+    subclass: c.subclass,
+    level: c.level,
+    ac: c.ac,
+    abilities: c.abilities || {},
+    saveProf: c.saveProf || {},
+    skillProf: c.skillProf || {},
+    alignment: c.alignment || '',
+    personalityTraits: c.personalityTraits || '',
+    ideals: c.ideals || '',
+    bonds: c.bonds || '',
+    flaws: c.flaws || '',
+    features: c.features || [],
+    spells: c.spells || [],
+    inventory: (c.inventory || []).map((l) => {
+      const item = getItem('items', l.itemId);
+      return item ? { itemId: l.itemId, qty: l.qty, name: item.name, description: item.description, rarity: item.rarity, type: item.type, imageUrl: item.imageUrl } : null;
+    }).filter(Boolean),
+  };
+}
+
 // Combatente escondido (token com 👁️ desligado) não deve nem aparecer na lista de
 // iniciativa dos jogadores — hoje ele só era filtrado do mapa. Vira um "???" sem PV,
 // retrato ou condições em vez de sumir da lista: sumir mudaria a posição de todo mundo
@@ -89,6 +117,7 @@ function views() {
         return isPc(e.name) || showEnemyHp ? base : censorHp(base);
       }),
     },
+    characters: db.characters.filter((c) => c.type === 'pc').map((c) => publicSheet(c, db)),
     campaignName: db.settings.campaignName,
   };
 
