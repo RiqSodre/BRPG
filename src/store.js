@@ -41,7 +41,9 @@ const DEFAULTS = {
   audio: [],      // { id, name, filename, type: 'ambient'|'music'|'sfx', category, tags, volume }
                   // category só se aplica a sfx: 'combate'|'criaturas'|'objetos'|'ambiente'|'magia'|'social'|'geral'
   sessions: [],   // { id, date, title, notes, recap }
-  combat: { active: false, round: 1, turn: 0, entries: [] },
+  combat: { active: false, round: 1, turn: 0, entries: [], log: [] },
+  // log: [{ ts, round, turn, text }] — histórico de tudo que rola na luta (dano, cura,
+  // condição, turno, morte...); sobrevive ao fim do combate, só limpa se o Mestre pedir.
   // Mapas de batalha: grid + imagem opcional. cellSize = metros por quadrado.
   maps: [],       // { id, name, cols, rows, cellSize, filename, imageUrl, img: { x, y, scale }, fog: { enabled, revealed: ['c,r'] } }
   // showEnemyHp: quando falso, os jogadores veem só a barra e o estado dos inimigos, não os números.

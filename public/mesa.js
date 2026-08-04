@@ -124,7 +124,7 @@ function updateTurnHud(combat, characters) {
 }
 
 function renderInitiative(combat) {
-  const box = el('player-initiative');
+  const box = el('player-init-list');
   if (!combat?.entries?.length) {
     box.innerHTML = '<div class="empty">Sem combate.</div>';
     el('player-turn').textContent = 'Sem combate em andamento';
@@ -161,6 +161,28 @@ function renderInitiative(combat) {
   }).join('');
 }
 
+// ---------- Log de combate — só leitura, mesma fonte que o Mestre vê ----------
+const fmtLogTime = (ts) => {
+  const d = new Date(ts);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+};
+let lastLogLen = 0;
+function renderCombatLog(log) {
+  const el2 = el('player-combat-log');
+  if (!el2) return;
+  log = log || [];
+  if (!el2.dataset.built) {
+    el2.dataset.built = '1';
+    el2.innerHTML = `<div class="side-section-label"><span>Log de combate</span></div><div class="combat-log-list" id="player-combat-log-list"></div>`;
+  }
+  const list = el('player-combat-log-list');
+  list.innerHTML = log.length
+    ? log.map((l) => `<div class="combat-log-row"><span class="combat-log-time">R${l.round} · ${fmtLogTime(l.ts)}</span>${esc(l.text)}</div>`).join('')
+    : '<div class="help-text" style="padding:6px 2px;">Nada registrado ainda.</div>';
+  // Só rola pro fim quando chega linha nova — assim não atrapalha quem tá lendo pra cima.
+  if (log.length !== lastLogLen) { list.scrollTop = list.scrollHeight; lastLogLen = log.length; }
+}
+
 function connect() {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   const ws = new WebSocket(`${proto}//${location.host}/mesa`);
@@ -176,6 +198,7 @@ function connect() {
       el('player-map').textContent = msg.map ? msg.map.name : '';
       bmap.setData({ map: msg.map, battle: msg.battle, combat: msg.combat });
       renderInitiative(msg.combat);
+      renderCombatLog(msg.combat?.log);
       updateTurnHud(msg.combat, msg.characters);
       // Enquadra sozinho quando o Mestre troca de mapa
       if (msg.map && msg.map.id !== firstMapId) {

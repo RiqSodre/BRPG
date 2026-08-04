@@ -1515,6 +1515,7 @@ function renderMapTab() {
           <div id="aoe-panel"></div>
           <div id="combat-order"></div>
           <div id="loose-tokens"></div>
+          <div class="side-section combat-log-section" id="combat-log-panel"></div>
         </aside>
       </div>`;
 
@@ -1942,6 +1943,7 @@ function renderMapSide() {
   renderAoePanel();
   renderCombatOrder();
   renderLooseTokens();
+  renderCombatLog();
 }
 
 const tokenOf = (name) => state.battle.tokens.find((t) => (t.combatName || t.name) === name);
@@ -2020,6 +2022,60 @@ async function saveCombatState() {
   await tryApi(() => api('/combat', { method: 'PUT', body: state.combat }));
 }
 
+// ---------- Log de combate ----------
+// Um histórico de tudo que rola na luta (dano, cura, condição, turno, morte...). Vive
+// dentro de state.combat pra viajar junto no mesmo PUT/broadcast que já existe — sem
+// rota nova, sem diffing no servidor. Sobrevive ao fim do combate (só limpa se o Mestre
+// pedir): é justamente o "ficou registrado" que se quer depois da luta.
+function logCombat(text) {
+  if (!state.combat.log) state.combat.log = [];
+  state.combat.log.push({ ts: Date.now(), round: state.combat.round, turn: state.combat.turn, text });
+  if (state.combat.log.length > 500) state.combat.log.splice(0, state.combat.log.length - 500);
+  renderCombatLog();
+}
+
+function fmtLogTime(ts) {
+  const d = new Date(ts);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+function renderCombatLog() {
+  const el = $('#combat-log-panel');
+  if (!el) return;
+  const log = state.combat.log || [];
+  if (!el.dataset.built) {
+    el.dataset.built = '1';
+    el.innerHTML = `
+      <div class="side-section-label">
+        <span>Log de combate</span>
+        <span class="row" style="gap:4px;margin:0;">
+          <button class="btn small ghost" id="log-copy" title="Copiar o log inteiro"><svg class="icon"><use href="#i-clipboard-text"/></svg></button>
+          <button class="btn small ghost danger" id="log-clear" title="Limpar o log"><svg class="icon"><use href="#i-trash"/></svg></button>
+        </span>
+      </div>
+      <div class="combat-log-list" id="combat-log-list"></div>`;
+    $('#log-copy').onclick = () => {
+      const text = (state.combat.log || []).map((l) => `[R${l.round}] ${fmtLogTime(l.ts)} — ${l.text}`).join('\n');
+      navigator.clipboard.writeText(text || '(log vazio)')
+        .then(() => toast('Log copiado!'))
+        .catch(() => toast('Não consegui copiar — copie manualmente.', true));
+    };
+    $('#log-clear').onclick = () => {
+      if (!(state.combat.log || []).length) return;
+      if (confirm('Limpar o log de combate? Não dá pra desfazer.')) {
+        state.combat.log = [];
+        saveCombatState();
+        renderCombatLog();
+      }
+    };
+  }
+  const list = $('#combat-log-list');
+  list.innerHTML = log.length
+    ? log.map((l) => `<div class="combat-log-row"><span class="combat-log-time">R${l.round} · ${fmtLogTime(l.ts)}</span>${esc(l.text)}</div>`).join('')
+    : '<div class="help-text" style="padding:6px 2px;">Nada registrado ainda — as ações da luta vão aparecer aqui.</div>';
+  list.scrollTop = list.scrollHeight;
+}
+
 function focusTurn() {
   const e = state.combat.entries[state.combat.turn];
   if (!e) return;
@@ -2038,6 +2094,7 @@ async function nextTurn(dir) {
 
   const atual = c.entries[c.turn];
   if (atual?.conditions?.length) toast(`${atual.name} está: ${atual.conditions.join(', ')}`);
+  logCombat(`Rodada ${c.round} — vez de ${atual?.name || '?'}`);
   await saveCombatState();
   renderMapSide();
   focusTurn();
@@ -2054,6 +2111,7 @@ async function rollInitiative() {
   c.entries.sort((a, b) => b.init - a.init);
   c.turn = 0;
   c.round = 1;
+  logCombat(`Iniciativa rolada: ${c.entries.map((e) => `${e.name} (${e.init})`).join(' → ')}`);
   await saveCombatState();
   renderMapSide();
   await refresh();
@@ -2077,13 +2135,20 @@ async function applyHp(tokens, delta) {
     const atual = Number(alvo.hp) || 0;
     const novo = Math.max(0, max ? Math.min(max, atual + delta) : atual + delta);
 
+    let linha = delta < 0
+      ? `${t.name} tomou ${-delta} de dano (${novo}${max ? `/${max}` : ''} PV)`
+      : `${t.name} recuperou ${delta} PV (${novo}${max ? `/${max}` : ''} PV)`;
     if (delta < 0 && alvo.concentration) {
-      avisos.push(`${t.name}: salvaguarda de CON CD ${Math.max(10, Math.floor(-delta / 2))} para manter a concentração`);
+      const cd = Math.max(10, Math.floor(-delta / 2));
+      avisos.push(`${t.name}: salvaguarda de CON CD ${cd} para manter a concentração`);
+      linha += ` — CD ${cd} de concentração`;
     }
     if (novo <= 0 && atual > 0) {
       alvo.deathSaves = { s: 0, f: 0 };
       avisos.push(`${t.name} caiu`);
+      linha += ' — caiu!';
     }
+    logCombat(linha);
     alvo.hp = novo;
     if (e) {
       t.hp = novo; // espelha no token para o canvas repintar imediatamente
@@ -2110,7 +2175,9 @@ async function applyHp(tokens, delta) {
 async function toggleCondition(t, cond) {
   const alvo = entryOf(t) || t;
   const atuais = alvo.conditions || [];
-  alvo.conditions = atuais.includes(cond) ? atuais.filter((x) => x !== cond) : [...atuais, cond];
+  const ligando = !atuais.includes(cond);
+  alvo.conditions = ligando ? [...atuais, cond] : atuais.filter((x) => x !== cond);
+  logCombat(`${t.name} ${ligando ? 'ficou' : 'não está mais'} ${cond}`);
   if (entryOf(t)) await saveCombatState(); else pushBattle();
   renderMapSide();
 }
@@ -2193,12 +2260,7 @@ function renderCombatHud() {
   $('#hud-prev').onclick = () => nextTurn(-1);
   $('#hud-roll').onclick = rollInitiative;
   $('#hud-announce').onclick = () => tryApi(() => api('/combat/announce', { method: 'POST' }), 'Iniciativa postada!');
-  $('#hud-end').onclick = async () => {
-    if (!confirm('Encerrar o combate? A iniciativa é limpa; os tokens continuam no mapa.')) return;
-    state.combat = { active: false, round: 1, turn: 0, entries: [] };
-    await saveCombatState();
-    toast('Combate encerrado.');
-  };
+  $('#hud-end').onclick = () => endCombat();
 }
 
 function renderTokenPanel() {
@@ -2337,6 +2399,7 @@ function renderAoePanel() {
     const r = await tryApi(() => api('/roll', { method: 'POST', body: { expr } }));
     if (!r) return;
     setResult(r.total, expr, r.detail || null);
+    logCombat(`Área de efeito: ${expr} = ${r.total}${r.detail ? ` (${r.detail})` : ''}`);
   };
 
   $('#aoe-expr').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#aoe-roll').click(); });
@@ -2499,6 +2562,7 @@ function renderCombatOrder() {
       const dmg = (e.hp ?? 0) - val;
       if (dmg > 0 && e.concentration) toast(`${e.name} tomou ${dmg} de dano concentrando: CD ${Math.max(10, Math.floor(dmg / 2))}!`);
       if (val <= 0 && e.hp > 0) e.deathSaves = { s: 0, f: 0 };
+      if (dmg !== 0) logCombat(dmg > 0 ? `${e.name} tomou ${dmg} de dano (${val}${e.maxHp ? `/${e.maxHp}` : ''} PV)` : `${e.name} recuperou ${-dmg} PV (${val}${e.maxHp ? `/${e.maxHp}` : ''} PV)`);
     }
     const nomeAntigo = e.name;
     e[fn] = val;
@@ -2522,6 +2586,7 @@ function renderCombatOrder() {
     if (!sel.value) return;
     const e = c.entries[Number(sel.dataset.addCond)];
     e.conditions = [...(e.conditions || []), sel.value];
+    logCombat(`${e.name} ficou ${sel.value}`);
     sel.value = '';
     saveCombat();
   });
@@ -2531,6 +2596,7 @@ function renderCombatOrder() {
     const [i, cond] = b.dataset.rmCond.split('|');
     const e = c.entries[Number(i)];
     e.conditions = (e.conditions || []).filter((x) => x !== cond);
+    logCombat(`${e.name} não está mais ${cond}`);
     saveCombat();
   });
 
@@ -2565,6 +2631,7 @@ function renderCombatOrder() {
       if (bmap.selectedId === tok.id) bmap.select(null);
       pushBattle();
     }
+    if (e) logCombat(`${e.name} saiu do combate`);
     c.entries.splice(i, 1);
     if (c.turn >= c.entries.length) c.turn = 0;
     saveCombat();
@@ -2575,7 +2642,8 @@ function renderCombatOrder() {
     const e = c.entries[Number(b.dataset.dsS)];
     e.deathSaves = e.deathSaves || { s: 0, f: 0 };
     e.deathSaves.s = Math.min(3, (e.deathSaves.s || 0) + 1);
-    if (e.deathSaves.s >= 3) toast(`${e.name} estabilizou!`);
+    if (e.deathSaves.s >= 3) { toast(`${e.name} estabilizou!`); logCombat(`${e.name} estabilizou (3 sucessos)`); }
+    else logCombat(`${e.name}: sucesso na resistência contra a morte (${e.deathSaves.s}/3)`);
     saveCombat();
   });
 
@@ -2584,7 +2652,8 @@ function renderCombatOrder() {
     const e = c.entries[Number(b.dataset.dsF)];
     e.deathSaves = e.deathSaves || { s: 0, f: 0 };
     e.deathSaves.f = Math.min(3, (e.deathSaves.f || 0) + 1);
-    if (e.deathSaves.f >= 3) toast(`${e.name} morreu...`);
+    if (e.deathSaves.f >= 3) { toast(`${e.name} morreu...`); logCombat(`${e.name} morreu (3 falhas)`); }
+    else logCombat(`${e.name}: falha na resistência contra a morte (${e.deathSaves.f}/3)`);
     saveCombat();
   });
 
@@ -2601,23 +2670,26 @@ function renderCombatOrder() {
 
   if (coAdd) coAdd.onclick = () => {
     c.entries.push({ name: 'Monstro', init: 10, hp: 10, maxHp: 10, conditions: [], deathSaves: { s: 0, f: 0 } });
+    logCombat('Monstro (em branco) entrou no combate');
     saveCombat();
   };
   if (coPcs) coPcs.onclick = () => charPickerModal();
   if (coSort) coSort.onclick = () => { c.entries.sort((a, b) => b.init - a.init); c.turn = 0; saveCombat(); };
   if (coSrd) coSrd.onclick = () => srdModal();
-  if (coNext) coNext.onclick = () => {
-    if (!c.entries.length) return;
-    c.turn = (c.turn + 1) % c.entries.length;
-    if (c.turn === 0) c.round += 1;
-    const cur = c.entries[c.turn];
-    if (cur?.conditions?.length) toast(`${cur.name} está: ${cur.conditions.join(', ')}`);
-    saveCombat();
-  };
+  if (coNext) coNext.onclick = () => nextTurn(1);
   if (coAnnounce) coAnnounce.onclick = () => tryApi(() => api('/combat/announce', { method: 'POST' }), 'Iniciativa postada!');
-  if (coEnd) coEnd.onclick = () => {
-    if (confirm('Encerrar o combate e limpar a lista?')) { c.entries = []; c.round = 1; c.turn = 0; saveCombat(); }
-  };
+  if (coEnd) coEnd.onclick = () => endCombat();
+}
+
+// Encerra o combate: limpa a iniciativa, mas o log de combate fica — é o que o Mestre
+// quer poder revisar depois da luta. Compartilhado pelo botão do HUD e o da sidebar.
+function endCombat() {
+  if (!confirm('Encerrar o combate? A iniciativa é limpa; os tokens continuam no mapa.')) return;
+  logCombat('Combate encerrado');
+  state.combat = { active: false, round: 1, turn: 0, entries: [], log: state.combat.log };
+  saveCombatState();
+  renderMapSide();
+  toast('Combate encerrado.');
 }
 
 // Seção subordinada: tokens no mapa que NÃO estão na iniciativa (objetos, NPCs de cenário,
@@ -3241,6 +3313,7 @@ async function addMonster(index, aoMapa) {
     srdIndex: m.index,
     imageUrl: arte,
   });
+  logCombat(`${nome} entrou no combate (iniciativa d20${mod >= 0 ? '+' : ''}${mod})`);
   await tryApi(() => api('/combat', { method: 'PUT', body: c }));
 
   if (aoMapa) {
@@ -3291,6 +3364,7 @@ async function addCharacter(charId, aoMapa) {
     charId: ch.id,
     imageUrl: ch.imageUrl || '',
   });
+  logCombat(`${nome} entrou no combate (iniciativa d20${dexMod >= 0 ? '+' : ''}${dexMod})`);
   await tryApi(() => api('/combat', { method: 'PUT', body: c }));
 
   if (aoMapa) {
@@ -3401,6 +3475,7 @@ function charPickerModal() {
           conditions: [], deathSaves: { s: 0, f: 0 }, isPc: true,
           charId: pc.id, imageUrl: pc.imageUrl || '',
         });
+        logCombat(`${pc.name} entrou no combate (iniciativa d20${dexMod >= 0 ? '+' : ''}${dexMod})`);
       }
     }
     await tryApi(() => api('/combat', { method: 'PUT', body: c }));

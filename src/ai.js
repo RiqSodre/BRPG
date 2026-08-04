@@ -87,6 +87,15 @@ export function buildCampaignContext() {
       parts.push(`### ${s.title || s.date}\n${s.recap || s.notes || '-'}`);
     }
   }
+  // Log de combate: linha a linha do que rolou na luta mais recente (dano, cura,
+  // condições, mortes, turnos...) — dá pra IA contexto pra recaps épicos e coerência
+  // com o que de fato aconteceu, sem o Mestre ter que reescrever tudo nas notas.
+  if (db.combat?.log?.length) {
+    parts.push('## Log de combate (eventos recentes, em ordem)');
+    parts.push(
+      db.combat.log.slice(-80).map((l) => `[Rodada ${l.round}] ${l.text}`).join('\n')
+    );
+  }
   return parts.join('\n\n');
 }
 
@@ -133,6 +142,8 @@ export async function generateRecap(sessionId) {
     role: 'user',
     content: `Gere um recap épico e curto (2-4 parágrafos) da última sessão para eu postar no Discord antes da próxima. ` +
       `Tom de narrador, em português, SEM revelar segredos que os jogadores não descobriram. ` +
+      `Se houver um "Log de combate" no contexto da campanha, use os eventos dele pra deixar as partes de luta ` +
+      `mais precisas e dramáticas (quem quase caiu, reviravoltas, o golpe decisivo) — sem virar uma lista de números. ` +
       `Anotações da sessão:\n\n${session.notes || '(sem anotações)'}`,
   }], 1000);
 }
