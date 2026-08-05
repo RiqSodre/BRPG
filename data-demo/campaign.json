@@ -1,0 +1,896 @@
+{
+  "settings": {
+    "campaignName": "As Correntes de Valmora",
+    "system": "D&D 5e",
+    "textChannelId": "",
+    "voiceChannelId": "",
+    "volume": 0.4,
+    "obsidian": {
+      "vaultPath": "",
+      "folderPlayers": "Players",
+      "folderEnemies": "Inimigos",
+      "folderNpcs": "Facções e NPCs",
+      "folderScenes": "Locais e Ganchos",
+      "folderSessions": "Sessões",
+      "folderLore": "Guia geral"
+    }
+  },
+  "story": [
+    {
+      "id": "story001demo",
+      "title": "Premissa da Campanha",
+      "category": "mundo",
+      "content": "Valmora é a maior cidade-porto do Mar Cinzento, sustentada pelo comércio e por um segredo incômodo: há vinte anos, relíquias amaldiçoadas vindas de naufrágios antigos começaram a aparecer no mercado negro. A maioria dos mercadores finge não ver. A Guarda do Porto finge não saber. Mas nos últimos meses, pessoas comuns começaram a desaparecer nas noites de maré alta — sempre depois de terem comprado algo \"raro demais\" de um vendedor que ninguém consegue descrever direito.",
+      "updatedAt": "2026-07-10T18:00:00.000Z"
+    },
+    {
+      "id": "story002demo",
+      "title": "Porto de Valmora — Cidade",
+      "category": "locais",
+      "content": "Cidade portuária de uns 30 mil habitantes, dividida em três bairros: **Porto Alto** — mercadores, guildas, a Capitania; **Porto Baixo** — docas, armazéns, tavernas, onde a lei chega por último; **O Espinhaço** — bairro residencial construído sobre o antigo cais de pedra, ruas estreitas e empilhadas ladeira acima. Acima de tudo, o Farol de Valmora, que nunca se apaga — dizem que a chama é alimentada por algo que não é fogo.",
+      "updatedAt": "2026-07-10T18:05:00.000Z"
+    },
+    {
+      "id": "story003demo",
+      "title": "A Companhia da Maré Cinzenta",
+      "category": "facções",
+      "content": "Rede de contrabando que trafica relíquias amaldiçoadas vindas do Cemitério de Naufrágios, um recife a duas léguas da costa onde dezenas de navios afundaram em uma única noite, séculos atrás. Ninguém sabe quem lidera a Companhia — só que ela paga bem, pergunta pouco, e que quem tenta investigar demais some na maré. O símbolo deles é uma âncora quebrada, gravada a giz nas portas de quem \"deve\" a eles.",
+      "updatedAt": "2026-07-10T18:10:00.000Z"
+    }
+  ],
+  "items": [
+    {
+      "id": "item001demo",
+      "name": "Poção de Cura",
+      "description": "Recupera 2d4+2 pontos de vida ao beber. O líquido vermelho-vivo borbulha sozinho dentro do frasco.",
+      "rarity": "Comum",
+      "type": "Poção",
+      "imageUrl": "",
+      "updatedAt": "2026-07-10T18:15:00.000Z"
+    },
+    {
+      "id": "item002demo",
+      "name": "Adaga da Maré Cinzenta",
+      "description": "Uma adaga de lâmina negra recuperada de um contrabandista. Sussurra em um idioma que ninguém reconhece quando desembainhada perto da água salgada. +1 nas jogadas de ataque e dano; uma vez por dia, pode lançar Escuridão centrada em si mesma (ação bônus).",
+      "rarity": "Raro",
+      "type": "Arma",
+      "imageUrl": "",
+      "updatedAt": "2026-07-10T18:20:00.000Z"
+    },
+    {
+      "id": "item003demo",
+      "name": "Amuleto de Respiração Aquática",
+      "description": "Enquanto usado, você pode respirar debaixo d'água e ganha deslocamento de natação igual ao seu deslocamento normal. Frio ao toque, mesmo debaixo do sol.",
+      "rarity": "Incomum",
+      "type": "Item Maravilhoso",
+      "imageUrl": "",
+      "updatedAt": "2026-07-10T18:25:00.000Z"
+    }
+  ],
+  "characters": [
+    {
+      "id": "pc001demo",
+      "name": "Kessia Thornwood",
+      "type": "pc",
+      "player": "Jogador 1",
+      "race": "Elfa",
+      "klass": "Patrulheira",
+      "subclass": "Caçadora",
+      "level": 3,
+      "ac": 15,
+      "hp": 28,
+      "maxHp": 28,
+      "stats": "",
+      "description": "Elfa do bosque, magra e silenciosa, sempre com o arco a tiracolo. Saiu de Ashmoor há um ano rastreando o motivo do desaparecimento do seu clã.",
+      "secrets": "O clã de Kessia não foi \"expulso\" — foi dizimado pela Companhia da Maré Cinzenta quando descobriram uma relíquia enterrada na floresta. Ela ainda não sabe.",
+      "voice": "",
+      "imageUrl": "",
+      "discordUserId": "",
+      "discordTag": "",
+      "inventory": [
+        {
+          "itemId": "item001demo",
+          "qty": 2
+        }
+      ],
+      "abilities": {
+        "str": 10,
+        "dex": 16,
+        "con": 13,
+        "int": 12,
+        "wis": 14,
+        "cha": 8
+      },
+      "saveProf": {
+        "str": true,
+        "dex": true,
+        "con": false,
+        "int": false,
+        "wis": false,
+        "cha": false
+      },
+      "skillProf": {
+        "athletics": false,
+        "acrobatics": false,
+        "sleightOfHand": false,
+        "stealth": true,
+        "arcana": false,
+        "history": false,
+        "investigation": false,
+        "nature": true,
+        "religion": false,
+        "animalHandling": true,
+        "insight": false,
+        "medicine": false,
+        "perception": true,
+        "survival": true,
+        "deception": false,
+        "intimidation": false,
+        "performance": false,
+        "persuasion": false
+      },
+      "features": [
+        {
+          "name": "Inimigo Favorecido: Mortos-vivos",
+          "source": "Patrulheira 1",
+          "description": "Vantagem em testes de Sabedoria (Sobrevivência) para rastrear mortos-vivos, e vantagem em testes de Inteligência para recordar informações sobre eles."
+        },
+        {
+          "name": "Explorador Nato: Pântano",
+          "source": "Patrulheira 1",
+          "description": "Terreno difícil de pântano não retarda seu deslocamento em grupo, e você não fica perdida exceto por magia."
+        },
+        {
+          "name": "Estilo de Combate: Tiro Certeiro",
+          "source": "Patrulheira 2",
+          "description": "Cobertura leve e média não concedem bônus à CA de alvos contra seus ataques à distância."
+        }
+      ],
+      "spells": [
+        {
+          "name": "Marca do Caçador",
+          "level": 1,
+          "description": "Marca uma criatura à vista; enquanto marcada, +1d6 de dano em ataques contra ela e vantagem em testes de Sabedoria (Percepção/Sobrevivência) pra rastreá-la.",
+          "imageUrl": ""
+        },
+        {
+          "name": "Enfeitiçar Animal",
+          "level": 1,
+          "description": "Encanta até três feras por até 24 horas, tornando-as amigáveis.",
+          "imageUrl": ""
+        }
+      ],
+      "alignment": "NB",
+      "personalityTraits": "Fala pouco, mas observa tudo — sabe o nome de cada guarda do porto antes de trocarem duas palavras.",
+      "ideals": "A natureza sempre encontra um equilíbrio; cabe a mim ajudar quando ele se rompe.",
+      "bonds": "Meu clã sumiu de Ashmoor há um ano. Vou descobrir o que aconteceu, custe o que custar.",
+      "flaws": "Confia mais em animais do que em pessoas — já causou mais de um mal-entendido caro.",
+      "updatedAt": "2026-07-10T19:00:00.000Z"
+    },
+    {
+      "id": "pc002demo",
+      "name": "Bram Ironfist",
+      "type": "pc",
+      "player": "Jogador 2",
+      "race": "Anão",
+      "klass": "Bárbaro",
+      "subclass": "Caminho do Berserker",
+      "level": 3,
+      "ac": 14,
+      "hp": 37,
+      "maxHp": 37,
+      "stats": "",
+      "description": "Anão largo como uma porta, barba trançada com contas de latão. Carrega o machado de duas mãos do avô, morto pela Companhia da Maré Cinzenta há dez anos.",
+      "secrets": "",
+      "voice": "",
+      "imageUrl": "",
+      "discordUserId": "",
+      "discordTag": "",
+      "inventory": [
+        {
+          "itemId": "item002demo",
+          "qty": 1
+        }
+      ],
+      "abilities": {
+        "str": 17,
+        "dex": 12,
+        "con": 16,
+        "int": 8,
+        "wis": 10,
+        "cha": 10
+      },
+      "saveProf": {
+        "str": true,
+        "dex": false,
+        "con": true,
+        "int": false,
+        "wis": false,
+        "cha": false
+      },
+      "skillProf": {
+        "athletics": true,
+        "acrobatics": false,
+        "sleightOfHand": false,
+        "stealth": false,
+        "arcana": false,
+        "history": false,
+        "investigation": false,
+        "nature": false,
+        "religion": false,
+        "animalHandling": false,
+        "insight": false,
+        "medicine": false,
+        "perception": false,
+        "survival": false,
+        "deception": false,
+        "intimidation": true,
+        "performance": false,
+        "persuasion": false
+      },
+      "features": [
+        {
+          "name": "Fúria",
+          "source": "Bárbaro 1",
+          "description": "Ação bônus para entrar em fúria: vantagem em testes/salvaguardas de Força, +2 no dano corpo a corpo com Força, resistência a dano cortante/perfurante/contundente. Dura 1 minuto."
+        },
+        {
+          "name": "Defesa sem Armadura",
+          "source": "Bárbaro 1",
+          "description": "Sem armadura, CA = 10 + mod. Destreza + mod. Constituição."
+        },
+        {
+          "name": "Ataque Descuidado",
+          "source": "Caminho do Berserker 3",
+          "description": "Vantagem nos ataques corpo a corpo com Força durante a fúria, mas ataques contra você também têm vantagem até seu próximo turno."
+        }
+      ],
+      "spells": [],
+      "alignment": "CB",
+      "personalityTraits": "Ri alto, bebe mais alto ainda, e nunca recusa uma boa briga de taverna.",
+      "ideals": "Força é responsabilidade. Uso a minha pra proteger quem não pode se proteger.",
+      "bonds": "Este machado era do meu avô. A Maré Cinzenta o matou. Um dia acerto as contas.",
+      "flaws": "Age primeiro, pensa depois — já quebrou mais portas do que abriu de propósito.",
+      "updatedAt": "2026-07-10T19:05:00.000Z"
+    },
+    {
+      "id": "pc003demo",
+      "name": "Nyra Duskwhisper",
+      "type": "pc",
+      "player": "Jogador 3",
+      "race": "Tiefling",
+      "klass": "Bruxa",
+      "subclass": "O Que Habita as Profundezas",
+      "level": 3,
+      "ac": 12,
+      "hp": 22,
+      "maxHp": 22,
+      "stats": "",
+      "description": "Pele cor de ardósia, chifres curtos e curvos, sempre com um sorriso torto. Fez um pacto com algo que dorme sob o Cemitério de Naufrágios pra salvar a irmã de uma doença.",
+      "secrets": "O preço do pacto de Nyra ainda não foi cobrado por completo — o patrono vai pedir algo em troca no momento mais inconveniente possível, provavelmente ligado ao clímax da campanha.",
+      "voice": "",
+      "imageUrl": "",
+      "discordUserId": "",
+      "discordTag": "",
+      "inventory": [
+        {
+          "itemId": "item003demo",
+          "qty": 1
+        },
+        {
+          "itemId": "item001demo",
+          "qty": 1
+        }
+      ],
+      "abilities": {
+        "str": 8,
+        "dex": 14,
+        "con": 13,
+        "int": 12,
+        "wis": 10,
+        "cha": 17
+      },
+      "saveProf": {
+        "str": false,
+        "dex": false,
+        "con": false,
+        "int": false,
+        "wis": true,
+        "cha": true
+      },
+      "skillProf": {
+        "athletics": false,
+        "acrobatics": false,
+        "sleightOfHand": false,
+        "stealth": false,
+        "arcana": true,
+        "history": false,
+        "investigation": true,
+        "nature": false,
+        "religion": false,
+        "animalHandling": false,
+        "insight": false,
+        "medicine": false,
+        "perception": false,
+        "survival": false,
+        "deception": true,
+        "intimidation": false,
+        "performance": false,
+        "persuasion": true
+      },
+      "features": [
+        {
+          "name": "Patrono de Outro Mundo",
+          "source": "Bruxa 1",
+          "description": "Fez um pacto com Aquele Que Habita as Profundezas, uma entidade adormecida sob o Cemitério de Naufrágios."
+        },
+        {
+          "name": "Mestra dos Pactos: Pacto da Lâmina",
+          "source": "Bruxa 3",
+          "description": "Pode criar uma arma de pacto na mão como ação; é considerada mágica pra fins de superar resistências."
+        }
+      ],
+      "spells": [
+        {
+          "name": "Toque Chocante",
+          "level": 0,
+          "description": "Ataque de magia corpo a corpo: 1d8 de dano elétrico e o alvo não pode reagir até o começo do seu próximo turno.",
+          "imageUrl": ""
+        },
+        {
+          "name": "Sussurro Dissonante",
+          "level": 1,
+          "description": "O alvo faz um teste de Sabedoria ou sofre 3d6 de dano psíquico e precisa usar sua reação pra se afastar de você.",
+          "imageUrl": ""
+        }
+      ],
+      "alignment": "CN",
+      "personalityTraits": "Faz piadas sombrias sobre o próprio destino — é como ela lida com o medo.",
+      "ideals": "Poder é a única moeda que realmente importa nesse mundo.",
+      "bonds": "Fiz um pacto pra salvar minha irmã. Ainda não sei o preço total.",
+      "flaws": "Não resiste a um segredo — mesmo os perigosos demais pra mexer.",
+      "updatedAt": "2026-07-10T19:10:00.000Z"
+    },
+    {
+      "id": "npc001demo",
+      "name": "Capitã Orlana Vex",
+      "type": "npc",
+      "npcType": "quest",
+      "race": "Humana",
+      "klass": "Capitã da Guarda do Porto",
+      "level": 5,
+      "ac": 15,
+      "hp": 40,
+      "maxHp": 40,
+      "description": "Comanda a Guarda do Porto Alto. Sotaque de marinheira, braços sempre cruzados quando desconfia de alguém — o que é quase sempre. Sabe mais sobre a Maré Cinzenta do que admite publicamente.",
+      "voice": "Fala rápido e direto, sotaque de marinheira, nunca sorri de verdade — só um puxão no canto da boca.",
+      "imageUrl": "",
+      "ttsVoice": "pt-BR-FranciscaNeural",
+      "ttsRate": 0,
+      "ttsPitch": 0,
+      "inventory": [],
+      "abilities": {
+        "str": 13,
+        "dex": 14,
+        "con": 14,
+        "int": 12,
+        "wis": 13,
+        "cha": 15
+      },
+      "saveProf": {},
+      "skillProf": {},
+      "features": [],
+      "spells": [],
+      "updatedAt": "2026-07-10T19:20:00.000Z"
+    },
+    {
+      "id": "npc002demo",
+      "name": "O Mercador Silencioso",
+      "type": "npc",
+      "npcType": "inimigo",
+      "race": "Desconhecida",
+      "klass": "Agente da Maré Cinzenta",
+      "level": 6,
+      "ac": 13,
+      "hp": 45,
+      "maxHp": 45,
+      "description": "Ninguém consegue descrever seu rosto direito depois de encontrá-lo — cada testemunha lembra de algo diferente. Vende relíquias amaldiçoadas em becos, sempre à noite, sempre na maré alta.",
+      "voice": "Nunca ergue a voz. Cada palavra parece calculada com antecedência, como se já soubesse sua resposta.",
+      "imageUrl": "",
+      "ttsVoice": "pt-BR-AntonioNeural",
+      "ttsRate": -15,
+      "ttsPitch": -10,
+      "inventory": [],
+      "abilities": {
+        "str": 10,
+        "dex": 16,
+        "con": 12,
+        "int": 17,
+        "wis": 14,
+        "cha": 16
+      },
+      "saveProf": {},
+      "skillProf": {},
+      "features": [],
+      "spells": [],
+      "updatedAt": "2026-07-10T19:25:00.000Z"
+    },
+    {
+      "id": "npc003demo",
+      "name": "Tobin Salgado",
+      "type": "npc",
+      "npcType": "aleatorio",
+      "race": "Humano",
+      "klass": "Pescador aposentado",
+      "level": 1,
+      "ac": 10,
+      "hp": 9,
+      "maxHp": 9,
+      "description": "Velho pescador que passa o dia sentado no cais remendando redes que não usa mais. Sabe todas as fofocas do Porto Baixo — só precisa de paciência (ou cerveja) pra soltar a língua.",
+      "voice": "Fala demais, sempre puxando assunto sobre o tempo antes de chegar ao ponto.",
+      "imageUrl": "",
+      "ttsVoice": "pt-BR-AntonioNeural",
+      "ttsRate": 10,
+      "ttsPitch": 5,
+      "inventory": [],
+      "abilities": {
+        "str": 9,
+        "dex": 10,
+        "con": 10,
+        "int": 9,
+        "wis": 12,
+        "cha": 11
+      },
+      "saveProf": {},
+      "skillProf": {},
+      "features": [],
+      "spells": [],
+      "updatedAt": "2026-07-10T19:30:00.000Z"
+    }
+  ],
+  "scenes": [
+    {
+      "id": "scene001demo",
+      "title": "Taverna do Polvo Encalhado",
+      "readAloud": "O cheiro de sal e cerveja derramada toma conta do ambiente assim que a porta se fecha atrás de vocês. Lampiões de óleo balançam no teto baixo, e uma tempestade distante faz as vigas rangerem. Num canto, um homem encapuzado observa a mesa de vocês por cima da caneca — e desvia o olhar rápido demais quando percebe que foi notado.",
+      "gmNotes": "Gancho: o homem encapuzado é um batedor da Companhia da Maré Cinzenta avaliando se os PJs valem a pena recrutar (ou eliminar). Se abordado, foge pelos fundos. Deixa cair um pedaço de papel com um símbolo de âncora quebrada.",
+      "imageUrl": "",
+      "ambientAudioId": null,
+      "musicAudioId": null,
+      "sfxIds": [],
+      "npcIds": [],
+      "updatedAt": "2026-07-10T20:00:00.000Z"
+    },
+    {
+      "id": "scene002demo",
+      "title": "Becos do Porto Baixo",
+      "readAloud": "A maré baixou e deixou o cheiro de peixe podre grudado nas pedras do cais. Lanternas raras criam ilhas de luz entre becos que parecem se fechar atrás de vocês conforme avançam. Em uma das portas, mal visível sob a sujeira, alguém desenhou a giz uma âncora partida ao meio.",
+      "gmNotes": "Investigação: teste de Sabedoria (Percepção) CD 13 pra notar que a porta marcada é de um armazém supostamente abandonado. Dentro, pistas sobre o Covil (cena 3): mapas rudimentares do Cemitério de Naufrágios e caixotes com o mesmo símbolo.",
+      "imageUrl": "",
+      "ambientAudioId": null,
+      "musicAudioId": null,
+      "sfxIds": [],
+      "npcIds": [],
+      "updatedAt": "2026-07-10T20:05:00.000Z"
+    },
+    {
+      "id": "scene003demo",
+      "title": "Covil da Maré Cinzenta",
+      "readAloud": "A caverna se abre debaixo do cais mais antigo de Valmora, iluminada por um brilho verde-acinzentado que não vem de nenhuma tocha. Dezenas de relíquias amaldiçoadas — restos de naufrágios — estão empilhadas em prateleiras improvisadas, e cada uma parece sussurrar algo diferente. No centro, o Mercador Silencioso espera, como se já soubesse que vocês viriam.",
+      "gmNotes": "Confronto final do arco 1. O Mercador luta pra fugir mais do que pra matar — quer proteger o carregamento, não os capangas. Se encurralado, ameaça destruir a relíquia central (que pode estar ligada ao clã de Kessia).",
+      "imageUrl": "",
+      "ambientAudioId": null,
+      "musicAudioId": null,
+      "sfxIds": [],
+      "npcIds": [],
+      "updatedAt": "2026-07-10T20:10:00.000Z"
+    }
+  ],
+  "audio": [],
+  "sessions": [
+    {
+      "id": "sess001demo",
+      "date": "2026-07-05",
+      "title": "Sessão 1 — Encontro no Polvo Encalhado",
+      "notes": "Grupo se conheceu na Taverna do Polvo Encalhado. Notaram o homem encapuzado observando; Bram tentou abordar direto e ele fugiu pelos fundos, deixando cair um papel com o símbolo da âncora quebrada. Kessia reconheceu o símbolo de relatos sobre o sumiço do clã dela. Nyra puxou conversa com o taverneiro e descobriu rumores sobre desaparecimentos na maré alta. Grupo decidiu investigar o Porto Baixo na manhã seguinte.",
+      "recap": "Sob o teto baixo do Polvo Encalhado, três estranhos se tornaram aliados por acaso — e por um olhar demorado demais. Um homem encapuzado, batedor de algo maior, escapou pelos fundos antes que Bram pudesse alcançá-lo, mas deixou pra trás um pedaço de papel: uma âncora partida ao meio, rabiscada a carvão. Para Kessia, o símbolo não era estranho — era o mesmo que assombrava os relatos sobre o desaparecimento do seu clã. Com rumores de gente sumindo nas noites de maré alta e um taverneiro nervoso demais pra ser inocente, o trio decidiu que o Porto Baixo guardava respostas. Ao amanhecer, seguiriam o cheiro de peixe podre e mistério.",
+      "updatedAt": "2026-07-10T20:30:00.000Z"
+    }
+  ],
+  "combat": {
+    "active": false,
+    "round": 2,
+    "turn": 1,
+    "entries": [
+      {
+        "name": "Bram Ironfist",
+        "init": 12,
+        "initMod": 1,
+        "hp": 24,
+        "maxHp": 37,
+        "conditions": [],
+        "deathSaves": {
+          "s": 0,
+          "f": 0
+        },
+        "isPc": true,
+        "charId": "pc002demo",
+        "imageUrl": ""
+      },
+      {
+        "name": "Nyra Duskwhisper",
+        "init": 15,
+        "initMod": 2,
+        "hp": 22,
+        "maxHp": 22,
+        "conditions": [],
+        "deathSaves": {
+          "s": 0,
+          "f": 0
+        },
+        "isPc": true,
+        "charId": "pc003demo",
+        "imageUrl": ""
+      },
+      {
+        "name": "Kessia Thornwood",
+        "init": 18,
+        "initMod": 3,
+        "hp": 20,
+        "maxHp": 28,
+        "conditions": [
+          "Envenenado"
+        ],
+        "deathSaves": {
+          "s": 0,
+          "f": 0
+        },
+        "isPc": true,
+        "charId": "pc001demo",
+        "imageUrl": ""
+      },
+      {
+        "name": "Contrabandista Cinzento",
+        "init": 9,
+        "initMod": 0,
+        "hp": 8,
+        "maxHp": 18,
+        "conditions": [],
+        "deathSaves": {
+          "s": 0,
+          "f": 0
+        },
+        "imageUrl": ""
+      }
+    ],
+    "log": [
+      {
+        "ts": 1783699200000,
+        "round": 1,
+        "turn": 0,
+        "text": "Iniciativa rolada: Kessia Thornwood (18) → Nyra Duskwhisper (15) → Bram Ironfist (12) → Contrabandista Cinzento (9)"
+      },
+      {
+        "ts": 1783699215000,
+        "round": 1,
+        "turn": 0,
+        "text": "Contrabandista Cinzento tomou 11 de dano (7/18 PV)"
+      },
+      {
+        "ts": 1783699230000,
+        "round": 1,
+        "turn": 1,
+        "text": "Rodada 1 — vez de Nyra Duskwhisper"
+      },
+      {
+        "ts": 1783699245000,
+        "round": 1,
+        "turn": 1,
+        "text": "Contrabandista Cinzento tomou 3 de dano (4/18 PV)"
+      },
+      {
+        "ts": 1783699260000,
+        "round": 1,
+        "turn": 2,
+        "text": "Rodada 1 — vez de Bram Ironfist"
+      },
+      {
+        "ts": 1783699275000,
+        "round": 1,
+        "turn": 3,
+        "text": "Kessia Thornwood tomou 8 de dano (20/28 PV)"
+      },
+      {
+        "ts": 1783699280000,
+        "round": 1,
+        "turn": 3,
+        "text": "Kessia Thornwood ficou Envenenado"
+      },
+      {
+        "ts": 1783699300000,
+        "round": 2,
+        "turn": 0,
+        "text": "Rodada 2 — vez de Bram Ironfist"
+      },
+      {
+        "ts": 1783699315000,
+        "round": 2,
+        "turn": 0,
+        "text": "Bram Ironfist tomou 13 de dano (24/37 PV)"
+      },
+      {
+        "ts": 1783699330000,
+        "round": 2,
+        "turn": 0,
+        "text": "Contrabandista Cinzento recuperou 4 PV (8/18 PV)"
+      },
+      {
+        "ts": 1783699345000,
+        "round": 2,
+        "turn": 1,
+        "text": "Rodada 2 — vez de Nyra Duskwhisper"
+      }
+    ]
+  },
+  "maps": [
+    {
+      "id": "91a558880232",
+      "name": "Becos do Porto Baixo",
+      "cols": 24,
+      "rows": 18,
+      "cellSize": 1.5,
+      "filename": "dcd1d6e3d3be.png",
+      "imageUrl": "",
+      "img": {
+        "x": 0,
+        "y": 0,
+        "scale": 1.3333333333333333
+      },
+      "fog": {
+        "enabled": true,
+        "revealed": []
+      },
+      "updatedAt": "2026-08-05T00:21:22.170Z",
+      "walls": [
+        {
+          "x1": 8,
+          "y1": 10,
+          "x2": 14,
+          "y2": 10
+        },
+        {
+          "x1": 14,
+          "y1": 10,
+          "x2": 14,
+          "y2": 15
+        },
+        {
+          "x1": 14,
+          "y1": 15,
+          "x2": 8,
+          "y2": 15
+        },
+        {
+          "x1": 8,
+          "y1": 15,
+          "x2": 8,
+          "y2": 10
+        },
+        {
+          "x1": 9,
+          "y1": 8,
+          "x2": 15,
+          "y2": 8
+        },
+        {
+          "x1": 15,
+          "y1": 8,
+          "x2": 15,
+          "y2": 6
+        },
+        {
+          "x1": 15,
+          "y1": 6,
+          "x2": 20,
+          "y2": 6
+        },
+        {
+          "x1": 20,
+          "y1": 6,
+          "x2": 20,
+          "y2": 0
+        },
+        {
+          "x1": 14,
+          "y1": 4,
+          "x2": 14,
+          "y2": 0
+        },
+        {
+          "x1": 14,
+          "y1": 4,
+          "x2": 9,
+          "y2": 4
+        },
+        {
+          "x1": 9,
+          "y1": 4,
+          "x2": 9,
+          "y2": 8
+        },
+        {
+          "x1": 5,
+          "y1": 7,
+          "x2": 5,
+          "y2": 13
+        },
+        {
+          "x1": 5,
+          "y1": 13,
+          "x2": 0,
+          "y2": 13
+        },
+        {
+          "x1": 5,
+          "y1": 7,
+          "x2": 0,
+          "y2": 7
+        },
+        {
+          "x1": 0,
+          "y1": 5,
+          "x2": 6,
+          "y2": 5
+        },
+        {
+          "x1": 6,
+          "y1": 5,
+          "x2": 6,
+          "y2": 0
+        },
+        {
+          "x1": 7,
+          "y1": 3,
+          "x2": 7,
+          "y2": 0
+        },
+        {
+          "x1": 7,
+          "y1": 3,
+          "x2": 12,
+          "y2": 3
+        },
+        {
+          "x1": 12,
+          "y1": 3,
+          "x2": 12,
+          "y2": 1
+        },
+        {
+          "x1": 16,
+          "y1": 8,
+          "x2": 16,
+          "y2": 14
+        },
+        {
+          "x1": 16,
+          "y1": 14,
+          "x2": 22,
+          "y2": 14
+        },
+        {
+          "x1": 16,
+          "y1": 8,
+          "x2": 21,
+          "y2": 8
+        },
+        {
+          "x1": 0,
+          "y1": 14,
+          "x2": 7,
+          "y2": 14
+        },
+        {
+          "x1": 7,
+          "y1": 14,
+          "x2": 7,
+          "y2": 18
+        },
+        {
+          "x1": 12,
+          "y1": 1,
+          "x2": 12,
+          "y2": -1
+        },
+        {
+          "x1": 9,
+          "y1": 10,
+          "x2": 8,
+          "y2": 10
+        }
+      ]
+    }
+  ],
+  "battle": {
+    "mapId": "91a558880232",
+    "tokens": [
+      {
+        "id": "4ac46aaa",
+        "name": "Bram Ironfist",
+        "combatName": "Bram Ironfist",
+        "col": 15,
+        "row": 10,
+        "size": 1,
+        "hidden": false,
+        "color": "",
+        "hp": 24,
+        "maxHp": 37,
+        "kind": "pc",
+        "imageUrl": "",
+        "charId": "pc002demo",
+        "conditions": [],
+        "concentration": false
+      },
+      {
+        "id": "e1a8b9ea",
+        "name": "Nyra Duskwhisper",
+        "combatName": "Nyra Duskwhisper",
+        "col": 12,
+        "row": 3,
+        "size": 1,
+        "hidden": false,
+        "color": "",
+        "hp": 22,
+        "maxHp": 22,
+        "kind": "pc",
+        "imageUrl": "",
+        "charId": "pc003demo",
+        "conditions": [],
+        "concentration": false
+      },
+      {
+        "id": "01676f30",
+        "name": "Kessia Thornwood",
+        "combatName": "Kessia Thornwood",
+        "col": 7,
+        "row": 7,
+        "size": 1,
+        "hidden": false,
+        "color": "",
+        "hp": 20,
+        "maxHp": 28,
+        "kind": "pc",
+        "imageUrl": "",
+        "charId": "pc001demo",
+        "conditions": [
+          "Envenenado"
+        ],
+        "concentration": false
+      },
+      {
+        "id": "2a732bd2",
+        "name": "Contrabandista Cinzento",
+        "combatName": "Contrabandista Cinzento",
+        "col": 11,
+        "row": 8,
+        "size": 1,
+        "hidden": false,
+        "color": "",
+        "hp": 8,
+        "maxHp": 18,
+        "kind": "enemy",
+        "imageUrl": "",
+        "conditions": [],
+        "concentration": false
+      }
+    ],
+    "ping": null,
+    "showEnemyHp": false,
+    "vision": {
+      "enabled": true,
+      "radius": 9
+    },
+    "turnDm": false
+  },
+  "activeSceneId": "scene001demo"
+}

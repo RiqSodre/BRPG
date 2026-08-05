@@ -59,8 +59,8 @@
 
   <!-- Popup da carta de magia -->
   <div class="spell-popup hidden" id="spell-popup">
-    <div class="spell-popup-box">
-      <button class="spell-popup-close" id="spell-popup-close" type="button"><svg class="icon"><use href="#i-x"/></svg></button>
+    <div class="spell-popup-box" role="dialog" aria-modal="true" aria-labelledby="spell-popup-name" tabindex="-1">
+      <button class="spell-popup-close" id="spell-popup-close" type="button" aria-label="Fechar"><svg class="icon"><use href="#i-x"/></svg></button>
       <img class="spell-popup-img hidden" id="spell-popup-img" src="" alt="" />
       <h3 id="spell-popup-name"></h3>
       <div id="spell-popup-desc"></div>

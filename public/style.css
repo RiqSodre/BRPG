@@ -42,6 +42,13 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* Rótulo presente para leitores de tela, sem ocupar espaço visual — usado em campos cujo
+   rótulo visível já é dado por um texto vizinho (placeholder, ícone, "Dano:" etc.). */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+
 body {
   font-family: 'Segoe UI', system-ui, sans-serif;
   background: var(--bg);
@@ -252,12 +259,12 @@ textarea { resize: vertical; min-height: 80px; }
   font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
   color: var(--accent2); text-transform: uppercase;
 }
-.co-controls { display: flex; gap: 3px; }
-.co-btn { padding: 3px 7px !important; font-size: 11px !important; line-height: 1.4; }
+.co-controls { display: flex; gap: 4px; }
+.co-btn { padding: 6px 9px !important; font-size: 11px !important; line-height: 1.4; }
 
 /* Barra de ações de turno */
 .co-turn-bar {
-  display: flex; gap: 3px; margin-bottom: 6px;
+  display: flex; gap: 4px; margin-bottom: 6px;
 }
 .co-turn-bar .co-btn { flex: 1; }
 
@@ -298,7 +305,7 @@ textarea { resize: vertical; min-height: 80px; }
 .init-entry.is-turn .ie-avatar { border-color: var(--accent2); }
 
 .ie-main { grid-column: 4; min-width: 0; }
-.ie-name-row { display: flex; align-items: center; gap: 3px; margin-bottom: 3px; }
+.ie-name-row { display: flex; align-items: center; gap: 4px; margin-bottom: 3px; }
 .ie-name {
   flex: 1; min-width: 0; padding: 3px 5px !important;
   font-size: 12px !important; font-weight: 500;
@@ -309,7 +316,7 @@ textarea { resize: vertical; min-height: 80px; }
 /* Controles de presença no mapa embutidos em cada combatente */
 .ie-mapbtn {
   flex: 0 0 auto; background: var(--bg3); border: 1px solid var(--border);
-  border-radius: 5px; padding: 2px 5px; cursor: pointer;
+  border-radius: 5px; padding: 5px 7px; cursor: pointer;
   font-size: 12px; line-height: 1.2; color: var(--text, #e2e0d8);
   transition: background 0.12s, border-color 0.12s, opacity 0.12s;
 }
@@ -334,7 +341,7 @@ textarea { resize: vertical; min-height: 80px; }
 .co-place-all b { color: var(--accent2); }
 
 .ie-row2 {
-  display: flex; align-items: center; gap: 2px;
+  display: flex; align-items: center; gap: 4px;
   flex-wrap: nowrap; font-variant-numeric: tabular-nums;
 }
 .ie-hp, .ie-maxhp {
@@ -350,13 +357,13 @@ textarea { resize: vertical; min-height: 80px; }
 .ie-pv { margin: 0 2px; }
 .ie-conc {
   background: var(--bg3); border: 1px solid var(--border);
-  border-radius: 4px; padding: 1px 4px; cursor: pointer;
+  border-radius: 4px; padding: 4px 7px; cursor: pointer;
   font-size: 11px; line-height: 1.3; transition: background 0.1s;
 }
 .ie-conc.on { background: var(--accent); border-color: var(--accent); }
 .ie-cond-sel {
-  padding: 1px 2px !important; font-size: 10px !important;
-  border-radius: 4px !important; width: 28px !important; min-width: 0; cursor: pointer;
+  padding: 5px 3px !important; font-size: 11px !important;
+  border-radius: 4px !important; width: 32px !important; min-width: 0; cursor: pointer;
 }
 .ie-conds { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 3px; }
 .ie-conds .cond-chip { cursor: pointer; }
@@ -821,7 +828,7 @@ textarea { resize: vertical; min-height: 80px; }
 .map-resize-handle.dragging { background: var(--accent); }
 
 .map-side {
-  width: 304px; min-width: 180px; max-width: 520px; overflow-y: auto;
+  width: 304px; min-width: 220px; max-width: 520px; overflow-y: auto;
   background: var(--bg2); border: 1px solid var(--border);
   border-radius: 12px; padding: 12px;
   display: flex; flex-direction: column; gap: 0;

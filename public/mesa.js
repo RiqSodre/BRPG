@@ -81,13 +81,25 @@ function renderHudTab() {
   }
 }
 
+let spellPopupTrigger = null;
 function openSpellPopup(spell) {
   if (!spell) return;
   el('spell-popup-name').textContent = spell.name;
   el('spell-popup-desc').innerHTML = esc(spell.description || '').replace(/\n/g, '<br>') || '<i>Sem descrição.</i>';
   const img = el('spell-popup-img');
   if (spell.imageUrl) { img.src = spell.imageUrl; img.classList.remove('hidden'); } else { img.classList.add('hidden'); }
+  spellPopupTrigger = document.activeElement;
   el('spell-popup').classList.remove('hidden');
+  document.querySelector('.player-bar')?.setAttribute('inert', '');
+  document.querySelector('.player-stage')?.setAttribute('inert', '');
+  el('spell-popup-close').focus();
+}
+function closeSpellPopup() {
+  el('spell-popup').classList.add('hidden');
+  document.querySelector('.player-bar')?.removeAttribute('inert');
+  document.querySelector('.player-stage')?.removeAttribute('inert');
+  spellPopupTrigger?.focus?.();
+  spellPopupTrigger = null;
 }
 
 document.querySelectorAll('.turn-hud-tab').forEach((b) => b.onclick = () => {
@@ -95,8 +107,11 @@ document.querySelectorAll('.turn-hud-tab').forEach((b) => b.onclick = () => {
   document.querySelectorAll('.turn-hud-tab').forEach((x) => x.classList.toggle('active', x === b));
   renderHudTab();
 });
-el('spell-popup-close').onclick = () => el('spell-popup').classList.add('hidden');
-el('spell-popup').onclick = (e) => { if (e.target.id === 'spell-popup') el('spell-popup').classList.add('hidden'); };
+el('spell-popup-close').onclick = closeSpellPopup;
+el('spell-popup').onclick = (e) => { if (e.target.id === 'spell-popup') closeSpellPopup(); };
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !el('spell-popup').classList.contains('hidden')) closeSpellPopup();
+});
 
 // Só aparece quando é a vez de um personagem de jogador (o Mestre e os NPCs não têm ficha pública).
 function updateTurnHud(combat, characters) {

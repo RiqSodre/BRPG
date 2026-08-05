@@ -44,6 +44,30 @@ const tryApi = async (fn, okMsg) => {
 };
 
 // ---------- Modal ----------
+// #modal fica com role="dialog"/aria-modal (ver index.html). Abrir/fechar sempre passa por
+// estas duas funções pra manter foco, Escape e o "inert" do resto da página consistentes,
+// mesmo com as várias funções *Modal() que montam o conteúdo e chamam openModalBackdrop()
+// direto em vez de openModal().
+let modalTrigger = null;
+function openModalBackdrop() {
+  modalTrigger = document.activeElement;
+  $('#modal-backdrop').classList.remove('hidden');
+  $('.sidebar')?.setAttribute('inert', '');
+  $('.content')?.setAttribute('inert', '');
+  const focusable = $('#modal').querySelector('input, textarea, select, button, a[href]');
+  (focusable || $('#modal')).focus();
+}
+function closeModal() {
+  $('#modal-backdrop').classList.add('hidden');
+  $('.sidebar')?.removeAttribute('inert');
+  $('.content')?.removeAttribute('inert');
+  modalTrigger?.focus?.();
+  modalTrigger = null;
+}
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !$('#modal-backdrop').classList.contains('hidden')) closeModal();
+});
+
 function openModal(title, fieldsHtml, onSave, saveLabel = 'Salvar') {
   $('#modal').innerHTML = `
     <h3>${esc(title)}</h3>
@@ -53,7 +77,7 @@ function openModal(title, fieldsHtml, onSave, saveLabel = 'Salvar') {
         <button type="submit" class="btn">${esc(saveLabel)}</button>
       </div>
     </form>`;
-  $('#modal-backdrop').classList.remove('hidden');
+  openModalBackdrop();
   $('#modal-cancel').onclick = closeModal;
   $('#modal-form').onsubmit = async (e) => {
     e.preventDefault();
@@ -68,7 +92,6 @@ function openModal(title, fieldsHtml, onSave, saveLabel = 'Salvar') {
     }
   };
 }
-function closeModal() { $('#modal-backdrop').classList.add('hidden'); }
 
 const field = (label, name, value = '', type = 'text', placeholder = '') =>
   `<div class="field"><label>${esc(label)}</label><input name="${name}" type="${type}" value="${esc(value)}" placeholder="${esc(placeholder)}" /></div>`;
@@ -657,7 +680,7 @@ function inventoryModal(ch) {
       <button class="btn ghost" id="modal-cancel">Fechar</button>
       <button class="btn gold" id="inv-add">+ Dar um item</button>
     </div>`;
-  $('#modal-backdrop').classList.remove('hidden');
+  openModalBackdrop();
   $('#modal-cancel').onclick = closeModal;
 
   $('#inv-add').onclick = () => {
@@ -699,7 +722,7 @@ function catalogPickerModal(ch) {
       }).join('') : '<div class="help-text">Nenhum item no catálogo. Crie um na aba Itens.</div>'}
     </div>
     <div class="modal-actions"><button class="btn ghost" id="modal-cancel">Fechar</button></div>`;
-  $('#modal-backdrop').classList.remove('hidden');
+  openModalBackdrop();
   $('#modal-cancel').onclick = closeModal;
   $$('#cat-list [data-cat-give]').forEach((b) => b.onclick = () => {
     closeModal();
@@ -1465,6 +1488,7 @@ function renderMapTab() {
               <button class="ov-btn" id="btn-fog-none" title="Cobrir o mapa inteiro"><svg class="icon"><use href="#i-moon"/></svg>Cobrir tudo</button>
               <span class="ov-sep"></span>
               <label class="tool-check" title="Cada personagem revela um raio ao redor de si; o resto fica na névoa"><input type="checkbox" id="vision-enabled" /> <svg class="icon"><use href="#i-eye"/></svg> Visão</label>
+              <label class="sr-only" for="vision-radius">Raio de visão dos personagens (metros)</label>
               <input type="number" id="vision-radius" min="3" max="60" step="1" class="vision-radius-input" title="Raio de visão dos personagens (metros)" /><span class="ov-label">m</span>
               <span class="ov-sep"></span>
               <label class="tool-check" title="Mostrar os números de PV dos inimigos aos jogadores"><input type="checkbox" id="show-enemy-hp" /> <svg class="icon"><use href="#i-heart-straight"/></svg> PV inimigos</label>
@@ -1730,7 +1754,7 @@ function renderMapTab() {
       document.addEventListener('mousemove', (e) => {
         if (!dragging) return;
         const delta = startX - e.clientX;
-        const newW = Math.max(180, Math.min(520, startW + delta));
+        const newW = Math.max(220, Math.min(520, startW + delta));
         side.style.width = newW + 'px';
         side.style.minWidth = newW + 'px';
         if (bmap) bmap.resize();
@@ -1845,6 +1869,7 @@ function renderSoundboard() {
     el.innerHTML = `
       <div class="sb-head">
         <span class="ov-label"><svg class="icon"><use href="#i-speaker-high"/></svg> Efeitos</span>
+        <label class="sr-only" for="sb-search">Filtrar efeitos ou buscar som novo</label>
         <input id="sb-search" class="sb-search" placeholder="filtrar ou buscar som novo…" />
         <button class="ov-btn" id="sb-fs" title="Buscar este termo no Freesound e usar na hora"><svg class="icon"><use href="#i-magnifying-glass"/></svg>Freesound</button>
         <button class="ov-btn danger" id="sb-stop" title="Parar tudo que está tocando"><svg class="icon"><use href="#i-stop"/></svg></button>
@@ -2357,7 +2382,7 @@ function renderAoePanel() {
         ${FX_PALETTE.map((f) => `<button class="fx-btn" data-aoefx="${f.kind}" title="${esc(f.label)} na área"><svg class="icon"><use href="#i-${f.icon}"/></svg></button>`).join('')}
       </div>
       <div class="aoe-roll-row">
-        <span class="aoe-roll-label">Dano:</span>
+        <label class="aoe-roll-label" for="aoe-expr">Dano:</label>
         <input type="text" id="aoe-expr" placeholder="8d6" class="aoe-expr-input" />
         <button class="btn small ghost" id="aoe-roll" title="Rolar dano"><svg class="icon"><use href="#i-dice-six"/></svg>Rolar</button>
         <span class="aoe-result" id="aoe-result"></span>
@@ -2736,7 +2761,7 @@ function renderLooseTokens() {
         const frac = t.maxHp > 0 ? Math.max(0, Math.min(1, (t.hp ?? 0) / t.maxHp)) : null;
         const conds = (t.conditions || []).map((cd) => `<span class="cond-chip" title="${esc(condTitle(cd))}">${condImg(cd)}</span>`).join('');
         return `
-        <div class="token-row ${t.hidden ? 'hidden-token' : ''}" data-tok-id="${t.id}">
+        <div class="token-row ${t.hidden ? 'hidden-token' : ''}" data-tok-id="${t.id}" role="button" tabindex="0" aria-label="Selecionar ${esc(t.name)} no mapa">
           ${t.imageUrl
             ? `<img class="token-avatar" style="border-color:${esc(cor)}" src="${esc(t.imageUrl)}" alt="" onerror="this.remove()" />`
             : `<span class="token-dot" style="background:${esc(cor)}"></span>`}
@@ -2766,10 +2791,16 @@ function renderLooseTokens() {
   $$('#loose-tokens [data-tok-edit]').forEach((b) => b.onclick = () =>
     tokenModal(state.battle.tokens.find((x) => x.id === b.dataset.tokEdit)));
   $$('#loose-tokens [data-tok-del]').forEach((b) => b.onclick = () => removeToken(b.dataset.tokDel));
-  $$('#loose-tokens .token-row').forEach((row) => row.onclick = (e) => {
-    if (e.target.closest('button')) return;
+  const selectLooseToken = (row) => {
     const t = state.battle.tokens.find((x) => x.id === row.dataset.tokId);
     if (t) { bmap.select(t.id); bmap.centerOn(t.col, t.row); }
+  };
+  $$('#loose-tokens .token-row').forEach((row) => {
+    row.onclick = (e) => { if (!e.target.closest('button')) selectLooseToken(row); };
+    row.onkeydown = (e) => {
+      if (e.target.closest('button')) return;
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectLooseToken(row); }
+    };
   });
 }
 
@@ -3260,7 +3291,7 @@ function srdModal() {
     <div class="modal-actions">
       <button class="btn ghost" id="modal-cancel">Fechar</button>
     </div>`;
-  $('#modal-backdrop').classList.remove('hidden');
+  openModalBackdrop();
   $('#modal-cancel').onclick = closeModal;
 
   const doSearch = async () => {
@@ -3444,7 +3475,7 @@ function charPickerModal() {
         : '<div class="help-text">Nenhum personagem cadastrado ainda. Crie na aba Personagens.</div>'}
     </div>
     <div class="modal-actions"><button class="btn ghost" id="modal-cancel">Fechar</button></div>`;
-  $('#modal-backdrop').classList.remove('hidden');
+  openModalBackdrop();
   $('#modal-cancel').onclick = closeModal;
   $('#cp-blank').onclick = () => { closeModal(); tokenModal(); };
 
@@ -3726,7 +3757,7 @@ async function showMonster(index) {
         <button class="btn small" id="srd-add-quick">+ Iniciativa</button>
         <button class="btn small gold" id="srd-map-quick" title="Iniciativa + mapa"><svg class="icon"><use href="#i-map-trifold"/></svg> + Mapa</button>
       </div>`;
-    $('#modal-backdrop').classList.remove('hidden');
+    openModalBackdrop();
     $('#modal-cancel').onclick = closeModal;
     $('#srd-lang-toggle').onclick = () => { _srdLang = _srdLang === 'pt' ? 'en' : 'pt'; buildModal(_srdLang); };
     $('#srd-add-quick').onclick = () => { closeModal(); addMonster(m.index, false); };

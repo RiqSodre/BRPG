@@ -2,3 +2,10 @@ node_modules/
 .env
 data/
 .claude/settings.local.json
+
+# data-demo/campaign.json e data-demo/sample-maps/ ficam versionados (são o conteúdo
+# de exemplo) — só as pastas que o initStore() cria em tempo de execução (uploads que
+# alguém faça testando a demo) somem.
+data-demo/audio/
+data-demo/maps/
+data-demo/images/

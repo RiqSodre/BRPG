@@ -21,7 +21,11 @@ process.on('unhandledRejection', (err) => {
 
 initStore();
 startServer();
-startBot().catch((err) => {
-  console.error('[bot] Falha ao iniciar o bot do Discord:', err.message);
-  console.error('[bot] O painel continua funcionando sem o bot.');
-});
+if (process.env.BRPG_DEMO === '1') {
+  console.log('[demo] Modo demo: painel web com dados de exemplo, bot do Discord desligado de propósito.');
+} else {
+  startBot().catch((err) => {
+    console.error('[bot] Falha ao iniciar o bot do Discord:', err.message);
+    console.error('[bot] O painel continua funcionando sem o bot.');
+  });
+}

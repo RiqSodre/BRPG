@@ -6,7 +6,11 @@ import { fileURLToPath } from 'url';
 import crypto from 'crypto';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-export const DATA_DIR = path.join(__dirname, '..', 'data');
+// BRPG_DATA_DIR permite apontar pra uma pasta de dados alternativa (ex: a demo em
+// data-demo/) sem tocar na campanha real — usado pelo `npm run demo`.
+export const DATA_DIR = process.env.BRPG_DATA_DIR
+  ? path.resolve(__dirname, '..', process.env.BRPG_DATA_DIR)
+  : path.join(__dirname, '..', 'data');
 export const AUDIO_DIR = path.join(DATA_DIR, 'audio');
 export const MAPS_DIR = path.join(DATA_DIR, 'maps');
 export const IMAGES_DIR = path.join(DATA_DIR, 'images'); // retratos de personagens e tokens
