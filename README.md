@@ -65,11 +65,19 @@ cookies de uma conta logada, de um destes dois jeitos no `.env`:
 Duas coisas importantes: **use uma conta descartável**, porque é ela que vai aparecer baixando e
 pode ser bloqueada por isso; e os cookies expiram, então uma hora será preciso exportar de novo.
 
-Antes de mexer em cookies, valem dois testes mais baratos: `npm run update-ytdlp`, que baixa a
-última versão do yt-dlp; e **instalar o [Deno](https://deno.com)**, que não precisa de conta
-nenhuma. O yt-dlp usa um runtime de JavaScript para responder aos desafios do YouTube e avisa
-que a extração sem ele está descontinuada — basta que o `deno` esteja no PATH, sem configurar
-nada no painel.
+Antes de mexer em cookies, valem dois testes mais baratos. O primeiro é `npm run update-ytdlp`,
+que baixa a última versão do yt-dlp. O segundo é **instalar o [Deno](https://deno.com)**, que não
+envolve conta nenhuma:
+
+```powershell
+winget install DenoLand.Deno
+```
+
+O yt-dlp usa um runtime de JavaScript para responder aos desafios do YouTube e avisa que a
+extração sem ele está descontinuada. Ele encontra o `deno` sozinho quando está no PATH — só
+**feche e reabra o terminal** depois de instalar, senão o `npm start` continua sem enxergá-lo.
+Se o painel roda como serviço ou por um atalho que não vê o PATH novo, aponte o caminho no
+`.env`: `DENO_PATH=C:\...\deno.exe`.
 
 Quem não quiser lidar com isso tem dois caminhos que não dependem do YouTube: enviar o arquivo
 de áudio direto pela aba 🎵 do painel, ou usar a busca do Freesound.

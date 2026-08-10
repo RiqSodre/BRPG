@@ -360,6 +360,12 @@ export function startServer() {
   // yt-dlp já veio pronto (baixado no npm install, sem precisar de Python instalado —
   // no Windows é um .exe autocontido). Reaproveita o ffmpeg-static que o projeto já usa
   // pra outras coisas, então não depende de nada além do que já está no repositório.
+  // O yt-dlp precisa de um runtime de JavaScript para responder aos desafios do YouTube
+  // (sem ele, ele mesmo avisa que a extração está descontinuada). Acha o `deno` sozinho
+  // se estiver no PATH; DENO_PATH existe para quando o painel roda como serviço ou de um
+  // atalho que não herdou o PATH novo depois da instalação.
+  const ytRuntime = () => (process.env.DENO_PATH ? { jsRuntimes: `deno:${process.env.DENO_PATH}` } : {});
+
   // O YouTube às vezes responde "Sign in to confirm you're not a bot" — a checagem dele
   // contra IPs que baixam muito (VPS, provedor compartilhado, rede com muita gente).
   // A saída que o próprio yt-dlp indica é mandar os cookies de uma conta logada; quem
@@ -403,6 +409,7 @@ export function startServer() {
     try {
       data = await youtubedl(`ytsearch8:${q}`, {
         dumpSingleJson: true, flatPlaylist: true, noWarnings: true, noCheckCertificates: true,
+        ...ytRuntime(),
         ...ytCookies(),
       });
     } catch (e) {
@@ -428,6 +435,7 @@ export function startServer() {
         ffmpegLocation: ffmpegPath,
         noCheckCertificates: true,
         noWarnings: true,
+        ...ytRuntime(),
         ...ytCookies(),
       });
     } catch (e) {
