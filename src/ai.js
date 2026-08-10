@@ -69,6 +69,9 @@ export function buildCampaignContext() {
         `${[c.race, c.klass, c.level ? `nível ${c.level}` : ''].filter(Boolean).join(', ')}\n` +
         (c.ac || c.maxHp ? `CA ${c.ac ?? '?'} | PV ${c.hp ?? '?'}/${c.maxHp ?? '?'}\n` : '') +
         (c.stats ? `Atributos: ${c.stats}\n` : '') +
+        // Idiomas entram no contexto porque a IA precisa saber quem entende o quê para
+        // narrar uma conversa em élfico ou um bilhete em anão sem inventar.
+        (c.proficiencies ? `Idiomas e proficiências: ${c.proficiencies}\n` : '') +
         (c.voice ? `Voz/maneirismos: ${c.voice}\n` : '') +
         (c.description ? `${c.description}\n` : '') +
         (c.secrets ? `SEGREDOS (só o Mestre sabe): ${c.secrets}` : '')

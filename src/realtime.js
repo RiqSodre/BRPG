@@ -65,6 +65,7 @@ function publicSheet(c, db) {
     abilities: c.abilities || {},
     saveProf: c.saveProf || {},
     skillProf: c.skillProf || {},
+    proficiencies: c.proficiencies || '',
     alignment: c.alignment || '',
     personalityTraits: c.personalityTraits || '',
     ideals: c.ideals || '',

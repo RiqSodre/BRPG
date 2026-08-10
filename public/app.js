@@ -771,6 +771,8 @@ function charModal(c = {}) {
           </div>`;
       }).join('')}
     </div>
+    ${fieldArea('Idiomas e outras proficiências', 'proficiencies', c.proficiencies,
+      'Comum, Anão, Élfico · Armaduras leves e escudos · Espadas curtas · Ferramentas de ladrão')}
     <div class="field">
       <label>Habilidades e Características</label>
       <div id="charm-features-list"></div>

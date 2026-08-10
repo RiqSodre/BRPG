@@ -55,7 +55,10 @@ function renderHudTab() {
       <div class="hud-sheet-title">Testes de resistência</div>
       ${ABILITIES.map((a) => linha(saveTotal(hudChar, a.key), a.label, hudChar.saveProf?.[a.key] ? 'on' : '')).join('')}
       <div class="hud-sheet-title" style="margin-top:10px;">Perícias</div>
-      ${SKILLS.map((s) => linha(skillTotal(hudChar, s), `${esc(s.label)} <span class="abbr">(${abilLabel(s.ability)})</span>`, hudChar.skillProf?.[s.key] ? 'on' : '')).join('')}`;
+      ${SKILLS.map((s) => linha(skillTotal(hudChar, s), `${esc(s.label)} <span class="abbr">(${abilLabel(s.ability)})</span>`, hudChar.skillProf?.[s.key] ? 'on' : '')).join('')}
+      ${hudChar.proficiencies ? `
+        <div class="hud-sheet-title" style="margin-top:10px;">Idiomas e outras proficiências</div>
+        <div class="sheet-prof-text">${esc(hudChar.proficiencies).replace(/\n/g, '<br>')}</div>` : ''}`;
   } else if (hudTab === 'inventory') {
     list.innerHTML = hudChar.inventory.length ? hudChar.inventory.map((l) => `
       <div class="hud-item">

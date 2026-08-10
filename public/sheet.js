@@ -134,6 +134,9 @@ function characterSheetHtml(ch, opts = {}) {
         ${skillLines}
       </div>
     </div>
+    ${ch.proficiencies ? `
+      <div class="sheet-col-title" style="margin-top:14px;">Idiomas e outras proficiências</div>
+      <div class="sheet-prof-text">${esc(ch.proficiencies).replace(/\n/g, '<br>')}</div>` : ''}
     ${(ch.features || []).length ? `
       <div class="sheet-col-title" style="margin-top:14px;">Habilidades e Características</div>
       ${ch.features.map((f) => sheetFeatureHtml(f, 'feature')).join('')}` : ''}
