@@ -1433,7 +1433,8 @@ function renderBoothTab() {
       <div class="tab-header"><h2><svg class="icon"><use href="#i-microphone"/></svg>Cabine do Mestre</h2></div>
       <p class="help-text">Fale pelos NPCs com a sua voz transformada: o som sai pelo bot, por cima da música ambiente.
       <b>Use fones de ouvido</b> e, enquanto estiver no ar, <b>mute-se no Discord</b> para os jogadores não ouvirem sua voz dupla.</p><br/>
-      <div class="card" style="max-width:760px;">
+      <div class="booth-layout">
+      <div class="card">
         <div class="row" style="align-items:center;">
           <button class="btn" id="booth-mic"><svg class="icon"><use href="#i-microphone"/></svg>Ativar microfone</button>
           <span id="booth-status" class="help-text">microfone desligado</span>
@@ -1453,15 +1454,16 @@ function renderBoothTab() {
         <p class="help-text" style="margin-top:6px;">O <b>timbre</b> muda o tamanho da criatura sem mexer no tom; a <b>voz dupla</b> soma uma segunda altura à sua (oitava abaixo = monstruoso, quinta acima = celestial, meio semitom = eco de outro mundo); o <b>tremor</b> faz a voz oscilar (velhos, assombrações, quem está com medo).</p>
       </div>
 
-      <div class="card" style="max-width:760px; margin-top:14px;">
+      <div class="card booth-bank">
         <div class="row" style="align-items:center; gap:8px;">
           <h3 style="margin:0; flex:1;"><svg class="icon"><use href="#i-users"/></svg>Banco de vozes</h3>
           <input type="text" id="booth-preset-busca" placeholder="buscar voz..." style="width:180px;" />
           <button class="btn small ghost" id="booth-preset-reset"><svg class="icon"><use href="#i-eraser"/></svg>Voz natural</button>
         </div>
-        <p class="help-text">Um clique carrega a voz nos controles acima — dá para ajustar depois e salvar no NPC.</p>
+        <p class="help-text">Um clique carrega a voz nos controles ao lado — dá para ajustar depois e salvar no NPC.</p>
         <div class="sfx-cat-bar" id="booth-preset-cats"></div>
         <div class="voice-preset-grid" id="booth-preset-grid"></div>
+      </div>
       </div>`;
 
     booth.onStatus = (msg, isError) => {

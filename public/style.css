@@ -533,6 +533,10 @@ textarea { resize: vertical; min-height: 80px; }
 .sfx-cat-chip .icon { width: 13px; height: 13px; }
 
 /* ---------- Cabine ---------- */
+/* Controles à esquerda, banco de vozes à direita: o Mestre escolhe a voz e ajusta o
+   que quiser sem rolar a página no meio da cena. Abaixo de 1080px vira uma coluna só. */
+.booth-layout { display: grid; grid-template-columns: minmax(360px, 440px) minmax(0, 1fr); gap: 14px; align-items: start; }
+@media (max-width: 1080px) { .booth-layout { grid-template-columns: minmax(0, 1fr); } }
 .booth-sliders { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; margin: 14px 0; }
 .booth-sliders label { font-size: 13px; color: var(--muted); display: flex; flex-direction: column; gap: 4px; }
 .booth-sliders span { color: var(--accent2); font-weight: bold; }
