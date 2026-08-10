@@ -64,7 +64,10 @@ const booth = {
   ws: null,
   onAir: false,
   micReady: false,
-  fx: { pitch: 0, reverb: 0, distortion: 0, gain: 2, robot: 0, radio: 0, echo: 0 },
+  fx: {
+    pitch: 0, reverb: 0, distortion: 0, gain: 2, robot: 0, radio: 0, echo: 0,
+    timbre: 0, tremor: 0, dual: 0, dualPitch: -12,
+  },
   sendBuf: new Float32Array(960), // 20ms mono @48kHz
   sendLen: 0,
   onStatus: null, // callback da UI
@@ -111,6 +114,13 @@ async function boothInitMic() {
     const n = booth.nodes;
     n.source = booth.ctx.createMediaStreamSource(booth.stream);
     n.pitch = new AudioWorkletNode(booth.ctx, 'pitch-shifter');
+    // Segunda voz: o mesmo microfone passa por um pitch shifter em outro intervalo e
+    // volta a se somar ao sinal. É o que separa "demônio" de "voz grave com distorção" —
+    // duas alturas soando juntas viram um coro, e o intervalo escolhido muda o caráter
+    // (oitava abaixo = monstruoso, quinta acima = celestial, meio semitom = eco/simulacro).
+    n.pitch2 = new AudioWorkletNode(booth.ctx, 'pitch-shifter');
+    n.dualWet = booth.ctx.createGain();
+    n.dualWet.gain.value = 0;
     n.shaper = booth.ctx.createWaveShaper();
     n.shaper.curve = distortionCurve(0);
     n.dry = booth.ctx.createGain();
@@ -154,7 +164,29 @@ async function boothInitMic() {
     n.echoWet = booth.ctx.createGain();
     n.echoWet.gain.value = 0;
 
+    // Timbre: um "tilt" de equalização no barramento final. Empurrar graves e cortar
+    // agudos dá corpo (ogro, golem); o inverso afina e anasala (goblin, fada). É o que
+    // deixa vozes de mesmo tom soarem como criaturas de tamanhos diferentes.
+    n.tiltLow = booth.ctx.createBiquadFilter();
+    n.tiltLow.type = 'lowshelf';
+    n.tiltLow.frequency.value = 240;
+    n.tiltHigh = booth.ctx.createBiquadFilter();
+    n.tiltHigh.type = 'highshelf';
+    n.tiltHigh.frequency.value = 3200;
+
+    // Tremor: LFO lento somado ao ganho de saída (a base fica em 1 e o oscilador
+    // oscila em volta dela) — voz de velho, de assombração, de quem está apavorado.
+    n.out = booth.ctx.createGain();
+    n.out.gain.value = 1;
+    n.tremOsc = booth.ctx.createOscillator();
+    n.tremOsc.frequency.value = 5.5;
+    n.tremDepth = booth.ctx.createGain();
+    n.tremDepth.gain.value = 0;
+    n.tremOsc.connect(n.tremDepth).connect(n.out.gain);
+    n.tremOsc.start();
+
     n.source.connect(n.pitch);
+    n.source.connect(n.pitch2).connect(n.dualWet).connect(n.shaper);
     n.pitch.connect(n.shaper);
     n.shaper.connect(n.dry).connect(n.bus);
     n.shaper.connect(n.convolver).connect(n.wet).connect(n.bus);
@@ -163,8 +195,9 @@ async function boothInitMic() {
     n.shaper.connect(n.echoDelay);
     n.echoDelay.connect(n.echoFeedback).connect(n.echoDelay);
     n.echoDelay.connect(n.echoWet).connect(n.bus);
-    n.bus.connect(n.capture);
-    n.bus.connect(n.monitor).connect(booth.ctx.destination);
+    n.bus.connect(n.tiltLow).connect(n.tiltHigh).connect(n.out);
+    n.out.connect(n.capture);
+    n.out.connect(n.monitor).connect(booth.ctx.destination);
 
     n.capture.port.onmessage = (e) => boothOnAudio(e.data);
     booth.micReady = true;
@@ -213,6 +246,14 @@ function boothApplyFx() {
   const n = booth.nodes;
   const t = booth.ctx.currentTime;
   n.pitch.parameters.get('pitch').setValueAtTime(booth.fx.pitch, t);
+  // A 2ª voz anda junto com a 1ª: o intervalo é relativo ao tom já escolhido, senão
+  // mexer no pitch principal desafinaria o coro. O worklet aceita -12..12.
+  const dual = Math.max(-12, Math.min(12, booth.fx.pitch + booth.fx.dualPitch));
+  n.pitch2.parameters.get('pitch').setValueAtTime(dual, t);
+  n.dualWet.gain.setTargetAtTime(booth.fx.dual, t, 0.05);
+  n.tiltLow.gain.setTargetAtTime(-booth.fx.timbre * 12, t, 0.05);
+  n.tiltHigh.gain.setTargetAtTime(booth.fx.timbre * 9, t, 0.05);
+  n.tremDepth.gain.setTargetAtTime(booth.fx.tremor * 0.55, t, 0.05);
   n.shaper.curve = distortionCurve(booth.fx.distortion);
   n.wet.gain.setTargetAtTime(booth.fx.reverb * 1.2, t, 0.05);
   n.dry.gain.setTargetAtTime(1 - booth.fx.reverb * 0.4, t, 0.05);

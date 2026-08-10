@@ -6,6 +6,12 @@
       "runtimeExecutable": "node",
       "runtimeArgs": ["src/index.js"],
       "port": 3000
+    },
+    {
+      "name": "BRPG demo",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["scripts/demo.js"],
+      "port": 3001
     }
   ]
 }
