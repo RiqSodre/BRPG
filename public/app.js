@@ -126,12 +126,6 @@ const listRowHtml = (item, kind) => `
   </div>`;
 // Uma habilidade/característica ou magia, na ficha somente-leitura: nome + uma tag
 // (fonte, ou nível pra magia) + descrição.
-const sheetFeatureHtml = (item, kind) => {
-  const tag = kind === 'spell' ? (item.level ? `Nível ${item.level}` : 'Truque') : (item.source || '');
-  const carta = kind === 'spell' && item.imageUrl
-    ? `<a href="${esc(item.imageUrl)}" target="_blank" title="Ver carta em tamanho maior"><img class="sheet-feature-card" src="${esc(item.imageUrl)}" alt="Carta de ${esc(item.name)}" /></a>` : '';
-  return `<div class="sheet-feature">${carta}<div class="sheet-feature-body"><b>${esc(item.name)}</b>${tag ? ` <span class="sheet-feature-tag">${esc(tag)}</span>` : ''}${item.description ? `<div class="sheet-feature-desc">${esc(item.description).replace(/\n/g, '<br>')}</div>` : ''}</div></div>`;
-};
 // Copia pro array o que já foi digitado nas linhas atuais — chamado sempre antes de
 // mexer na estrutura (adicionar/remover), senão o re-render reconstrói a partir do
 // array desatualizado e apaga o texto que ainda não tinha "voltado" pra ele.
@@ -878,74 +872,7 @@ function charModal(c = {}) {
 // do mapa. Reaproveita o mesmo visual da ficha de monstro do bestiário (srd-*).
 function characterSheetModal(ch) {
   if (!ch) return;
-  const isPc = ch.type === 'pc';
-  const pb = profBonus(ch.level || 1);
-  const dexMod = abilityMod(scoreOf(ch, 'dex'));
-
-  const saveLines = ABILITIES.map((a) => {
-    const prof = Boolean(ch.saveProf?.[a.key]);
-    const total = abilityMod(scoreOf(ch, a.key)) + (prof ? pb : 0);
-    return `<div class="sheet-row${prof ? ' on' : ''}"><span class="dot"></span><span class="val">${fmtSigned(total)}</span> ${a.label}</div>`;
-  }).join('');
-
-  const skillLines = SKILLS.map((s) => {
-    const prof = Boolean(ch.skillProf?.[s.key]);
-    const total = abilityMod(scoreOf(ch, s.ability)) + (prof ? pb : 0);
-    return `<div class="sheet-row${prof ? ' on' : ''}"><span class="dot"></span><span class="val">${fmtSigned(total)}</span> ${esc(s.label)} <span class="abbr">(${abilLabel(s.ability)})</span></div>`;
-  }).join('');
-
-  const passivePerception = 10 + abilityMod(scoreOf(ch, 'wis')) + (ch.skillProf?.perception ? pb : 0);
-  const hpFrac = ch.maxHp > 0 ? Math.max(0, Math.min(1, (ch.hp ?? 0) / ch.maxHp)) : null;
-  const initials = (ch.name || '?').trim().slice(0, 1).toUpperCase();
-
-  openModal(`${esc(ch.name)} — Ficha`, `
-    <div class="sheet-header">
-      ${ch.imageUrl
-        ? `<img class="sheet-portrait" src="${esc(ch.imageUrl)}" alt="${esc(ch.name)}" onerror="this.classList.add('placeholder');this.removeAttribute('src');this.textContent='${esc(initials)}';" />`
-        : `<div class="sheet-portrait placeholder">${esc(initials)}</div>`}
-      <div class="sheet-title">
-        <h4>${esc(ch.name)}</h4>
-        <div class="sheet-subtitle">${esc([ch.race, ch.klass, ch.level ? `nível ${ch.level}` : ''].filter(Boolean).join(' · ')) || '—'}${isPc && ch.player ? ` · joga ${esc(ch.player)}` : ''}</div>
-      </div>
-    </div>
-    <div class="sheet-stats">
-      <div class="sheet-stat ac"><div class="sheet-stat-label">CA</div><div class="sheet-stat-val">${esc(ch.ac ?? '—')}</div></div>
-      <div class="sheet-stat hp">
-        <div class="sheet-stat-label">PV</div>
-        <div class="sheet-stat-val">${esc(ch.hp ?? '?')}/${esc(ch.maxHp ?? '?')}</div>
-        ${hpFrac !== null ? `<div class="hp-bar"><span style="width:${hpFrac * 100}%;background:${hpFrac > 0.5 ? '#4a9d6f' : hpFrac > 0.25 ? '#b8925a' : '#c05650'}"></span></div>` : ''}
-      </div>
-      <div class="sheet-stat"><div class="sheet-stat-label">Iniciativa</div><div class="sheet-stat-val">${fmtSigned(dexMod)}</div></div>
-      <div class="sheet-stat"><div class="sheet-stat-label">Prof.</div><div class="sheet-stat-val">${fmtSigned(pb)}</div></div>
-      <div class="sheet-stat"><div class="sheet-stat-label">Perc. passiva</div><div class="sheet-stat-val">${passivePerception}</div></div>
-    </div>
-    <div class="sheet-abilities">
-      ${ABILITIES.map((a) => `
-        <div class="sheet-abil">
-          <div class="sheet-abil-label">${a.label}</div>
-          <div class="sheet-abil-mod">${fmtSigned(abilityMod(scoreOf(ch, a.key)))}</div>
-          <div class="sheet-abil-score">${scoreOf(ch, a.key)}</div>
-        </div>`).join('')}
-    </div>
-    <div class="sheet-cols">
-      <div class="sheet-col">
-        <div class="sheet-col-title">Testes de resistência</div>
-        ${saveLines}
-      </div>
-      <div class="sheet-col">
-        <div class="sheet-col-title">Perícias</div>
-        ${skillLines}
-      </div>
-    </div>
-    ${(ch.features || []).length ? `
-      <div class="sheet-col-title" style="margin-top:14px;">Habilidades e Características</div>
-      ${ch.features.map((f) => sheetFeatureHtml(f, 'feature')).join('')}` : ''}
-    ${(ch.spells || []).length ? `
-      <div class="sheet-col-title" style="margin-top:14px;">Magias</div>
-      ${ch.spells.map((s) => sheetFeatureHtml(s, 'spell')).join('')}` : ''}
-    ${sheetRoleplayHtml(ch)}
-    ${ch.description ? `<div class="sheet-desc">${esc(ch.description).replace(/\n/g, '<br>')}</div>` : ''}
-  `, async () => {}, 'Fechar');
+  openModal(`${esc(ch.name)} — Ficha`, characterSheetHtml(ch), async () => {}, 'Fechar');
 
   // Botão "Editar" fora do form/submit do modal — se fosse o botão principal, o
   // closeModal()+refresh() que o openModal roda depois do onSave fecharia a ficha de
@@ -3257,57 +3184,8 @@ const CONDITIONS = ['Agarrado', 'Amedrontado', 'Atordoado', 'Caído', 'Cego', 'C
 // Ícone real da condição (game-icons.net) — a descrição completa (efeitos + página do livro) fica no title.
 const condImg = (cd, cls = '') => `<img class="cond-icon${cls ? ` ${cls}` : ''}" src="${esc(condIcon(cd))}" alt="${esc(cd)}" />`;
 const d20 = () => 1 + Math.floor(Math.random() * 20);
-const abilityMod = (score) => Math.floor((Number(score) - 10) / 2);
-
-// ---------- Ficha de personagem: atributos, testes de resistência e perícias ----------
-const ABILITIES = [
-  { key: 'str', label: 'FOR' }, { key: 'dex', label: 'DES' }, { key: 'con', label: 'CON' },
-  { key: 'int', label: 'INT' }, { key: 'wis', label: 'SAB' }, { key: 'cha', label: 'CAR' },
-];
-const ALIGNMENT_LABELS = {
-  LB: 'Leal e Bom', NB: 'Neutro e Bom', CB: 'Caótico e Bom',
-  LN: 'Leal e Neutro', N: 'Neutro', CN: 'Caótico e Neutro',
-  LM: 'Leal e Mau', NM: 'Neutro e Mau', CM: 'Caótico e Mau',
-};
-// Bloco de interpretação (traços/ideais/vínculos/defeitos) na ficha somente-leitura —
-// só entra se tiver pelo menos um campo preenchido, pra não poluir fichas sem isso.
-function sheetRoleplayHtml(ch) {
-  const rows = [
-    ['Traços de personalidade', ch.personalityTraits],
-    ['Ideais', ch.ideals],
-    ['Vínculos', ch.bonds],
-    ['Defeitos', ch.flaws],
-  ].filter(([, v]) => v);
-  if (!ch.alignment && !rows.length) return '';
-  return `
-    <div class="sheet-col-title" style="margin-top:14px;">Interpretação${ch.alignment ? ` <span class="sheet-feature-tag">${esc(ALIGNMENT_LABELS[ch.alignment] || ch.alignment)}</span>` : ''}</div>
-    ${rows.map(([label, v]) => `<div class="sheet-feature"><div class="sheet-feature-body"><b>${label}</b><div class="sheet-feature-desc">${esc(v).replace(/\n/g, '<br>')}</div></div></div>`).join('')}`;
-}
-const SKILLS = [
-  { key: 'athletics', label: 'Atletismo', ability: 'str' },
-  { key: 'acrobatics', label: 'Acrobacia', ability: 'dex' },
-  { key: 'sleightOfHand', label: 'Prestidigitação', ability: 'dex' },
-  { key: 'stealth', label: 'Furtividade', ability: 'dex' },
-  { key: 'arcana', label: 'Arcanismo', ability: 'int' },
-  { key: 'history', label: 'História', ability: 'int' },
-  { key: 'investigation', label: 'Investigação', ability: 'int' },
-  { key: 'nature', label: 'Natureza', ability: 'int' },
-  { key: 'religion', label: 'Religião', ability: 'int' },
-  { key: 'animalHandling', label: 'Lidar com Animais', ability: 'wis' },
-  { key: 'insight', label: 'Intuição', ability: 'wis' },
-  { key: 'medicine', label: 'Medicina', ability: 'wis' },
-  { key: 'perception', label: 'Percepção', ability: 'wis' },
-  { key: 'survival', label: 'Sobrevivência', ability: 'wis' },
-  { key: 'deception', label: 'Enganação', ability: 'cha' },
-  { key: 'intimidation', label: 'Intimidação', ability: 'cha' },
-  { key: 'performance', label: 'Atuação', ability: 'cha' },
-  { key: 'persuasion', label: 'Persuasão', ability: 'cha' },
-];
-const abilLabel = (key) => ABILITIES.find((a) => a.key === key)?.label || key;
-// Bônus de proficiência pelo nível — tabela padrão do 5e (1-4 → +2, 5-8 → +3, ...).
-const profBonus = (level) => Math.floor((Math.max(1, Number(level) || 1) - 1) / 4) + 2;
-const fmtSigned = (n) => (n >= 0 ? `+${n}` : `${n}`);
-const scoreOf = (ch, key) => Number(ch?.abilities?.[key]) || 10;
+// ABILITIES, SKILLS, abilityMod, profBonus, characterSheetHtml e companhia moram em
+// sheet.js — a tela dos jogadores mostra a mesma ficha e precisa das mesmas contas.
 
 // ---------- Bestiário (aba dedicada — mesma ficha/ações do modal SRD da Batalha) ----------
 let bestiarioMonsters = null; // cache: null = ainda não carregado

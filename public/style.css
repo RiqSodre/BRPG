@@ -944,6 +944,21 @@ textarea { resize: vertical; min-height: 80px; }
 .player-title { display: flex; align-items: center; gap: 8px; color: var(--accent2); }
 .player-turn { font-size: 16px; color: var(--text); }
 .player-conn { font-size: 12px; color: var(--muted); }
+/* Fichas do grupo na barra de cima */
+.player-sheets { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.party-chip {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--bg3); border: 1px solid var(--border); color: var(--text);
+  border-radius: 999px; padding: 3px 12px 3px 3px; font-size: 13px; cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+.party-chip:hover { border-color: var(--accent2); background: var(--bg2); }
+.party-chip img, .party-chip-initial {
+  width: 26px; height: 26px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
+  background: var(--bg2); border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; color: var(--accent2);
+}
 .player-stage { position: relative; flex: 1; display: flex; min-height: 0; padding: 12px; gap: 12px; }
 .player-stage canvas {
   flex: 1; min-width: 0;
@@ -998,15 +1013,32 @@ textarea { resize: vertical; min-height: 80px; }
 .turn-hud-info { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .turn-hud-info b { font-size: 18px; color: var(--accent2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .turn-hud-info span { font-size: 13px; color: var(--muted); }
-.turn-hud-abilities { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; margin: 12px 0; }
+.turn-hud-sheet { margin-left: auto; flex-shrink: 0; }
+/* CA, PV, iniciativa, proficiência e percepção passiva — as contas prontas, que é o que
+   o jogador precisa no meio do turno sem abrir a ficha inteira. */
+.turn-hud-stats { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.hud-stat {
+  flex: 1; min-width: 62px; display: flex; flex-direction: column; align-items: center; gap: 1px;
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 7px; padding: 5px 4px;
+}
+.hud-stat span { font-size: 9px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+.hud-stat b { font-size: 15px; color: var(--accent2); font-variant-numeric: tabular-nums; }
+.turn-hud-abilities { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; margin: 8px 0 12px; }
 .hud-abil {
-  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
   background: var(--bg3); border: 1px solid var(--border); border-radius: 7px; padding: 6px 2px;
 }
 .hud-abil-label { font-size: 10px; color: var(--muted); letter-spacing: 0.04em; }
 .hud-abil-val { font-size: 16px; font-weight: 700; color: var(--text); }
-/* Duas colunas: com quatro abas numa linha só, "Interpretação" ficava espremida. */
+.hud-abil-score { font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.hud-sheet-title {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--accent2); padding-bottom: 4px; margin-bottom: 4px; border-bottom: 1px solid var(--border);
+}
+/* Duas colunas: com as abas numa linha só, "Interpretação" ficava espremida. Em número
+   ímpar, a última ocupa a linha inteira em vez de deixar um buraco ao lado. */
 .turn-hud-tabs { display: grid; grid-template-columns: repeat(2, 1fr); gap: 5px; }
+.turn-hud-tab:last-child:nth-child(odd) { grid-column: 1 / -1; }
 .turn-hud-tab {
   display: flex; align-items: center; justify-content: center; gap: 6px;
   background: var(--bg3); border: 1px solid var(--border); color: var(--muted);
@@ -1028,6 +1060,30 @@ textarea { resize: vertical; min-height: 80px; }
 .hud-item-desc { font-size: 13.5px; color: var(--muted); line-height: 1.55; margin-top: 6px; white-space: pre-wrap; }
 .hud-item-desc.hidden { display: none; }
 .hud-empty { font-size: 13.5px; color: var(--muted); padding: 8px 2px; }
+
+/* Ficha completa na tela dos jogadores — mesma leitura de longe da carta de magia:
+   ocupa quase a tela toda, e só o corpo rola (o cabeçalho com o Fechar fica parado). */
+.sheet-modal {
+  position: fixed; inset: 0; z-index: 50;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.78); backdrop-filter: blur(4px);
+}
+.sheet-modal.hidden { display: none; }
+.sheet-modal-box {
+  width: min(940px, 94vw); max-height: 92vh; display: flex; flex-direction: column;
+  background: var(--bg2); border: 1px solid var(--accent); border-radius: 14px;
+  box-shadow: 0 18px 50px rgba(0,0,0,0.55);
+}
+.sheet-modal-head {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 18px; border-bottom: 1px solid var(--border);
+}
+.sheet-modal-head h3 { flex: 1; min-width: 0; font-size: 19px; color: var(--accent2); }
+.sheet-modal-body { padding: 18px; overflow-y: auto; }
+@media (max-width: 720px) {
+  .sheet-modal-box { width: 100vw; max-height: 100vh; height: 100vh; border-radius: 0; }
+  .sheet-modal-body .sheet-cols { flex-direction: column; gap: 10px; }
+}
 
 /* Popup da carta de magia — abre em tela cheia pra dar pra ler de longe (mesa/TV).
    Clique fora, no X ou Esc fecha. */

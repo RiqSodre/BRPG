@@ -22,6 +22,9 @@
       <span id="player-map" class="badge"></span>
     </div>
     <div id="player-turn" class="player-turn">Sem combate em andamento</div>
+    <!-- Fichas do grupo: qualquer um abre a ficha completa de qualquer personagem,
+         a qualquer momento — não só na vez dele. -->
+    <div class="player-sheets" id="player-sheets"></div>
     <div class="player-conn"><span class="dot off" id="player-dot"></span> <span id="player-status">conectando...</span></div>
   </header>
   <div class="player-stage">
@@ -45,15 +48,29 @@
           <b id="turn-hud-name"></b>
           <span id="turn-hud-sub"></span>
         </div>
+        <button class="btn small ghost turn-hud-sheet" id="turn-hud-sheet" type="button"><svg class="icon"><use href="#i-scroll"/></svg>Ficha</button>
       </div>
+      <div class="turn-hud-stats" id="turn-hud-stats"></div>
       <div class="turn-hud-abilities" id="turn-hud-abilities"></div>
       <div class="turn-hud-tabs">
         <button class="turn-hud-tab active" data-hud-tab="features"><svg class="icon"><use href="#i-sparkle"/></svg>Habilidades</button>
         <button class="turn-hud-tab" data-hud-tab="spells"><svg class="icon"><use href="#i-book-open-text"/></svg>Magias</button>
+        <button class="turn-hud-tab" data-hud-tab="skills"><svg class="icon"><use href="#i-target"/></svg>Perícias</button>
         <button class="turn-hud-tab" data-hud-tab="inventory"><svg class="icon"><use href="#i-backpack"/></svg>Mochila</button>
         <button class="turn-hud-tab" data-hud-tab="roleplay"><svg class="icon"><use href="#i-mask-happy"/></svg>Interpretação</button>
       </div>
       <div class="turn-hud-list" id="turn-hud-list"></div>
+    </div>
+  </div>
+
+  <!-- Ficha completa: a mesma do painel do Mestre, já sem os segredos (o servidor filtra). -->
+  <div class="sheet-modal hidden" id="sheet-modal">
+    <div class="sheet-modal-box" role="dialog" aria-modal="true" aria-labelledby="sheet-modal-name" tabindex="-1">
+      <div class="sheet-modal-head">
+        <h3 id="sheet-modal-name"></h3>
+        <button class="btn small ghost" id="sheet-modal-close" type="button" aria-label="Fechar"><svg class="icon"><use href="#i-x"/></svg>Fechar</button>
+      </div>
+      <div class="sheet-modal-body" id="sheet-modal-body"></div>
     </div>
   </div>
 
@@ -68,6 +85,7 @@
   </div>
   <script src="battlemap.js"></script>
   <script src="dice3d.js"></script>
+  <script src="sheet.js"></script>
   <script src="mesa.js"></script>
 </body>
 </html>

@@ -49,11 +49,19 @@ function publicSheet(c, db) {
   return {
     id: c.id,
     name: c.name,
+    type: c.type,
+    player: c.player || '',
     race: c.race,
     klass: c.klass,
     subclass: c.subclass,
     level: c.level,
     ac: c.ac,
+    // PV do próprio grupo já é público na tela dos jogadores (os tokens de PC nunca
+    // passam pelo censorHp) — esconder só na ficha seria incoerente.
+    hp: c.hp,
+    maxHp: c.maxHp,
+    imageUrl: c.imageUrl || '',
+    description: c.description || '',
     abilities: c.abilities || {},
     saveProf: c.saveProf || {},
     skillProf: c.skillProf || {},

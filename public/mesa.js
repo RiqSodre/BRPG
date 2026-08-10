@@ -24,18 +24,9 @@ function setStatus(ok, msg) {
 }
 
 // ---------- HUD de turno: atributos + habilidades/magias/mochila de quem está jogando ----------
-const ABILITIES = [
-  { key: 'str', label: 'FOR' }, { key: 'dex', label: 'DES' }, { key: 'con', label: 'CON' },
-  { key: 'int', label: 'INT' }, { key: 'wis', label: 'SAB' }, { key: 'cha', label: 'CAR' },
-];
-const abilityMod = (score) => Math.floor((Number(score) - 10) / 2);
-const fmtSigned = (n) => (n >= 0 ? `+${n}` : `${n}`);
-const ALIGNMENT_LABELS = {
-  LB: 'Leal e Bom', NB: 'Neutro e Bom', CB: 'Caótico e Bom',
-  LN: 'Leal e Neutro', N: 'Neutro', CN: 'Caótico e Neutro',
-  LM: 'Leal e Mau', NM: 'Neutro e Mau', CM: 'Caótico e Mau',
-};
+// ABILITIES, SKILLS e as contas do 5e vêm de sheet.js — as mesmas do painel do Mestre.
 
+let party = []; // fichas públicas de todos os personagens de jogador
 let hudChar = null; // ficha pública (sem segredos) do personagem em foco no HUD
 let hudTab = 'features';
 
@@ -55,6 +46,16 @@ function renderHudTab() {
         <div class="hud-item-name">${esc(s.name)} <span class="hud-item-tag">${s.level ? `Nv ${s.level}` : 'Truque'}</span></div>
       </div>`).join('') : '<div class="hud-empty">Nenhuma magia cadastrada.</div>';
     list.querySelectorAll('.hud-item').forEach((row) => row.onclick = () => openSpellPopup(hudChar.spells[Number(row.dataset.i)]));
+  } else if (hudTab === 'skills') {
+    // Os totais já somados: no meio do turno ninguém quer somar modificador com
+    // proficiência de cabeça. Bolinha cheia = treinado.
+    const linha = (total, label, extra = '') =>
+      `<div class="sheet-row${extra ? ' on' : ''}"><span class="dot"></span><span class="val">${fmtSigned(total)}</span> ${label}</div>`;
+    list.innerHTML = `
+      <div class="hud-sheet-title">Testes de resistência</div>
+      ${ABILITIES.map((a) => linha(saveTotal(hudChar, a.key), a.label, hudChar.saveProf?.[a.key] ? 'on' : '')).join('')}
+      <div class="hud-sheet-title" style="margin-top:10px;">Perícias</div>
+      ${SKILLS.map((s) => linha(skillTotal(hudChar, s), `${esc(s.label)} <span class="abbr">(${abilLabel(s.ability)})</span>`, hudChar.skillProf?.[s.key] ? 'on' : '')).join('')}`;
   } else if (hudTab === 'inventory') {
     list.innerHTML = hudChar.inventory.length ? hudChar.inventory.map((l) => `
       <div class="hud-item">
@@ -81,25 +82,73 @@ function renderHudTab() {
   }
 }
 
-let spellPopupTrigger = null;
+// Enquanto um overlay (carta de magia ou ficha) está aberto, o resto da tela sai do
+// fluxo de foco — nem Tab nem leitor de tela devem passear pelo mapa atrás do modal.
+const OVERLAYS = ['spell-popup', 'sheet-modal'];
+let overlayTrigger = null;
+function openOverlay(id, focusEl) {
+  overlayTrigger = document.activeElement;
+  el(id).classList.remove('hidden');
+  document.querySelector('.player-bar')?.setAttribute('inert', '');
+  document.querySelector('.player-stage')?.setAttribute('inert', '');
+  focusEl?.focus();
+}
+function closeOverlay(id) {
+  el(id).classList.add('hidden');
+  if (OVERLAYS.every((x) => el(x).classList.contains('hidden'))) {
+    document.querySelector('.player-bar')?.removeAttribute('inert');
+    document.querySelector('.player-stage')?.removeAttribute('inert');
+  }
+  overlayTrigger?.focus?.();
+  overlayTrigger = null;
+}
+
 function openSpellPopup(spell) {
   if (!spell) return;
   el('spell-popup-name').textContent = spell.name;
   el('spell-popup-desc').innerHTML = esc(spell.description || '').replace(/\n/g, '<br>') || '<i>Sem descrição.</i>';
   const img = el('spell-popup-img');
   if (spell.imageUrl) { img.src = spell.imageUrl; img.classList.remove('hidden'); } else { img.classList.add('hidden'); }
-  spellPopupTrigger = document.activeElement;
-  el('spell-popup').classList.remove('hidden');
-  document.querySelector('.player-bar')?.setAttribute('inert', '');
-  document.querySelector('.player-stage')?.setAttribute('inert', '');
-  el('spell-popup-close').focus();
+  openOverlay('spell-popup', el('spell-popup-close'));
 }
-function closeSpellPopup() {
-  el('spell-popup').classList.add('hidden');
-  document.querySelector('.player-bar')?.removeAttribute('inert');
-  document.querySelector('.player-stage')?.removeAttribute('inert');
-  spellPopupTrigger?.focus?.();
-  spellPopupTrigger = null;
+const closeSpellPopup = () => closeOverlay('spell-popup');
+
+// ---------- Ficha completa (a mesma que o Mestre vê, sem os segredos) ----------
+let sheetOpenId = null;
+
+function renderSheet() {
+  const ch = party.find((c) => c.id === sheetOpenId);
+  if (!ch) return;
+  el('sheet-modal-name').textContent = `${ch.name} — Ficha`;
+  el('sheet-modal-body').innerHTML = characterSheetHtml(ch, { inventory: true });
+}
+
+function openSheet(id) {
+  sheetOpenId = id;
+  renderSheet();
+  el('sheet-modal-body').scrollTop = 0;
+  openOverlay('sheet-modal', el('sheet-modal-close'));
+}
+function closeSheet() {
+  sheetOpenId = null;
+  closeOverlay('sheet-modal');
+}
+
+// Fichas do grupo na barra de cima: qualquer jogador abre a ficha completa de qualquer
+// personagem a qualquer momento, sem depender de ser a vez dele.
+function renderParty(characters) {
+  party = characters || [];
+  const bar = el('player-sheets');
+  bar.innerHTML = party.map((c) => `
+    <button class="party-chip" data-sheet="${esc(c.id)}" title="Ver a ficha de ${esc(c.name)}">
+      ${c.imageUrl ? `<img src="${esc(c.imageUrl)}" alt="" />` : '<span class="party-chip-initial">' + esc((c.name || '?').trim().slice(0, 1).toUpperCase()) + '</span>'}
+      ${esc(c.name)}
+    </button>`).join('');
+  bar.querySelectorAll('[data-sheet]').forEach((b) => b.onclick = () => openSheet(b.dataset.sheet));
+  // A ficha aberta segue o estado da mesa (PV, itens que o Mestre acabou de entregar).
+  if (sheetOpenId) {
+    if (party.some((c) => c.id === sheetOpenId)) renderSheet(); else closeSheet();
+  }
 }
 
 document.querySelectorAll('.turn-hud-tab').forEach((b) => b.onclick = () => {
@@ -107,10 +156,15 @@ document.querySelectorAll('.turn-hud-tab').forEach((b) => b.onclick = () => {
   document.querySelectorAll('.turn-hud-tab').forEach((x) => x.classList.toggle('active', x === b));
   renderHudTab();
 });
+el('turn-hud-sheet').onclick = () => { if (hudChar) openSheet(hudChar.id); };
 el('spell-popup-close').onclick = closeSpellPopup;
 el('spell-popup').onclick = (e) => { if (e.target.id === 'spell-popup') closeSpellPopup(); };
+el('sheet-modal-close').onclick = closeSheet;
+el('sheet-modal').onclick = (e) => { if (e.target.id === 'sheet-modal') closeSheet(); };
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && !el('spell-popup').classList.contains('hidden')) closeSpellPopup();
+  if (e.key !== 'Escape') return;
+  if (!el('spell-popup').classList.contains('hidden')) closeSpellPopup();
+  else if (!el('sheet-modal').classList.contains('hidden')) closeSheet();
 });
 
 // Só aparece quando é a vez de um personagem de jogador (o Mestre e os NPCs não têm ficha pública).
@@ -130,10 +184,21 @@ function updateTurnHud(combat, characters) {
   const portrait = el('turn-hud-portrait');
   if (cur.imageUrl) { portrait.src = cur.imageUrl; portrait.style.visibility = 'visible'; } else { portrait.style.visibility = 'hidden'; }
   el('turn-hud-name').textContent = ch.name;
-  el('turn-hud-sub').textContent = [ch.race, ch.klass, ch.level ? `nível ${ch.level}` : '', ch.ac ? `CA ${ch.ac}` : ''].filter(Boolean).join(' · ');
+  el('turn-hud-sub').textContent = [ch.race, ch.klass, ch.subclass, ch.level ? `nível ${ch.level}` : ''].filter(Boolean).join(' · ');
+  el('turn-hud-stats').innerHTML = [
+    ['CA', ch.ac ?? '—'],
+    ...(ch.maxHp != null ? [['PV', `${ch.hp ?? '?'}/${ch.maxHp}`]] : []),
+    ['Inic.', fmtSigned(abilityMod(scoreOf(ch, 'dex')))],
+    ['Prof.', fmtSigned(profBonus(ch.level))],
+    ['Perc. pass.', passivePerception(ch)],
+  ].map(([label, v]) => `<div class="hud-stat"><span>${esc(label)}</span><b>${esc(String(v))}</b></div>`).join('');
   el('turn-hud-abilities').innerHTML = ABILITIES.map((a) => {
-    const score = Number(ch.abilities?.[a.key]) || 10;
-    return `<div class="hud-abil"><span class="hud-abil-label">${a.label}</span><span class="hud-abil-val">${fmtSigned(abilityMod(score))}</span></div>`;
+    const score = scoreOf(ch, a.key);
+    return `<div class="hud-abil">
+      <span class="hud-abil-label">${a.label}</span>
+      <span class="hud-abil-val">${fmtSigned(abilityMod(score))}</span>
+      <span class="hud-abil-score">${score}</span>
+    </div>`;
   }).join('');
   renderHudTab();
 }
@@ -214,6 +279,7 @@ function connect() {
       bmap.setData({ map: msg.map, battle: msg.battle, combat: msg.combat });
       renderInitiative(msg.combat);
       renderCombatLog(msg.combat?.log);
+      renderParty(msg.characters);
       updateTurnHud(msg.combat, msg.characters);
       // Enquadra sozinho quando o Mestre troca de mapa
       if (msg.map && msg.map.id !== firstMapId) {
