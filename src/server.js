@@ -360,6 +360,42 @@ export function startServer() {
   // yt-dlp já veio pronto (baixado no npm install, sem precisar de Python instalado —
   // no Windows é um .exe autocontido). Reaproveita o ffmpeg-static que o projeto já usa
   // pra outras coisas, então não depende de nada além do que já está no repositório.
+  // O YouTube às vezes responde "Sign in to confirm you're not a bot" — a checagem dele
+  // contra IPs que baixam muito (VPS, provedor compartilhado, rede com muita gente).
+  // A saída que o próprio yt-dlp indica é mandar os cookies de uma conta logada; quem
+  // hospeda escolhe entre apontar um arquivo cookies.txt ou ler direto do navegador.
+  let avisouCookies = false;
+  const ytCookies = () => {
+    const arquivo = process.env.YOUTUBE_COOKIES;
+    if (arquivo) {
+      // Caminho errado faz o yt-dlp morrer com um traceback de Python e derruba até a
+      // busca, que nem precisaria de login. Melhor ignorar e seguir sem cookies.
+      if (fs.existsSync(arquivo)) return { cookies: arquivo };
+      if (!avisouCookies) {
+        avisouCookies = true;
+        console.warn(`[youtube] YOUTUBE_COOKIES aponta para um arquivo que não existe (${arquivo}) — seguindo sem cookies.`);
+      }
+      return {};
+    }
+    if (process.env.YOUTUBE_COOKIES_FROM_BROWSER) return { cookiesFromBrowser: process.env.YOUTUBE_COOKIES_FROM_BROWSER };
+    return {};
+  };
+  // Erro do yt-dlp vira uma frase que diz o que fazer — a mensagem crua sai em inglês,
+  // com três links de documentação, e não ajuda quem só queria uma música de taverna.
+  const ytErro = (prefixo, e) => {
+    const bruto = (e.message || '').trim();
+    if (/confirm\s+you.{0,3}re\s+not\s+a\s+bot|Sign in to confirm/i.test(bruto)) {
+      return new Error(`${prefixo}: o YouTube está exigindo uma sessão logada nesta conexão. `
+        + 'Configure YOUTUBE_COOKIES ou YOUTUBE_COOKIES_FROM_BROWSER no .env (veja o README) — '
+        + 'e vale rodar `npm run update-ytdlp`, caso a sua cópia do yt-dlp esteja velha.');
+    }
+    // Quando o yt-dlp quebra de vez, a primeira linha é "Traceback (most recent call
+    // last):" e não diz nada — a linha útil é a última.
+    const linhas = bruto.split('\n').map((l) => l.trim()).filter(Boolean);
+    const util = linhas.find((l) => l.startsWith('ERROR:')) || (/^Traceback/.test(linhas[0] || '') ? linhas[linhas.length - 1] : linhas[0]);
+    return new Error(`${prefixo}: ${util || bruto}`);
+  };
+
   app.get('/api/youtube/search', wrap(async (req, res) => {
     const q = String(req.query.q || '').trim();
     if (!q) return res.json([]);
@@ -367,9 +403,10 @@ export function startServer() {
     try {
       data = await youtubedl(`ytsearch8:${q}`, {
         dumpSingleJson: true, flatPlaylist: true, noWarnings: true, noCheckCertificates: true,
+        ...ytCookies(),
       });
     } catch (e) {
-      throw new Error(`Busca no YouTube falhou: ${(e.message || '').split('\n')[0] || e.message}`);
+      throw ytErro('Busca no YouTube falhou', e);
     }
     res.json((data.entries || []).map((v) => ({
       id: v.id,
@@ -391,9 +428,10 @@ export function startServer() {
         ffmpegLocation: ffmpegPath,
         noCheckCertificates: true,
         noWarnings: true,
+        ...ytCookies(),
       });
     } catch (e) {
-      throw new Error(`Falha ao baixar do YouTube: ${(e.message || '').split('\n')[0] || e.message}`);
+      throw ytErro('Falha ao baixar do YouTube', e);
     }
     const item = addItem('audio', {
       name: title || 'Áudio do YouTube',

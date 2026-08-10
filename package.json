@@ -6,7 +6,8 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "demo": "node scripts/demo.js"
+    "demo": "node scripts/demo.js",
+    "update-ytdlp": "npm rebuild youtube-dl-exec"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",

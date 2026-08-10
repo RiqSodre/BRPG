@@ -46,6 +46,33 @@ Edite o `.env` e preencha:
   - `GROQ_API_KEY` — chave criada em https://groq.com (Llama 3.3 70B, **gratuito**)
   - Se definir as duas, o GPT é usado por padrão; force uma com `AI_PROVIDER=openai` ou `AI_PROVIDER=groq`
 - `FREESOUND_API_KEY` — opcional, para buscar sons pelo painel (grátis em https://freesound.org/apiv2/apply)
+- `YOUTUBE_COOKIES` / `YOUTUBE_COOKIES_FROM_BROWSER` — opcionais, só se a importação do YouTube reclamar (veja abaixo)
+
+#### Quando o YouTube pede login ("Sign in to confirm you're not a bot")
+
+O YouTube exige uma sessão logada quando não confia na conexão de onde vem o pedido — acontece
+em VPS, em internet compartilhada e em redes com muita gente atrás do mesmo IP. Não é um defeito
+do painel, e por isso pode acontecer na máquina de um e não na de outro. A saída é dar a ele os
+cookies de uma conta logada, de um destes dois jeitos no `.env`:
+
+- `YOUTUBE_COOKIES=C:\caminho\cookies.txt` — um arquivo exportado no formato Netscape (dá pra
+  gerar com uma extensão de exportar cookies). Para o arquivo durar, exporte de uma janela
+  anônima: faça login, exporte, e **feche a janela sem deslogar** — deslogar invalida o cookie.
+- `YOUTUBE_COOKIES_FROM_BROWSER=firefox` — lê direto do navegador instalado (`chrome`,
+  `firefox`, `edge`, `brave`, `opera`...). Mais simples, mas o Chrome recente costuma dar
+  trabalho por causa da criptografia dos cookies; o Firefox costuma funcionar melhor.
+
+Duas coisas importantes: **use uma conta descartável**, porque é ela que vai aparecer baixando e
+pode ser bloqueada por isso; e os cookies expiram, então uma hora será preciso exportar de novo.
+
+Antes de mexer em cookies, valem dois testes mais baratos: `npm run update-ytdlp`, que baixa a
+última versão do yt-dlp; e **instalar o [Deno](https://deno.com)**, que não precisa de conta
+nenhuma. O yt-dlp usa um runtime de JavaScript para responder aos desafios do YouTube e avisa
+que a extração sem ele está descontinuada — basta que o `deno` esteja no PATH, sem configurar
+nada no painel.
+
+Quem não quiser lidar com isso tem dois caminhos que não dependem do YouTube: enviar o arquivo
+de áudio direto pela aba 🎵 do painel, ou usar a busca do Freesound.
 
 ### 4. Rodar
 
