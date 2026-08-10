@@ -1513,6 +1513,9 @@ class BattleMap {
 window.BattleMap = BattleMap;
 window.Grid = Grid;
 window.MAP_CELL = CELL;
-window.CONDITION_ICON = CONDITION_ICON;
+// CONDITION_ICON virou CONDITION_INFO quando as condições ganharam ícone+descrição;
+// a linha de export ficou pra trás e estourava um ReferenceError em todo carregamento,
+// cortando os dois exports abaixo. As telas seguiam funcionando porque const de script
+// clássico é visível por identificador entre scripts — só o window.* que não existia.
 window.condIcon = condIcon;
 window.hpFraction = hpFraction;
