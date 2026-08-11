@@ -109,6 +109,8 @@ function closeOverlay(id) {
 function openSpellPopup(spell) {
   if (!spell) return;
   el('spell-popup-name').textContent = spell.name;
+  el('spell-popup-meta').innerHTML = `<span class="spell-type">${esc(spellTypeLine(spell))}</span>`
+    + SPELL_META.filter(([k]) => spell[k]).map(([k, label]) => `<span><b>${label}:</b> ${esc(spell[k])}</span>`).join('');
   el('spell-popup-desc').innerHTML = esc(spell.description || '').replace(/\n/g, '<br>') || '<i>Sem descrição.</i>';
   const img = el('spell-popup-img');
   if (spell.imageUrl) { img.src = spell.imageUrl; img.classList.remove('hidden'); } else { img.classList.add('hidden'); }

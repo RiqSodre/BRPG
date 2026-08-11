@@ -50,11 +50,38 @@ const skillTotal = (ch, skill) => abilityMod(scoreOf(ch, skill.ability)) + (ch.s
 // Percepção passiva: 10 + o total de Percepção (a proficiência já entra por ali).
 const passivePerception = (ch) => 10 + abilityMod(scoreOf(ch, 'wis')) + (ch.skillProf?.perception ? profBonus(ch.level) : 0);
 
+// ---------- Magias: o bloco padrão do 5e ----------
+const SPELL_SCHOOLS = [
+  'abjuração', 'adivinhação', 'conjuração', 'encantamento',
+  'evocação', 'ilusão', 'necromancia', 'transmutação',
+];
+// A linha do topo da carta: "Truque de evocação", "3º nível de evocação". Sem escola
+// cadastrada, sobra só o nível — que já é mais do que nada.
+function spellTypeLine(s) {
+  const nivel = Number(s.level) || 0;
+  const base = nivel ? `${nivel}º nível` : 'Truque';
+  return s.school ? `${base} de ${s.school}` : base;
+}
+const SPELL_META = [
+  ['castingTime', 'Tempo de Conjuração'],
+  ['range', 'Alcance'],
+  ['components', 'Componentes'],
+  ['duration', 'Duração'],
+];
+// O tipo sempre entra (sai do nível, que toda magia tem); das demais linhas, só as
+// preenchidas — magia caseira sem tudo cadastrado não vira um bloco de rótulos vazios.
+function spellMetaHtml(s) {
+  const linhas = SPELL_META.filter(([k]) => s[k]).map(([k, label]) => `<div><b>${label}:</b> ${esc(s[k])}</div>`);
+  return `<div class="spell-meta"><div class="spell-type">${esc(spellTypeLine(s))}</div>${linhas.join('')}</div>`;
+}
+
 const sheetFeatureHtml = (item, kind) => {
-  const tag = kind === 'spell' ? (item.level ? `Nível ${item.level}` : 'Truque') : (item.source || '');
+  // Magia não usa a etiqueta: o tipo dela vira a linha em itálico do bloco de regras,
+  // como no livro. "TRUQUE DE EVOCAÇÃO" numa etiqueta maiúscula ficava gritado.
+  const tag = kind === 'spell' ? '' : (item.source || '');
   const carta = kind === 'spell' && item.imageUrl
     ? `<a href="${esc(item.imageUrl)}" target="_blank" title="Ver carta em tamanho maior"><img class="sheet-feature-card" src="${esc(item.imageUrl)}" alt="Carta de ${esc(item.name)}" /></a>` : '';
-  return `<div class="sheet-feature">${carta}<div class="sheet-feature-body"><b>${esc(item.name)}</b>${tag ? ` <span class="sheet-feature-tag">${esc(tag)}</span>` : ''}${item.description ? `<div class="sheet-feature-desc">${esc(item.description).replace(/\n/g, '<br>')}</div>` : ''}</div></div>`;
+  return `<div class="sheet-feature">${carta}<div class="sheet-feature-body"><b>${esc(item.name)}</b>${tag ? ` <span class="sheet-feature-tag">${esc(tag)}</span>` : ''}${kind === 'spell' ? spellMetaHtml(item) : ''}${item.description ? `<div class="sheet-feature-desc">${esc(item.description).replace(/\n/g, '<br>')}</div>` : ''}</div></div>`;
 };
 
 // Bloco de interpretação (traços/ideais/vínculos/defeitos) — só entra se tiver pelo menos

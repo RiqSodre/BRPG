@@ -151,13 +151,23 @@
           "name": "Marca do Caçador",
           "level": 1,
           "description": "Marca uma criatura à vista; enquanto marcada, +1d6 de dano em ataques contra ela e vantagem em testes de Sabedoria (Percepção/Sobrevivência) pra rastreá-la.",
-          "imageUrl": ""
+          "imageUrl": "",
+          "school": "adivinhação",
+          "castingTime": "1 ação bônus",
+          "range": "27 metros",
+          "components": "V",
+          "duration": "Concentração, até 1 hora"
         },
         {
           "name": "Enfeitiçar Animal",
           "level": 1,
           "description": "Encanta até três feras por até 24 horas, tornando-as amigáveis.",
-          "imageUrl": ""
+          "imageUrl": "",
+          "school": "encantamento",
+          "castingTime": "1 ação",
+          "range": "9 metros",
+          "components": "V, S",
+          "duration": "24 horas"
         }
       ],
       "alignment": "NB",
@@ -335,13 +345,23 @@
           "name": "Toque Chocante",
           "level": 0,
           "description": "Ataque de magia corpo a corpo: 1d8 de dano elétrico e o alvo não pode reagir até o começo do seu próximo turno.",
-          "imageUrl": ""
+          "imageUrl": "",
+          "school": "evocação",
+          "castingTime": "1 ação",
+          "range": "Toque",
+          "components": "V, S",
+          "duration": "Instantânea"
         },
         {
           "name": "Sussurro Dissonante",
           "level": 1,
           "description": "O alvo faz um teste de Sabedoria ou sofre 3d6 de dano psíquico e precisa usar sua reação pra se afastar de você.",
-          "imageUrl": ""
+          "imageUrl": "",
+          "school": "encantamento",
+          "castingTime": "1 ação",
+          "range": "18 metros",
+          "components": "V",
+          "duration": "Instantânea"
         }
       ],
       "alignment": "CN",

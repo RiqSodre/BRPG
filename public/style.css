@@ -1100,15 +1100,15 @@ textarea { resize: vertical; min-height: 80px; }
   position: relative; width: 96vw; height: 94vh;
   display: grid; gap: 8px 28px;
   grid-template-columns: minmax(0, 1.1fr) minmax(320px, 1fr);
-  grid-template-rows: auto minmax(0, 1fr);
-  grid-template-areas: "img title" "img desc";
+  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-areas: "img title" "img meta" "img desc";
   background: var(--bg2); border: 1px solid var(--accent); border-radius: 16px;
   padding: 28px 32px; box-shadow: 0 16px 48px rgba(0,0,0,0.6);
 }
 /* Sem imagem de carta, o texto usa a largura inteira em vez de deixar metade vazia. */
 .spell-popup-box:has(.spell-popup-img.hidden) {
   grid-template-columns: minmax(0, 1fr);
-  grid-template-areas: "title" "desc";
+  grid-template-areas: "title" "meta" "desc";
 }
 .spell-popup-close {
   position: absolute; top: 14px; right: 14px; width: 36px; height: 36px; z-index: 1;
@@ -1126,6 +1126,18 @@ textarea { resize: vertical; min-height: 80px; }
   grid-area: title; color: var(--accent2);
   font-size: 30px; line-height: 1.2; padding-right: 48px;
 }
+/* Bloco de regras da magia (tipo, conjuração, alcance, componentes, duração) — o
+   mesmo formato do livro, com o rótulo em negrito e o valor ao lado. */
+.spell-meta { margin-top: 3px; font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+.spell-meta b { color: var(--text); font-weight: 600; }
+.spell-meta .spell-type { font-style: italic; color: var(--accent2); }
+#spell-popup-meta {
+  grid-area: meta; padding-right: 48px;
+  display: flex; flex-wrap: wrap; gap: 2px 22px;
+  font-size: 16px; color: var(--muted); line-height: 1.5;
+}
+#spell-popup-meta .spell-type { width: 100%; font-style: italic; color: var(--accent2); }
+#spell-popup-meta b { color: var(--text); font-weight: 600; }
 #spell-popup-desc {
   grid-area: desc; overflow-y: auto; max-width: 62ch;
   font-size: 18px; color: var(--text); line-height: 1.65; white-space: pre-wrap;
@@ -1134,11 +1146,12 @@ textarea { resize: vertical; min-height: 80px; }
 @media (max-width: 860px), (orientation: portrait) {
   .spell-popup-box {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1.2fr) auto minmax(0, 1fr);
-    grid-template-areas: "img" "title" "desc";
+    grid-template-rows: minmax(0, 1.2fr) auto auto minmax(0, 1fr);
+    grid-template-areas: "img" "title" "meta" "desc";
     padding: 20px; gap: 10px;
   }
   .spell-popup-box h3 { font-size: 22px; }
+  #spell-popup-meta { font-size: 14px; padding-right: 0; gap: 2px 16px; }
   #spell-popup-desc { font-size: 16px; max-width: none; }
 }
 

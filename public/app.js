@@ -106,6 +106,15 @@ const fieldSelect = (label, name, options, selected) =>
 // (`list`) é a fonte da verdade pra estrutura (quantas linhas, em que ordem); o texto
 // de cada campo é lido direto do DOM na hora de salvar, não fica sincronizado a cada
 // tecla — evita perder o foco/cursor ao re-renderizar.
+// Campos do bloco de magia: seletor da linha do editor -> chave no objeto salvo. Uma
+// lista só, usada nas três pontas (montar a linha, preservar no re-render e salvar).
+const SPELL_FIELDS = [
+  ['.lr-school', 'school'],
+  ['.lr-casting', 'castingTime'],
+  ['.lr-range', 'range'],
+  ['.lr-components', 'components'],
+  ['.lr-duration', 'duration'],
+];
 const listRowHtml = (item, kind) => `
   <div class="list-row">
     <div class="field-row">
@@ -115,6 +124,19 @@ const listRowHtml = (item, kind) => `
         : `<input class="lr-source" placeholder="Fonte (raça, classe...)" value="${esc(item.source || '')}" />`}
       <button type="button" class="btn small danger lr-remove" title="Remover"><svg class="icon"><use href="#i-x"/></svg></button>
     </div>
+    ${kind === 'spell' ? `
+    <div class="field-row lr-spell-meta">
+      <select class="lr-school">
+        <option value="">— escola —</option>
+        ${SPELL_SCHOOLS.map((e) => `<option value="${e}" ${item.school === e ? 'selected' : ''}>${e[0].toUpperCase()}${e.slice(1)}</option>`).join('')}
+      </select>
+      <input class="lr-casting" placeholder="Tempo de conjuração" value="${esc(item.castingTime || '')}" />
+      <input class="lr-range" placeholder="Alcance" value="${esc(item.range || '')}" />
+    </div>
+    <div class="field-row lr-spell-meta">
+      <input class="lr-components" placeholder="Componentes (V, S, M...)" value="${esc(item.components || '')}" />
+      <input class="lr-duration" placeholder="Duração" value="${esc(item.duration || '')}" />
+    </div>` : ''}
     <textarea class="lr-desc" placeholder="Descrição">${esc(item.description || '')}</textarea>
     ${kind === 'spell' ? `
     <div class="lr-image-row">
@@ -136,6 +158,7 @@ function syncListRows(containerId, list, kind) {
     list[i].description = row.querySelector('.lr-desc').value;
     if (kind === 'spell') {
       list[i].level = Number(row.querySelector('.lr-level').value) || 0;
+      for (const [sel, key] of SPELL_FIELDS) list[i][key] = row.querySelector(sel)?.value || '';
       // O arquivo escolhido (ainda não enviado) não sobrevive a um re-render — só a
       // URL já salva é preservada. Enviar antes de mexer na estrutura evitaria isso,
       // mas complicaria demais um editor que já resolve a imagem só no salvar da ficha.
@@ -839,6 +862,7 @@ function charModal(c = {}) {
       return {
         name: row.querySelector('.lr-name').value.trim(),
         level: Math.max(0, Math.min(9, Number(row.querySelector('.lr-level').value) || 0)),
+        ...Object.fromEntries(SPELL_FIELDS.map(([sel, key]) => [key, (row.querySelector(sel)?.value || '').trim()])),
         description: row.querySelector('.lr-desc').value.trim(),
         imageUrl,
       };
