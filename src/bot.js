@@ -31,6 +31,9 @@ const GUILD_ID = process.env.DISCORD_GUILD_ID;
 // nada na tela dizia que faltava coisa. Uma página por mensagem cabe folgado nos dois
 // limites; o resto sai como follow-up, também só para quem pediu.
 const PAGINA_MAX = 4000;
+// Texto solto (fora de embed) para em 2000 — e estourar não corta: o Discord recusa a
+// mensagem inteira com "Invalid Form Body". Um recap de sessão passa disso fácil.
+const MENSAGEM_MAX = 1900;
 // Trecho da descrição de cada item/magia. Existe para um item de texto enorme não tomar
 // a página inteira — o texto completo está na ficha, no painel e na tela dos jogadores.
 const TRECHO_MAX = 500;
@@ -47,8 +50,14 @@ export function paginar(linhas, max = PAGINA_MAX) {
     // o laço ficaria empurrando um bloco que não entra em lugar nenhum.
     while (linha.length > max) {
       if (atual) { paginas.push(atual); atual = ''; }
-      paginas.push(linha.slice(0, max));
-      linha = linha.slice(max);
+      // Corta no último espaço ou quebra da janela, pra não partir palavra no meio de
+      // um parágrafo de recap. Bloco sem espaço nenhum (um link enorme) corta no limite.
+      const janela = linha.slice(0, max);
+      const ponto = Math.max(janela.lastIndexOf('\n'), janela.lastIndexOf(' '));
+      const corte = ponto > max * 0.6 ? ponto : max;
+      paginas.push(linha.slice(0, corte));
+      // O espaço do corte vira a emenda entre as duas mensagens e não precisa aparecer.
+      linha = linha.slice(corte).replace(/^[ \n]/, '');
     }
     if (!atual) atual = linha;
     else if (atual.length + 2 + linha.length <= max) atual += `\n\n${linha}`;
@@ -445,13 +454,13 @@ export async function postScene(scene) {
   const channel = await guild.channels.fetch(db.settings.textChannelId);
   if (!channel) return false;
 
-  const embed = new EmbedBuilder()
-    .setTitle(`🎭 ${scene.title}`)
-    .setDescription(scene.readAloud || '*...*')
-    .setColor(0x7c3aed)
-    .setFooter({ text: db.settings.campaignName });
-  if (scene.imageUrl) embed.setImage(scene.imageUrl);
-  await channel.send({ embeds: [embed] });
+  await enviarEmbeds(channel, {
+    titulo: `🎭 ${scene.title}`,
+    cor: 0x7c3aed,
+    texto: scene.readAloud,
+    imageUrl: scene.imageUrl,
+    rodape: db.settings.campaignName,
+  });
   return true;
 }
 
@@ -470,8 +479,30 @@ export async function postMessage(content) {
   const guild = await client.guilds.fetch(GUILD_ID);
   const channel = await guild.channels.fetch(db.settings.textChannelId);
   if (!channel) return false;
-  await channel.send(content);
+  // Texto solto vai fatiado nos parágrafos; objeto (embeds) já vem pronto de quem chamou.
+  if (typeof content === 'string') {
+    for (const parte of paginar(content.split('\n\n'), MENSAGEM_MAX)) await channel.send(parte);
+  } else {
+    await channel.send(content);
+  }
   return true;
+}
+
+// Manda um texto longo como um ou mais embeds — `destino` é um canal ou um usuário (os
+// dois têm .send). Sem isso, um texto de leitura ou handout acima de 4096 caracteres
+// fazia o Discord recusar a mensagem inteira.
+export async function enviarEmbeds(destino, { titulo, cor, texto, imageUrl, rodape }) {
+  const paginas = paginar((texto || '*...*').split('\n\n'), PAGINA_MAX);
+  for (let i = 0; i < paginas.length; i++) {
+    const embed = new EmbedBuilder()
+      .setTitle(paginas.length > 1 ? `${titulo} (${i + 1}/${paginas.length})` : titulo)
+      .setDescription(paginas[i])
+      .setColor(cor)
+      .setFooter({ text: rodape });
+    // A imagem fecha a última página: no meio do texto, ela empurraria o resto pra baixo.
+    if (i === paginas.length - 1 && imageUrl) embed.setImage(imageUrl);
+    await destino.send({ embeds: [embed] });
+  }
 }
 
 // Monta o embed de um item. Imagens locais (upload) o Discord não consegue baixar,
@@ -520,16 +551,15 @@ export async function sendItemToPlayer(character, item, qty = 1) {
 // Envia um handout: por DM a jogadores específicos ou no canal de texto para todos.
 export async function sendHandout({ characterIds = [], toChannel = false, title, content, imageUrl }) {
   if (!client) throw new Error('Bot não está conectado.');
-  const embed = new EmbedBuilder()
-    .setTitle(`📜 ${title || 'Handout'}`)
-    .setColor(0xc4a747)
-    .setFooter({ text: getDb().settings.campaignName });
-  if (content) embed.setDescription(content);
-  if (imageUrl) embed.setImage(imageUrl);
+  const db = getDb();
+  const pagina = { titulo: `📜 ${title || 'Handout'}`, cor: 0xc4a747, texto: content, imageUrl, rodape: db.settings.campaignName };
 
   if (toChannel) {
-    const ok = await postMessage({ embeds: [embed] });
-    if (!ok) throw new Error('Defina o canal de texto nas configurações.');
+    if (!db.settings.textChannelId) throw new Error('Defina o canal de texto nas configurações.');
+    const guild = await client.guilds.fetch(GUILD_ID);
+    const channel = await guild.channels.fetch(db.settings.textChannelId);
+    if (!channel) throw new Error('Defina o canal de texto nas configurações.');
+    await enviarEmbeds(channel, pagina);
     return { sent: ['canal'] };
   }
 
@@ -543,7 +573,7 @@ export async function sendHandout({ characterIds = [], toChannel = false, title,
     }
     try {
       const user = await client.users.fetch(character.discordUserId);
-      await user.send({ embeds: [embed] });
+      await enviarEmbeds(user, pagina);
       sent.push(character.name);
     } catch {
       failed.push(`${character.name} (DM bloqueada nas configurações de privacidade do jogador)`);
