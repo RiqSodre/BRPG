@@ -25,6 +25,64 @@ const RARITY_COLOR = {
 
 const GUILD_ID = process.env.DISCORD_GUILD_ID;
 
+// Limites do Discord: 4096 caracteres na descrição de um embed e 6000 somando tudo que
+// vai numa mensagem. As listas da ficha (mochila, magias, habilidades) eram cortadas num
+// .slice(0, 4000) — quem tivesse mochila grande simplesmente não via os últimos itens, e
+// nada na tela dizia que faltava coisa. Uma página por mensagem cabe folgado nos dois
+// limites; o resto sai como follow-up, também só para quem pediu.
+const PAGINA_MAX = 4000;
+// Trecho da descrição de cada item/magia. Existe para um item de texto enorme não tomar
+// a página inteira — o texto completo está na ficha, no painel e na tela dos jogadores.
+const TRECHO_MAX = 500;
+
+const trecho = (txt) => (txt.length > TRECHO_MAX ? `${txt.slice(0, TRECHO_MAX)}…` : txt);
+
+// Junta as linhas em páginas sem estourar o limite e sem partir uma linha no meio.
+// Exportada para dar pra testar sem subir o bot.
+export function paginar(linhas, max = PAGINA_MAX) {
+  const paginas = [];
+  let atual = '';
+  for (let linha of linhas) {
+    // Linha sozinha maior que uma página vira várias — sem isso, ela nunca caberia e
+    // o laço ficaria empurrando um bloco que não entra em lugar nenhum.
+    while (linha.length > max) {
+      if (atual) { paginas.push(atual); atual = ''; }
+      paginas.push(linha.slice(0, max));
+      linha = linha.slice(max);
+    }
+    if (!atual) atual = linha;
+    else if (atual.length + 2 + linha.length <= max) atual += `\n\n${linha}`;
+    else { paginas.push(atual); atual = linha; }
+  }
+  if (atual) paginas.push(atual);
+  return paginas;
+}
+
+// Teto de mensagens por comando: ninguém tem uma mochila de 32 mil caracteres, mas se
+// tiver, é melhor mandar oito páginas e dizer que faltou do que despejar quarenta.
+const MAX_PAGINAS = 8;
+
+// Responde uma lista da ficha em quantas mensagens forem necessárias, todas privadas.
+export async function responderLista(interaction, { titulo, cor, thumbnail, rodape, linhas }) {
+  const todas = paginar(linhas);
+  const cortou = todas.length > MAX_PAGINAS;
+  const paginas = cortou ? todas.slice(0, MAX_PAGINAS) : todas;
+  for (let i = 0; i < paginas.length; i++) {
+    const ultima = i === paginas.length - 1;
+    // O aviso do corte vai no rodapé: somado à descrição, poderia estourar o limite.
+    const pe = paginas.length > 1 ? `${rodape} · página ${i + 1} de ${todas.length}` : rodape;
+    const embed = new EmbedBuilder()
+      .setTitle(paginas.length > 1 ? `${titulo} (${i + 1}/${todas.length})` : titulo)
+      .setColor(cor)
+      .setDescription(paginas[i])
+      .setFooter({ text: cortou && ultima ? `${pe} — o resto está na sua ficha, com o Mestre` : pe });
+    // A miniatura só na primeira: repetida em cada página, vira poluição.
+    if (i === 0 && /^https?:\/\//i.test(thumbnail || '')) embed.setThumbnail(thumbnail);
+    const payload = { embeds: [embed], ephemeral: true };
+    if (i === 0) await interaction.reply(payload); else await interaction.followUp(payload);
+  }
+}
+
 let client = null;
 
 // Um único player alimentado pelo mixer: ambiente em loop + efeitos por cima,
@@ -179,16 +237,16 @@ async function onInteraction(interaction) {
       const linhas = inv.map((l) => {
         const it = getItem('items', l.itemId);
         const meta = [it.type, it.rarity].filter(Boolean).join(' · ');
-        const desc = it.description ? `\n${it.description.slice(0, 140)}${it.description.length > 140 ? '…' : ''}` : '';
+        const desc = it.description ? `\n${trecho(it.description)}` : '';
         return `**${l.qty}× ${it.name}**${meta ? ` — _${meta}_` : ''}${desc}`;
       });
-      const embed = new EmbedBuilder()
-        .setTitle(`🎒 Mochila de ${ch.name}`)
-        .setColor(0xc4a747)
-        .setDescription(linhas.join('\n\n').slice(0, 4000))
-        .setFooter({ text: `${inv.length} item(ns) · ${db.settings.campaignName}` });
-      if (/^https?:\/\//i.test(ch.imageUrl || '')) embed.setThumbnail(ch.imageUrl);
-      await interaction.reply({ embeds: [embed], ephemeral: true });
+      await responderLista(interaction, {
+        titulo: `🎒 Mochila de ${ch.name}`,
+        cor: 0xc4a747,
+        thumbnail: ch.imageUrl,
+        rodape: `${inv.length} item(ns) · ${db.settings.campaignName}`,
+        linhas,
+      });
     } else if (interaction.commandName === 'magias') {
       const db = getDb();
       const ch = db.characters.find((c) => c.discordUserId === interaction.user.id);
@@ -204,17 +262,20 @@ async function onInteraction(interaction) {
       const linhas = spells
         .slice().sort((a, b) => (a.level || 0) - (b.level || 0))
         .map((s) => {
-          const tag = s.level ? `Nível ${s.level}` : 'Truque';
-          const desc = s.description ? `\n${s.description.slice(0, 300)}${s.description.length > 300 ? '…' : ''}` : '';
-          return `**${s.name}** — _${tag}_${desc}`;
+          // Mesma frase da ficha ("Truque de evocação", "1º nível de encantamento") —
+          // ver spellTypeLine em public/sheet.js, que o navegador usa.
+          const tipo = (s.level ? `${s.level}º nível` : 'Truque') + (s.school ? ` de ${s.school}` : '');
+          const regras = [s.castingTime, s.range, s.components, s.duration].filter(Boolean).join(' · ');
+          const desc = s.description ? `\n${trecho(s.description)}` : '';
+          return `**${s.name}** — _${tipo}_${regras ? `\n_${regras}_` : ''}${desc}`;
         });
-      const embed = new EmbedBuilder()
-        .setTitle(`Magias de ${ch.name}`)
-        .setColor(0x6e5bc4)
-        .setDescription(linhas.join('\n\n').slice(0, 4000))
-        .setFooter({ text: `${spells.length} magia(s) · ${db.settings.campaignName}` });
-      if (/^https?:\/\//i.test(ch.imageUrl || '')) embed.setThumbnail(ch.imageUrl);
-      await interaction.reply({ embeds: [embed], ephemeral: true });
+      await responderLista(interaction, {
+        titulo: `Magias de ${ch.name}`,
+        cor: 0x6e5bc4,
+        thumbnail: ch.imageUrl,
+        rodape: `${spells.length} magia(s) · ${db.settings.campaignName}`,
+        linhas,
+      });
     } else if (interaction.commandName === 'habilidades') {
       const db = getDb();
       const ch = db.characters.find((c) => c.discordUserId === interaction.user.id);
@@ -228,16 +289,16 @@ async function onInteraction(interaction) {
         return;
       }
       const linhas = feats.map((f) => {
-        const desc = f.description ? `\n${f.description.slice(0, 300)}${f.description.length > 300 ? '…' : ''}` : '';
+        const desc = f.description ? `\n${trecho(f.description)}` : '';
         return `**${f.name}**${f.source ? ` _(${f.source})_` : ''}${desc}`;
       });
-      const embed = new EmbedBuilder()
-        .setTitle(`Habilidades de ${ch.name}`)
-        .setColor(0xb8925a)
-        .setDescription(linhas.join('\n\n').slice(0, 4000))
-        .setFooter({ text: `${feats.length} habilidade(s) · ${db.settings.campaignName}` });
-      if (/^https?:\/\//i.test(ch.imageUrl || '')) embed.setThumbnail(ch.imageUrl);
-      await interaction.reply({ embeds: [embed], ephemeral: true });
+      await responderLista(interaction, {
+        titulo: `Habilidades de ${ch.name}`,
+        cor: 0xb8925a,
+        thumbnail: ch.imageUrl,
+        rodape: `${feats.length} habilidade(s) · ${db.settings.campaignName}`,
+        linhas,
+      });
     }
   } catch (err) {
     console.error('[bot] Erro na interação:', err);
