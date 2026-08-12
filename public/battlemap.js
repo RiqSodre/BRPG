@@ -443,9 +443,26 @@ class BattleMap {
     this.onWallsChange = null; // (walls) => void — parede desenhada, apagada ou movida
     this._hoverWall = -1;      // índice da parede sob o cursor no modo "apagar parede"
 
+    this.onResize = null;      // () => void — o dono reenquadra a câmera
+
     this._bindEvents();
     this._resize();
-    window.addEventListener('resize', () => { this._resize(); this.draw(); });
+    // Um caminho só para os dois gatilhos: se a janela tratasse o resize por fora, ela
+    // ajustaria o canvas sem avisar o dono, e aí o observador não veria mais mudança
+    // nenhuma para avisar — a câmera ficaria com o enquadramento do tamanho antigo.
+    const aoMudarTamanho = () => {
+      if (!this._resize()) return;
+      this.draw();
+      this.onResize?.();
+    };
+    window.addEventListener('resize', aoMudarTamanho);
+    // O construtor roda junto com o parse do script, quando o canvas ainda não tem
+    // tamanho: sem observar, o backing store ficava em 2x2 para sempre e todo cálculo
+    // de câmera saía desse número (o mapa abria minúsculo na tela dos jogadores).
+    if (window.ResizeObserver) {
+      this._ro = new ResizeObserver(aoMudarTamanho);
+      this._ro.observe(this.canvas);
+    }
   }
 
   // Os tokens já chegam prontos do servidor: PV e condições vindos da iniciativa, retrato do
@@ -527,15 +544,38 @@ class BattleMap {
     this.draw();
   }
 
-  // Centraliza a câmera num ponto do grid (px), opcionalmente com deslize suave.
-  focusPx(tx, ty, { smooth = true } = {}) {
+  // Zoom "de mesa": enquadra uma janela de N quadrados, que é o quanto dá pra ler nome
+  // e PV de um token sem precisar mexer na roda do mouse. Nunca fica menor que o
+  // enquadramento do mapa inteiro — abaixo disso só sobraria vazio em volta.
+  battleZoom(cells = 14) {
+    if (!this.map) return this.cam.zoom;
+    const dpr = window.devicePixelRatio || 1;
+    const w = this.canvas.width / dpr;
+    const h = this.canvas.height / dpr;
+    if (!w || !h) return this.cam.zoom;
+    const { w: gw, h: gh } = Grid.mapPixelSize(this.map);
+    const inteiro = Math.min(w / gw, h / gh) * 0.95;
+    return Math.min(4, Math.max(inteiro, Math.min(w, h) / (cells * CELL)));
+  }
+
+  // Centraliza a câmera num ponto do grid (px), opcionalmente com deslize suave e com
+  // um zoom de destino (que entra na mesma animação, senão a imagem daria um pulo).
+  focusPx(tx, ty, { smooth = true, zoom = null } = {}) {
     if (!this.map) return;
     const dpr = window.devicePixelRatio || 1;
     const w = this.canvas.width / dpr;
     const h = this.canvas.height / dpr;
-    const target = { x: w / 2 - tx * this.cam.zoom, y: h / 2 - ty * this.cam.zoom };
-    if (!smooth) { this.cam.x = target.x; this.cam.y = target.y; this.draw(); return; }
-    this._camTarget = target;
+    const z = zoom ?? this.cam.zoom;
+    if (!smooth) {
+      this.cam.zoom = z;
+      this.cam.x = w / 2 - tx * z;
+      this.cam.y = h / 2 - ty * z;
+      this.draw();
+      return;
+    }
+    // Guarda o ponto do GRID, não o canto da câmera: com o zoom animando junto, um alvo
+    // em pixels de tela ficaria errado em todo quadro do meio e o mapa escorregaria.
+    this._camTarget = { gx: tx, gy: ty, zoom: z };
     this._camAnimate();
   }
 
@@ -551,10 +591,23 @@ class BattleMap {
     const step = () => {
       const t = this._camTarget;
       if (!t) { this._camAnim = null; return; }
-      this.cam.x += (t.x - this.cam.x) * 0.2;
-      this.cam.y += (t.y - this.cam.y) * 0.2;
-      if (Math.abs(t.x - this.cam.x) < 0.5 && Math.abs(t.y - this.cam.y) < 0.5) {
-        this.cam.x = t.x; this.cam.y = t.y;
+      const dpr = window.devicePixelRatio || 1;
+      const w = this.canvas.width / dpr;
+      const h = this.canvas.height / dpr;
+      const zAlvo = t.zoom ?? this.cam.zoom;
+      this.cam.zoom += (zAlvo - this.cam.zoom) * 0.2;
+      // O destino sai do zoom DESTE quadro, então o ponto focal fica parado no centro
+      // enquanto a imagem se aproxima, em vez de deslizar e voltar.
+      const alvoX = w / 2 - t.gx * this.cam.zoom;
+      const alvoY = h / 2 - t.gy * this.cam.zoom;
+      this.cam.x += (alvoX - this.cam.x) * 0.2;
+      this.cam.y += (alvoY - this.cam.y) * 0.2;
+      const noLugar = Math.abs(alvoX - this.cam.x) < 0.5 && Math.abs(alvoY - this.cam.y) < 0.5
+        && Math.abs(zAlvo - this.cam.zoom) < 0.002;
+      if (noLugar) {
+        this.cam.zoom = zAlvo;
+        this.cam.x = w / 2 - t.gx * this.cam.zoom;
+        this.cam.y = h / 2 - t.gy * this.cam.zoom;
         this._camTarget = null; this._camAnim = null;
         this.draw();
         return;
@@ -825,12 +878,19 @@ class BattleMap {
   }
 
   // ---------- Desenho ----------
+  // Devolve true só quando o tamanho realmente mudou: escrever em canvas.width limpa o
+  // canvas e mexe no tamanho intrínseco dele, o que com o ResizeObserver abaixo viraria
+  // um laço de redimensionamento.
   _resize() {
     const dpr = window.devicePixelRatio || 1;
     const r = this.canvas.getBoundingClientRect();
-    this.canvas.width = r.width * dpr;
-    this.canvas.height = r.height * dpr;
+    const w = Math.round(r.width * dpr);
+    const h = Math.round(r.height * dpr);
+    if (!w || !h || (this.canvas.width === w && this.canvas.height === h)) return false;
+    this.canvas.width = w;
+    this.canvas.height = h;
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return true;
   }
 
   // Anima só enquanto existe ping ou efeito na tela; fora disso o canvas fica parado.

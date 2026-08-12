@@ -5,17 +5,32 @@ const el = (id) => document.getElementById(id);
 const bmap = new BattleMap(el('player-canvas'), { isDm: false });
 let firstMapId = null;
 let lastFocusKey = null;
+let emCombate = false;
+let ultimoCombate = null;
+
+// Reenquadra do zero: na batalha em andamento, se houver; no mapa inteiro, se não.
+function enquadrar({ smooth = true } = {}) {
+  if (!focusCurrentTurn(ultimoCombate, { smooth })) bmap.fit();
+}
+// O canvas só ganha tamanho depois do primeiro layout — e muda de novo quando a janela
+// muda. Nos dois casos o enquadramento anterior foi calculado com o tamanho errado.
+bmap.onResize = () => { lastFocusKey = null; enquadrar({ smooth: false }); };
 
 // Centraliza a câmera no combatente do turno, para os jogadores acompanharem a ação.
-function focusCurrentTurn(combat) {
-  if (!combat?.entries?.length) { lastFocusKey = null; return; }
+// Além de deslocar, entra no zoom de mesa: enquadrado no mapa inteiro, um token fica do
+// tamanho de uma moeda e ninguém lê nome nem PV — e a tela dos jogadores não tem por que
+// exigir que alguém mexa na roda do mouse pra enxergar o próprio turno.
+function focusCurrentTurn(combat, { smooth = true } = {}) {
+  if (!combat?.entries?.length) { lastFocusKey = null; return false; }
   const cur = combat.entries[combat.turn];
-  if (!cur) return;
+  if (!cur) return false;
   const key = `${combat.round}:${combat.turn}`;
-  if (key === lastFocusKey) return; // só reposiciona quando o turno realmente muda
-  lastFocusKey = key;
+  if (key === lastFocusKey) return true; // só reposiciona quando o turno realmente muda
   const tok = bmap.battle.tokens.find((t) => (t.combatName || t.name) === cur.name);
-  if (tok) bmap.focusToken(tok, { smooth: true });
+  if (!tok) return false; // combatente sem token no mapa (ou escondido): mantém o enquadramento
+  lastFocusKey = key;
+  bmap.focusToken(tok, { smooth, zoom: bmap.battleZoom() });
+  return true;
 }
 
 function setStatus(ok, msg) {
@@ -286,15 +301,24 @@ function connect() {
       renderCombatLog(msg.combat?.log);
       renderParty(msg.characters);
       updateTurnHud(msg.combat, msg.characters);
-      // Enquadra sozinho quando o Mestre troca de mapa
+      // Enquadra sozinho quando o Mestre troca de mapa: já entra na cena de batalha se
+      // houver combate rolando, sem passar pelo mapa inteiro (o "de onde eu estou?"
+      // vale no começo da cena, não no meio de um turno).
+      ultimoCombate = msg.combat;
+      const temCombate = Boolean(msg.combat?.entries?.length);
       if (msg.map && msg.map.id !== firstMapId) {
         firstMapId = msg.map.id;
         lastFocusKey = null;
+        if (!focusCurrentTurn(msg.combat, { smooth: false })) bmap.fit();
+      } else if (emCombate && !temCombate) {
+        // Acabou o combate: volta pro mapa inteiro, em vez de deixar a câmera colada em
+        // quem jogou por último.
         bmap.fit();
       } else {
         // Segue o turno atual conforme o combate avança
         focusCurrentTurn(msg.combat);
       }
+      emCombate = temCombate;
     } else if (msg.type === 'ping') {
       bmap.addPing(msg.col, msg.row);
     } else if (msg.type === 'fx' && msg.fx) {

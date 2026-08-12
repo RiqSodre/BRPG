@@ -997,9 +997,12 @@ textarea { resize: vertical; min-height: 80px; }
 
 /* HUD de turno (tela dos jogadores) — só a ficha do personagem cuja vez é agora,
    nunca segredos nem dados de outros personagens (a fonte já vem filtrada do servidor). */
+/* Altura cheia por padrão: ancorada só no rodapé, a lista de perícias/magias parava no
+   meio da tela e deixava metade do espaço vazio acima. Com top e bottom fixos o painel
+   ocupa a coluna inteira e quem rola é a lista de dentro. */
 .turn-hud {
-  position: absolute; left: 24px; bottom: 24px; z-index: 7;
-  width: 380px; max-width: calc(100% - 48px); max-height: calc(100% - 48px);
+  position: absolute; left: 24px; top: 24px; bottom: 24px; z-index: 7;
+  width: 380px; max-width: calc(100% - 48px);
   display: flex; flex-direction: column;
   background: rgba(13,13,17,0.9); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
   border: 1px solid var(--accent); border-radius: 14px; padding: 16px;
@@ -1047,7 +1050,9 @@ textarea { resize: vertical; min-height: 80px; }
 }
 .turn-hud-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 .turn-hud-tab .icon { width: 15px; height: 15px; }
-.turn-hud-list { overflow-y: auto; margin-top: 10px; min-height: 0; }
+/* Ocupa o que sobra da coluna: sem o flex, a lista só crescia até o conteúdo e a
+   ficha em altura cheia ficava com um vão embaixo enquanto as perícias rolavam. */
+.turn-hud-list { flex: 1; overflow-y: auto; margin-top: 10px; min-height: 0; }
 .hud-item {
   padding: 10px; border-radius: 8px; cursor: pointer; font-size: 14.5px;
   border-bottom: 1px solid var(--border);
