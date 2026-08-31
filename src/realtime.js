@@ -155,7 +155,7 @@ function broadcastEvent(payload) {
 export function createMesaWss() {
   const wss = new WebSocketServer({ noServer: true });
 
-  wss.on('connection', (ws) => {
+  wss.on('connection', (ws, req) => {
     const client = { ws, role: 'player' };
     clients.add(client);
 
@@ -164,7 +164,17 @@ export function createMesaWss() {
       try { msg = JSON.parse(data.toString()); } catch { return; }
 
       if (msg.type === 'hello') {
-        client.role = msg.role === 'dm' ? 'dm' : 'player';
+        const papelPedido = msg.role === 'dm' ? 'dm' : 'player';
+        // O portal do jogador (req.brpgAuthRequired, ligado no upgrade de /portal-ws)
+        // exige uma sessão de Mestre ou jogador vinculado. mesa.html e o painel do
+        // Mestre chegam por /mesa e nunca passam por aqui — continuam sem login, como
+        // sempre foram, pra não quebrar quem já usa o sistema sem configurar o portal.
+        if (req?.brpgAuthRequired) {
+          const info = req.brpgAuthInfo;
+          const autorizado = info && (papelPedido === 'dm' ? info.role === 'dm' : info.role === 'dm' || info.role === 'player');
+          if (!autorizado) { ws.close(4001, 'not_authorized'); return; }
+        }
+        client.role = papelPedido;
         const v = views();
         send(ws, { type: 'table', ...(client.role === 'dm' ? v.dm : v.player) });
         return;

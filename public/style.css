@@ -954,6 +954,9 @@ textarea { resize: vertical; min-height: 80px; }
   transition: border-color 0.12s, background 0.12s;
 }
 .party-chip:hover { border-color: var(--accent2); background: var(--bg2); }
+/* O personagem da própria sessão (portal autenticado) — o botão "Minha ficha" já leva
+   direto lá, isso é só pra reconhecer o próprio chip no meio do grupo. */
+.party-chip.mine { border-color: var(--accent2); }
 .party-chip img, .party-chip-initial {
   width: 26px; height: 26px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
   background: var(--bg2); border: 1px solid var(--border);

@@ -4,12 +4,20 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Portal do Jogador — Mesa do Mestre</title>
+  <script>
+    (function () {
+      var saved = localStorage.getItem('brpg-theme');
+      var theme = saved || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
   <link rel="stylesheet" href="style.css" />
   <style>
     .portal-wrap {
-      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      min-height: 100vh; flex: 1; display: flex; align-items: center; justify-content: center;
       background: var(--bg); padding: 24px;
     }
+    .portal-wrap.hidden { display: none; }
     .portal-card {
       max-width: 420px; width: 100%; background: var(--bg2);
       border: 1px solid var(--border); border-radius: 16px; padding: 28px;
@@ -30,14 +38,102 @@
       background: rgba(139,92,246,0.15); color: var(--accent); margin-bottom: 14px;
     }
     .portal-logout { margin-top: 16px; background: none; border: none; color: var(--muted); font-size: 13px; cursor: pointer; text-decoration: underline; }
+    /* Visão ao vivo (Fase 1): mesmo layout de mesa.html, mas atrás do login. Precisa de
+       flex/flex-direction próprios porque é um filho a mais dentro de body.player-body
+       (que em mesa.html tem só esse conteúdo direto) — sem isso o cabeçalho e o palco
+       não dividem a altura da tela como esperado. */
+    #portal-live { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+    #portal-live.hidden { display: none; }
   </style>
 </head>
-<body>
-  <div class="portal-wrap">
+<body class="player-body">
+  <script src="icons.js"></script>
+
+  <div class="portal-wrap" id="portal-wrap">
     <div class="portal-card" id="portal-card">
       <p>Carregando...</p>
     </div>
   </div>
+
+  <!-- Visão ao vivo: mapa + ficha do próprio personagem sempre à mão, para acompanhar a
+       mesa sem precisar de compartilhamento de tela. Só é montada (scripts inclusive)
+       depois que o login confirma "jogador vinculado" — ver jogador.js. -->
+  <div id="portal-live" class="hidden">
+    <header class="player-bar">
+      <div class="player-title">
+        <svg class="icon brand-icon"><use href="#i-map-trifold"/></svg>
+        <b id="player-campaign">Mesa</b>
+        <span id="player-map" class="badge"></span>
+      </div>
+      <div id="player-turn" class="player-turn">Sem combate em andamento</div>
+      <button class="btn small gold" id="btn-minha-ficha" type="button" title="Abrir a sua ficha">
+        <svg class="icon"><use href="#i-scroll"/></svg>Minha ficha
+      </button>
+      <!-- Fichas do grupo: qualquer um abre a ficha completa de qualquer personagem,
+           a qualquer momento — não só na vez dele. A sua vem destacada (.mine). -->
+      <div class="player-sheets" id="player-sheets"></div>
+      <div class="player-conn"><span class="dot off" id="player-dot"></span> <span id="player-status">conectando...</span></div>
+      <button class="btn small ghost" id="btn-portal-logout" type="button">Sair</button>
+    </header>
+    <div class="player-stage">
+      <canvas id="player-canvas"></canvas>
+      <div class="dice-tray-stage" id="dice-tray">
+        <div class="dice-tray-box">
+          <div id="dice-tray-canvas"></div>
+          <div class="dice-tray-result" id="dice-tray-result"></div>
+        </div>
+      </div>
+      <aside class="player-initiative" id="player-initiative">
+        <div id="player-init-list"></div>
+        <div class="side-section combat-log-section" id="player-combat-log"></div>
+      </aside>
+
+      <!-- HUD de turno: só aparece quando é a vez de um personagem de jogador. -->
+      <div class="turn-hud hidden" id="turn-hud">
+        <div class="turn-hud-head">
+          <img class="turn-hud-portrait" id="turn-hud-portrait" src="" alt="" />
+          <div class="turn-hud-info">
+            <b id="turn-hud-name"></b>
+            <span id="turn-hud-sub"></span>
+          </div>
+          <button class="btn small ghost turn-hud-sheet" id="turn-hud-sheet" type="button"><svg class="icon"><use href="#i-scroll"/></svg>Ficha</button>
+        </div>
+        <div class="turn-hud-stats" id="turn-hud-stats"></div>
+        <div class="turn-hud-abilities" id="turn-hud-abilities"></div>
+        <div class="turn-hud-tabs">
+          <button class="turn-hud-tab active" data-hud-tab="features"><svg class="icon"><use href="#i-sparkle"/></svg>Habilidades</button>
+          <button class="turn-hud-tab" data-hud-tab="spells"><svg class="icon"><use href="#i-book-open-text"/></svg>Magias</button>
+          <button class="turn-hud-tab" data-hud-tab="skills"><svg class="icon"><use href="#i-target"/></svg>Perícias</button>
+          <button class="turn-hud-tab" data-hud-tab="inventory"><svg class="icon"><use href="#i-backpack"/></svg>Mochila</button>
+          <button class="turn-hud-tab" data-hud-tab="roleplay"><svg class="icon"><use href="#i-mask-happy"/></svg>Interpretação</button>
+        </div>
+        <div class="turn-hud-list" id="turn-hud-list"></div>
+      </div>
+    </div>
+
+    <!-- Ficha completa: a mesma do painel do Mestre, já sem os segredos (o servidor filtra). -->
+    <div class="sheet-modal hidden" id="sheet-modal">
+      <div class="sheet-modal-box" role="dialog" aria-modal="true" aria-labelledby="sheet-modal-name" tabindex="-1">
+        <div class="sheet-modal-head">
+          <h3 id="sheet-modal-name"></h3>
+          <button class="btn small ghost" id="sheet-modal-close" type="button" aria-label="Fechar"><svg class="icon"><use href="#i-x"/></svg>Fechar</button>
+        </div>
+        <div class="sheet-modal-body" id="sheet-modal-body"></div>
+      </div>
+    </div>
+
+    <!-- Popup da carta de magia -->
+    <div class="spell-popup hidden" id="spell-popup">
+      <div class="spell-popup-box" role="dialog" aria-modal="true" aria-labelledby="spell-popup-name" tabindex="-1">
+        <button class="spell-popup-close" id="spell-popup-close" type="button" aria-label="Fechar"><svg class="icon"><use href="#i-x"/></svg></button>
+        <img class="spell-popup-img hidden" id="spell-popup-img" src="" alt="" />
+        <h3 id="spell-popup-name"></h3>
+        <div id="spell-popup-meta"></div>
+        <div id="spell-popup-desc"></div>
+      </div>
+    </div>
+  </div>
+
   <script src="jogador.js"></script>
 </body>
 </html>

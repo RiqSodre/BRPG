@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import express from 'express';
 import session from 'express-session';
+import { EventEmitter } from 'events';
 import multer from 'multer';
 import { WebSocketServer } from 'ws';
 import youtubedl from 'youtube-dl-exec';
@@ -42,13 +43,16 @@ export function startServer() {
   app.use(express.json({ limit: '2mb' }));
   // Sessão do PORTAL DO JOGADOR (login com Discord). O painel do Mestre não usa
   // sessão nem cookie — continua acessado direto, sem login, como sempre foi.
-  app.use(session({
+  // Fica numa variável porque o handshake do WebSocket do portal (/portal-ws, mais
+  // abaixo) também precisa rodar esse mesmo middleware fora do pipeline de rotas.
+  const sessionMiddleware = session({
     name: 'brpg.sid',
     secret: process.env.SESSION_SECRET || 'dev-only-troque-no-.env',
     resave: false,
     saveUninitialized: false,
     cookie: { httpOnly: true, sameSite: 'lax', maxAge: 30 * 24 * 60 * 60 * 1000 },
-  }));
+  });
+  app.use(sessionMiddleware);
   app.use(express.static(path.join(__dirname, '..', 'public')));
   app.use('/audio-files', express.static(AUDIO_DIR));
   app.use('/tts-files', express.static(tts.TTS_DIR));
@@ -771,13 +775,40 @@ export function startServer() {
     ws.on('close', () => bot.boothStop());
   });
 
-  // Um único despachante de upgrade: dois WebSocketServer presos ao mesmo servidor
-  // HTTP recusariam o handshake um do outro.
+  // Handshake mínimo pra rodar o middleware de sessão fora do pipeline do Express: o
+  // upgrade do WebSocket é uma requisição HTTP normal (cookie incluso), mas não passa
+  // por app.use(). express-session só lê req.session daqui — nunca escreve resposta —
+  // então um objeto falso com os métodos que ele espera encontrar basta.
+  const respostaFalsa = () => {
+    const res = new EventEmitter();
+    res.writeHead = () => res;
+    res.getHeader = () => undefined;
+    res.setHeader = () => res;
+    res.end = () => res;
+    return res;
+  };
+
+  // Um único despachante de upgrade: WebSocketServer presos ao mesmo servidor HTTP
+  // recusariam o handshake um do outro. /mesa (painel do Mestre e mesa.html) e
+  // /portal-ws (jogador.html, autenticado) compartilham o mesmo mesaWss — é a mesma
+  // mesa — só o segundo exige uma sessão de jogador ou Mestre válida.
   server.on('upgrade', (req, socket, head) => {
     const { pathname } = new URL(req.url, 'http://localhost');
-    const target = pathname === '/mesa' ? mesaWss : pathname === '/booth' ? boothWss : null;
-    if (!target) { socket.destroy(); return; }
-    target.handleUpgrade(req, socket, head, (ws) => target.emit('connection', ws, req));
+    if (pathname === '/mesa' || pathname === '/portal-ws') {
+      const conectar = () => mesaWss.handleUpgrade(req, socket, head, (ws) => mesaWss.emit('connection', ws, req));
+      if (pathname !== '/portal-ws') { conectar(); return; }
+      sessionMiddleware(req, respostaFalsa(), () => {
+        req.brpgAuthRequired = true;
+        req.brpgAuthInfo = req.session?.discordUser ? auth.resolveRole(req.session.discordUser.id) : null;
+        conectar();
+      });
+      return;
+    }
+    if (pathname === '/booth') {
+      boothWss.handleUpgrade(req, socket, head, (ws) => boothWss.emit('connection', ws, req));
+      return;
+    }
+    socket.destroy();
   });
 
   return app;
