@@ -27,17 +27,38 @@
     .portal-card p { color: var(--muted); font-size: 14px; line-height: 1.5; margin-bottom: 18px; }
     .portal-avatar { width: 72px; height: 72px; border-radius: 50%; border: 2px solid var(--accent2); margin-bottom: 10px; }
     .portal-btn {
-      display: inline-flex; align-items: center; gap: 8px;
-      background: #5865F2; color: #fff; border: none; border-radius: 10px;
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      background: var(--accent); color: #fff; border: none; border-radius: 10px;
       padding: 11px 20px; font-size: 14px; font-weight: 600; cursor: pointer;
-      text-decoration: none;
+      text-decoration: none; width: 100%;
     }
     .portal-btn:hover { filter: brightness(1.1); }
+    .portal-btn:disabled { opacity: 0.5; cursor: not-allowed; }
     .portal-badge {
       display: inline-block; font-size: 12px; padding: 4px 10px; border-radius: 20px;
       background: rgba(139,92,246,0.15); color: var(--accent); margin-bottom: 14px;
     }
     .portal-logout { margin-top: 16px; background: none; border: none; color: var(--muted); font-size: 13px; cursor: pointer; text-decoration: underline; }
+    /* Seletor de personagem: cada um é um botão grande com retrato — mais rápido de
+       reconhecer o próprio personagem de relance do que ler nomes numa lista. */
+    .portal-roster { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 18px; }
+    .portal-roster-item {
+      display: flex; flex-direction: column; align-items: center; gap: 6px;
+      width: 92px; background: var(--bg3); border: 2px solid var(--border); border-radius: 12px;
+      padding: 10px 6px; cursor: pointer; font: inherit; color: var(--text);
+    }
+    .portal-roster-item:hover { border-color: var(--accent2); }
+    .portal-roster-item.selected { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, var(--bg3)); }
+    .portal-roster-item img, .portal-roster-item .portal-roster-initial {
+      width: 48px; height: 48px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
+      background: var(--bg2); border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; font-weight: 700; color: var(--accent2);
+    }
+    .portal-roster-item span.portal-roster-name { font-size: 12px; line-height: 1.3; text-align: center; word-break: break-word; }
+    .portal-login-form { display: flex; flex-direction: column; gap: 10px; text-align: left; }
+    .portal-login-form input { width: 100%; }
+    .portal-login-erro { color: var(--danger); font-size: 13px; margin: 8px 0 0; text-align: center; }
     /* Visão ao vivo (Fase 1): mesmo layout de mesa.html, mas atrás do login. Precisa de
        flex/flex-direction próprios porque é um filho a mais dentro de body.player-body
        (que em mesa.html tem só esse conteúdo direto) — sem isso o cabeçalho e o palco

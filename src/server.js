@@ -67,41 +67,24 @@ export function startServer() {
     });
   };
 
-  // ---- Login do jogador (Discord OAuth2) ----
-  app.get('/api/auth-status', (req, res) => {
-    const session_ = req.session?.discordUser;
-    res.json({
-      configured: auth.oauthConfigured(),
-      loggedIn: Boolean(session_),
-      discordUser: session_ || null,
-      ...(session_ ? auth.resolveRole(session_.id) : {}),
-    });
-  });
+  // ---- Login do jogador (nativo — personagem + senha, sem conta externa) ----
+  // Lista pública pro seletor de personagem na tela de login.
+  app.get('/api/portal/roster', wrap(async (req, res) => res.json(auth.rosterPublico())));
 
-  app.get('/auth/discord', (req, res) => {
-    if (!auth.oauthConfigured()) {
-      return res.status(500).send('Login com Discord ainda não configurado pelo Mestre (faltam DISCORD_CLIENT_ID/SECRET no .env).');
-    }
-    res.redirect(auth.buildAuthUrl(req));
-  });
-
-  app.get('/auth/discord/callback', wrap(async (req, res) => {
-    if (req.query.error) return res.redirect('/jogador.html?erro=acesso_negado');
-    const { access_token } = await auth.exchangeCode(req, req.query.code);
-    const discordUser = await auth.fetchDiscordUser(access_token);
-    req.session.discordUser = discordUser;
-    res.redirect('/jogador.html');
+  app.post('/api/portal/login', wrap(async (req, res) => {
+    const r = auth.login(req.body.characterId, req.body.passcode);
+    if (!r.ok) return res.status(401).json(r);
+    req.session.characterId = r.character.id;
+    req.session.save(() => res.json(r));
   }));
 
-  app.post('/api/auth/logout', (req, res) => {
+  app.post('/api/portal/logout', (req, res) => {
     req.session.destroy(() => res.json({ ok: true }));
   });
 
-  // Identidade do jogador logado + o papel resolvido. Ainda não devolve dados
-  // da campanha (isso é a Fase 1) — só prova que login + papel funcionam.
-  app.get('/api/me', auth.requireAuth, (req, res) => {
-    const { role, character } = auth.resolveRole(req.session.discordUser.id);
-    res.json({ discordUser: req.session.discordUser, role, character });
+  // Quem está logado agora — null se ninguém (a tela de login decide sozinha o que mostrar).
+  app.get('/api/portal/me', (req, res) => {
+    res.json({ character: auth.sessionCharacter(req) });
   });
 
   // ---- Estado geral ----
@@ -172,13 +155,8 @@ export function startServer() {
     const linha = ch.inventory.find((l) => l.itemId === item.id);
     if (linha) linha.qty += qty; else ch.inventory.push({ itemId: item.id, qty });
     save();
-
-    let aviso = null;
-    if (req.body.notify) {
-      try { await bot.sendItemToPlayer(ch, item, qty); }
-      catch (e) { aviso = e.message; }
-    }
-    res.json({ inventory: ch.inventory, aviso });
+    // O jogador já vê o item chegar ao vivo no próprio portal — não precisa de aviso à parte.
+    res.json({ inventory: ch.inventory });
   }));
 
   // Ajusta a quantidade (0 ou menos remove o item da mochila).
@@ -199,16 +177,6 @@ export function startServer() {
     ch.inventory = ch.inventory.filter((l) => l.itemId !== req.params.itemId);
     save();
     res.json({ inventory: ch.inventory });
-  }));
-
-  // Reenvia o item por DM, sem mexer na quantidade.
-  app.post('/api/characters/:id/inventory/:itemId/notify', wrap(async (req, res) => {
-    const ch = acharPersonagem(req.params.id);
-    const item = getItem('items', req.params.itemId);
-    if (!item) throw new Error('Item não encontrado no catálogo.');
-    const linha = ch.inventory.find((l) => l.itemId === item.id);
-    await bot.sendItemToPlayer(ch, item, linha?.qty ?? 1);
-    res.json({ ok: true });
   }));
 
   // ---- Biblioteca de áudio ----
@@ -322,13 +290,8 @@ export function startServer() {
 
   // ---- Handouts ----
   app.post('/api/handout', wrap(async (req, res) => {
-    const { target, title, content, imageUrl } = req.body;
-    const result = await bot.sendHandout({
-      toChannel: target === 'all',
-      characterIds: target === 'all' ? [] : [target],
-      title, content, imageUrl,
-    });
-    res.json(result);
+    const { title, content, imageUrl } = req.body;
+    res.json(await bot.sendHandout({ title, content, imageUrl }));
   }));
 
   // ---- IA ----
@@ -688,25 +651,11 @@ export function startServer() {
   // ---- Combate / iniciativa ----
   app.put('/api/combat', wrap(async (req, res) => {
     const db = getDb();
-    const antes = db.combat || {};
-    const chaveAntes = `${antes.round}:${antes.turn}`;
     db.combat = req.body;
     save();
-    broadcastTable(); // a mesa mostra de quem é o turno e os PV
-
-    // Avisa o jogador por DM quando a vez muda de combatente — nunca trava o save
-    // do combate se a DM falhar (best-effort, ver notifyTurn em bot.js).
-    if (db.battle?.turnDm && db.combat.active) {
-      const chaveDepois = `${db.combat.round}:${db.combat.turn}`;
-      if (chaveDepois !== chaveAntes) {
-        const entry = db.combat.entries[db.combat.turn];
-        const ch = entry?.charId && db.characters.find((c) => c.id === entry.charId);
-        if (ch?.type === 'pc' && ch.discordUserId) {
-          bot.notifyTurn(ch, { round: db.combat.round, entry }).catch(() => {});
-        }
-      }
-    }
-
+    // A ficha do turno já aparece ao vivo no portal e na tela dos jogadores — de quem
+    // é a vez, PV, condições, tudo em tempo real, sem precisar de aviso à parte.
+    broadcastTable();
     res.json(db.combat);
   }));
   app.post('/api/combat/announce', wrap(async (req, res) => {
@@ -799,7 +748,7 @@ export function startServer() {
       if (pathname !== '/portal-ws') { conectar(); return; }
       sessionMiddleware(req, respostaFalsa(), () => {
         req.brpgAuthRequired = true;
-        req.brpgAuthInfo = req.session?.discordUser ? auth.resolveRole(req.session.discordUser.id) : null;
+        req.brpgAuthInfo = auth.sessionCharacter(req); // null se a sessão não é de um jogador logado
         conectar();
       });
       return;

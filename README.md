@@ -11,7 +11,7 @@ Assistente do Mestre para campanhas de RPG jogadas via Discord. Centraliza **his
 - **✨ IA que entende a campanha** — chat do Mestre com acesso a toda a história, NPCs (e seus segredos), cenas e sessões. Pergunte "o que o taverneiro sabe sobre o culto?", improvise locais/NPCs/encontros, gere recaps épicos das sessões.
 - **🤖 Sons escolhidos por IA** — o botão "✨ Sons IA" numa cena faz a IA escolher os áudios da sua biblioteca que combinam com ela (pelas tags e descrição).
 - **🧙 Personagens** — fichas de PCs e NPCs (D&D 5e), com botão de **improvisar diálogo de NPC** na hora.
-- **📨 Handouts e segredos** — envie cartas, mapas e segredos **por DM a um jogador específico** (o jogador se vincula ao personagem com `/vincular`) ou ao canal para todos.
+- **📨 Handouts e segredos** — envie cartas, mapas e segredos ao canal de texto para todos verem.
 - **⚔️ Iniciativa esperta** — busque monstros no **bestiário SRD** (dnd5eapi.co), veja o stat block e adicione ao combate com iniciativa rolada. Condições, death saves e lembrete de CD de concentração ao tomar dano.
 - **🎲 Dados** — jogadores rolam com `/rolar 1d20+5` no Discord; o Mestre rola pelo painel.
 
@@ -84,14 +84,19 @@ de áudio direto pela aba 🎵 do painel, ou usar a busca do Freesound.
 
 #### Portal do jogador (em construção, opcional)
 
-Um portal onde cada jogador loga com o Discord e acompanha a própria ficha em tempo real está sendo construído na branch `feat/player-portal`. Para testar o login enquanto isso evolui, preencha também:
+Um portal onde cada jogador acompanha a própria ficha, o mapa e a iniciativa em tempo
+real, sem precisar de compartilhamento de tela — está sendo construído na branch
+`feat/player-portal`. O login é nativo, sem conta externa nenhuma:
 
-- `DISCORD_CLIENT_ID` e `DISCORD_CLIENT_SECRET` — na mesma aplicação do bot (passo 2), aba **OAuth2**
-- Em **OAuth2 → Redirects**, cadastre `http://localhost:3000/auth/discord/callback`
-- `GM_DISCORD_ID` — seu ID de usuário do Discord (não o do servidor), para o portal te reconhecer como Mestre
-- `SESSION_SECRET` — qualquer texto longo e aleatório
+1. Defina `SESSION_SECRET` no `.env` (qualquer texto longo e aleatório) — assina o
+   cookie de sessão dos jogadores.
+2. Na aba **Personagens → Editar** de cada PC, defina uma **senha do portal** e
+   avise o jogador.
+3. O jogador abre `/jogador.html`, escolhe o próprio personagem numa lista e digita
+   a senha.
 
-Sem essas variáveis, tudo continua funcionando exatamente como hoje — o portal (`/jogador.html`) só fica indisponível até serem configuradas.
+Sem `SESSION_SECRET` definido, uma chave de desenvolvimento é usada — funciona para
+testar localmente, mas troque antes de expor o painel além do seu computador.
 
 ### 4. Rodar
 
@@ -114,7 +119,7 @@ Abra **http://localhost:3000** — esse é o seu painel do Mestre (só você vê
 src/
   index.js    # ponto de entrada (servidor + bot)
   server.js   # painel web + API REST
-  bot.js      # bot do Discord (voz, cenas, /rolar, /vincular, handouts)
+  bot.js      # bot do Discord (voz, cenas, /rolar, handouts no canal)
   mixer.js    # mixer PCM: ambiente + efeitos + voz ao vivo, crossfade, loop
   tts.js      # vozes de NPC via Edge TTS
   ai.js       # integração com GPT/Groq (contexto = campanha inteira)

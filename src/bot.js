@@ -1,9 +1,8 @@
 // Bot do Discord: presença no canal de voz, reprodução automática de áudio
 // das cenas (ambiente em loop), soundboard de efeitos e postagem de cenas.
-import fs from 'fs';
 import path from 'path';
 import {
-  Client, GatewayIntentBits, EmbedBuilder, ChannelType, AttachmentBuilder,
+  Client, GatewayIntentBits, EmbedBuilder, ChannelType,
   REST, Routes, SlashCommandBuilder,
 } from 'discord.js';
 import {
@@ -11,17 +10,7 @@ import {
   AudioPlayerStatus, NoSubscriberBehavior, StreamType, VoiceConnectionStatus, entersState,
 } from '@discordjs/voice';
 import { Mixer } from './mixer.js';
-import { getDb, getItem, updateItem, save, AUDIO_DIR, IMAGES_DIR } from './store.js';
-
-// Cores de raridade no embed — a mesma linguagem visual de loot que os jogadores conhecem.
-const RARITY_COLOR = {
-  'Comum': 0x9d9d9d,
-  'Incomum': 0x1eff00,
-  'Raro': 0x0070dd,
-  'Muito raro': 0xa335ee,
-  'Lendário': 0xff8000,
-  'Artefato': 0xe6cc80,
-};
+import { getDb, save, AUDIO_DIR } from './store.js';
 
 const GUILD_ID = process.env.DISCORD_GUILD_ID;
 
@@ -34,11 +23,6 @@ const PAGINA_MAX = 4000;
 // Texto solto (fora de embed) para em 2000 — e estourar não corta: o Discord recusa a
 // mensagem inteira com "Invalid Form Body". Um recap de sessão passa disso fácil.
 const MENSAGEM_MAX = 1900;
-// Trecho da descrição de cada item/magia. Existe para um item de texto enorme não tomar
-// a página inteira — o texto completo está na ficha, no painel e na tela dos jogadores.
-const TRECHO_MAX = 500;
-
-const trecho = (txt) => (txt.length > TRECHO_MAX ? `${txt.slice(0, TRECHO_MAX)}…` : txt);
 
 // Junta as linhas em páginas sem estourar o limite e sem partir uma linha no meio.
 // Exportada para dar pra testar sem subir o bot.
@@ -65,31 +49,6 @@ export function paginar(linhas, max = PAGINA_MAX) {
   }
   if (atual) paginas.push(atual);
   return paginas;
-}
-
-// Teto de mensagens por comando: ninguém tem uma mochila de 32 mil caracteres, mas se
-// tiver, é melhor mandar oito páginas e dizer que faltou do que despejar quarenta.
-const MAX_PAGINAS = 8;
-
-// Responde uma lista da ficha em quantas mensagens forem necessárias, todas privadas.
-export async function responderLista(interaction, { titulo, cor, thumbnail, rodape, linhas }) {
-  const todas = paginar(linhas);
-  const cortou = todas.length > MAX_PAGINAS;
-  const paginas = cortou ? todas.slice(0, MAX_PAGINAS) : todas;
-  for (let i = 0; i < paginas.length; i++) {
-    const ultima = i === paginas.length - 1;
-    // O aviso do corte vai no rodapé: somado à descrição, poderia estourar o limite.
-    const pe = paginas.length > 1 ? `${rodape} · página ${i + 1} de ${todas.length}` : rodape;
-    const embed = new EmbedBuilder()
-      .setTitle(paginas.length > 1 ? `${titulo} (${i + 1}/${todas.length})` : titulo)
-      .setColor(cor)
-      .setDescription(paginas[i])
-      .setFooter({ text: cortou && ultima ? `${pe} — o resto está na sua ficha, com o Mestre` : pe });
-    // A miniatura só na primeira: repetida em cada página, vira poluição.
-    if (i === 0 && /^https?:\/\//i.test(thumbnail || '')) embed.setThumbnail(thumbnail);
-    const payload = { embeds: [embed], ephemeral: true };
-    if (i === 0) await interaction.reply(payload); else await interaction.followUp(payload);
-  }
 }
 
 let client = null;
@@ -152,32 +111,13 @@ async function registerCommands() {
     new SlashCommandBuilder().setName('sair').setDescription('O bot sai do canal de voz'),
     new SlashCommandBuilder().setName('rolar').setDescription('Rola dados (ex: 1d20+5, 2d6)')
       .addStringOption((o) => o.setName('dados').setDescription('Expressão, ex: 1d20+5').setRequired(true)),
-    new SlashCommandBuilder().setName('vincular').setDescription('Vincula seu usuário do Discord ao seu personagem da campanha')
-      .addStringOption((o) => o.setName('personagem').setDescription('Seu personagem').setRequired(true).setAutocomplete(true)),
-    new SlashCommandBuilder().setName('desvincular').setDescription('Remove o vínculo entre seu usuário do Discord e seu personagem'),
-    new SlashCommandBuilder().setName('inventario').setDescription('Abre a mochila do seu personagem'),
-    new SlashCommandBuilder().setName('magias').setDescription('Mostra as magias do seu personagem'),
-    new SlashCommandBuilder().setName('habilidades').setDescription('Mostra as habilidades e características do seu personagem'),
   ].map((c) => c.toJSON());
   const rest = new REST().setToken(process.env.DISCORD_TOKEN);
   await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), { body: commands });
-  console.log('[bot] Comandos /entrar, /sair, /rolar, /vincular, /desvincular, /inventario, /magias e /habilidades registrados.');
+  console.log('[bot] Comandos /entrar, /sair e /rolar registrados.');
 }
 
 async function onInteraction(interaction) {
-  if (interaction.isAutocomplete() && interaction.commandName === 'vincular') {
-    try {
-      const typed = interaction.options.getFocused().toLowerCase();
-      const pcs = getDb().characters.filter((c) => c.type === 'pc' && c.name.toLowerCase().includes(typed));
-      await interaction.respond(pcs.slice(0, 25).map((c) => ({
-        name: c.discordUserId && c.discordUserId !== interaction.user.id ? `${c.name} (já vinculado a outro jogador)` : c.name,
-        value: c.id,
-      })));
-    } catch (err) {
-      console.error('[bot] Falha no autocomplete de /vincular:', err.message);
-    }
-    return;
-  }
   if (!interaction.isChatInputCommand()) return;
   try {
     if (interaction.commandName === 'entrar') {
@@ -194,120 +134,12 @@ async function onInteraction(interaction) {
     } else if (interaction.commandName === 'sair') {
       leaveVoice();
       await interaction.reply('👋 Saí do canal de voz.');
-    } else if (interaction.commandName === 'vincular') {
-      const charId = interaction.options.getString('personagem');
-      const character = getItem('characters', charId);
-      if (!character || character.type !== 'pc') {
-        await interaction.reply({ content: 'Personagem não encontrado — peça ao Mestre para criar sua ficha no painel.', ephemeral: true });
-        return;
-      }
-      if (character.discordUserId === interaction.user.id) {
-        await interaction.reply({ content: `Você já é **${character.name}** — nada a fazer.`, ephemeral: true });
-        return;
-      }
-      if (character.discordUserId) {
-        await interaction.reply({ content: `❌ **${character.name}** já está vinculado a outro jogador (${character.discordTag || 'desconhecido'}). Peça ao Mestre para desvincular pelo painel antes de tentar de novo.`, ephemeral: true });
-        return;
-      }
-      // Um jogador só fica vinculado a um personagem por vez — solta o antigo antes de vincular o novo.
-      const antigo = getDb().characters.find((c) => c.discordUserId === interaction.user.id && c.id !== charId);
-      if (antigo) updateItem('characters', antigo.id, { discordUserId: null, discordTag: null });
-      updateItem('characters', charId, { discordUserId: interaction.user.id, discordTag: interaction.user.username });
-      await interaction.reply({
-        content: `🔗 Pronto! Você agora é **${character.name}**.${antigo ? ` (Desvinculei **${antigo.name}**, que estava com você antes.)` : ''} O Mestre pode te enviar segredos por DM... 👀`,
-        ephemeral: true,
-      });
-    } else if (interaction.commandName === 'desvincular') {
-      const ch = getDb().characters.find((c) => c.discordUserId === interaction.user.id);
-      if (!ch) {
-        await interaction.reply({ content: 'Você não tem nenhum personagem vinculado no momento.', ephemeral: true });
-        return;
-      }
-      updateItem('characters', ch.id, { discordUserId: null, discordTag: null });
-      await interaction.reply({ content: `🔓 Vínculo com **${ch.name}** removido. Use \`/vincular\` de novo quando quiser.`, ephemeral: true });
     } else if (interaction.commandName === 'rolar') {
       const expr = interaction.options.getString('dados');
       const result = rollDice(expr);
       await interaction.reply(result.error
         ? `❌ ${result.error}`
         : `🎲 **${interaction.member?.displayName ?? interaction.user.username}** rolou \`${expr}\`:\n${result.detail} = **${result.total}**`);
-    } else if (interaction.commandName === 'inventario') {
-      const db = getDb();
-      const ch = db.characters.find((c) => c.discordUserId === interaction.user.id);
-      if (!ch) {
-        await interaction.reply({ content: 'Você ainda não vinculou seu personagem. Use `/vincular` primeiro.', ephemeral: true });
-        return;
-      }
-      const inv = (ch.inventory || []).filter((l) => getItem('items', l.itemId));
-      if (!inv.length) {
-        await interaction.reply({ content: `🎒 A mochila de **${ch.name}** está vazia.`, ephemeral: true });
-        return;
-      }
-      const linhas = inv.map((l) => {
-        const it = getItem('items', l.itemId);
-        const meta = [it.type, it.rarity].filter(Boolean).join(' · ');
-        const desc = it.description ? `\n${trecho(it.description)}` : '';
-        return `**${l.qty}× ${it.name}**${meta ? ` — _${meta}_` : ''}${desc}`;
-      });
-      await responderLista(interaction, {
-        titulo: `🎒 Mochila de ${ch.name}`,
-        cor: 0xc4a747,
-        thumbnail: ch.imageUrl,
-        rodape: `${inv.length} item(ns) · ${db.settings.campaignName}`,
-        linhas,
-      });
-    } else if (interaction.commandName === 'magias') {
-      const db = getDb();
-      const ch = db.characters.find((c) => c.discordUserId === interaction.user.id);
-      if (!ch) {
-        await interaction.reply({ content: 'Você ainda não vinculou seu personagem. Use `/vincular` primeiro.', ephemeral: true });
-        return;
-      }
-      const spells = ch.spells || [];
-      if (!spells.length) {
-        await interaction.reply({ content: `${ch.name} não tem nenhuma magia cadastrada ainda — peça ao Mestre pra registrar na ficha.`, ephemeral: true });
-        return;
-      }
-      const linhas = spells
-        .slice().sort((a, b) => (a.level || 0) - (b.level || 0))
-        .map((s) => {
-          // Mesma frase da ficha ("Truque de evocação", "1º nível de encantamento") —
-          // ver spellTypeLine em public/sheet.js, que o navegador usa.
-          const tipo = (s.level ? `${s.level}º nível` : 'Truque') + (s.school ? ` de ${s.school}` : '');
-          const regras = [s.castingTime, s.range, s.components, s.duration].filter(Boolean).join(' · ');
-          const desc = s.description ? `\n${trecho(s.description)}` : '';
-          return `**${s.name}** — _${tipo}_${regras ? `\n_${regras}_` : ''}${desc}`;
-        });
-      await responderLista(interaction, {
-        titulo: `Magias de ${ch.name}`,
-        cor: 0x6e5bc4,
-        thumbnail: ch.imageUrl,
-        rodape: `${spells.length} magia(s) · ${db.settings.campaignName}`,
-        linhas,
-      });
-    } else if (interaction.commandName === 'habilidades') {
-      const db = getDb();
-      const ch = db.characters.find((c) => c.discordUserId === interaction.user.id);
-      if (!ch) {
-        await interaction.reply({ content: 'Você ainda não vinculou seu personagem. Use `/vincular` primeiro.', ephemeral: true });
-        return;
-      }
-      const feats = ch.features || [];
-      if (!feats.length) {
-        await interaction.reply({ content: `${ch.name} não tem nenhuma habilidade cadastrada ainda — peça ao Mestre pra registrar na ficha.`, ephemeral: true });
-        return;
-      }
-      const linhas = feats.map((f) => {
-        const desc = f.description ? `\n${trecho(f.description)}` : '';
-        return `**${f.name}**${f.source ? ` _(${f.source})_` : ''}${desc}`;
-      });
-      await responderLista(interaction, {
-        titulo: `Habilidades de ${ch.name}`,
-        cor: 0xb8925a,
-        thumbnail: ch.imageUrl,
-        rodape: `${feats.length} habilidade(s) · ${db.settings.campaignName}`,
-        linhas,
-      });
     }
   } catch (err) {
     console.error('[bot] Erro na interação:', err);
@@ -505,126 +337,18 @@ export async function enviarEmbeds(destino, { titulo, cor, texto, imageUrl, roda
   }
 }
 
-// Monta o embed de um item. Imagens locais (upload) o Discord não consegue baixar,
-// então o arquivo vai anexado e o embed aponta para o anexo.
-function itemEmbed(item, qty = 1, header = '🎒 Você recebeu um item') {
-  const meta = [item.type, item.rarity].filter(Boolean).join(' · ');
-  const embed = new EmbedBuilder()
-    .setAuthor({ name: header })
-    .setTitle(`${qty > 1 ? `${qty}× ` : ''}${item.name}`)
-    .setColor(RARITY_COLOR[item.rarity] ?? 0x9d9d9d)
-    .setFooter({ text: getDb().settings.campaignName });
-  const desc = [meta ? `_${meta}_` : '', item.description || ''].filter(Boolean).join('\n\n');
-  if (desc) embed.setDescription(desc);
-
-  const files = [];
-  const url = item.imageUrl || '';
-  if (url.startsWith('/images/')) {
-    const p = path.join(IMAGES_DIR, path.basename(url));
-    if (fs.existsSync(p)) {
-      const nome = path.basename(p);
-      files.push(new AttachmentBuilder(p, { name: nome }));
-      embed.setThumbnail(`attachment://${nome}`);
-    }
-  } else if (/^https?:\/\//i.test(url)) {
-    embed.setThumbnail(url);
-  }
-  return { embed, files };
-}
-
-// Entrega um item ao jogador vinculado ao personagem, por DM.
-export async function sendItemToPlayer(character, item, qty = 1) {
-  if (!client) throw new Error('O bot do Discord está desconectado — confira o DISCORD_TOKEN no .env.');
-  if (!character?.discordUserId) {
-    throw new Error(`${character?.name ?? 'Esse personagem'} não está vinculado a um jogador. Peça para ele usar /vincular no Discord.`);
-  }
-  const { embed, files } = itemEmbed(item, qty);
-  try {
-    const user = await client.users.fetch(character.discordUserId);
-    await user.send({ embeds: [embed], files });
-  } catch {
-    throw new Error(`Não consegui mandar DM para ${character.name} — o jogador precisa aceitar mensagens diretas do servidor.`);
-  }
-  return true;
-}
-
-// Envia um handout: por DM a jogadores específicos ou no canal de texto para todos.
-export async function sendHandout({ characterIds = [], toChannel = false, title, content, imageUrl }) {
+// Envia um handout pro canal de texto — todo mundo vê ao mesmo tempo. A entrega
+// individual por DM saiu junto com o vínculo de Discord: os jogadores acompanham item
+// e ficha ao vivo pelo portal, então essa via já não fazia falta.
+export async function sendHandout({ title, content, imageUrl }) {
   if (!client) throw new Error('Bot não está conectado.');
   const db = getDb();
-  const pagina = { titulo: `📜 ${title || 'Handout'}`, cor: 0xc4a747, texto: content, imageUrl, rodape: db.settings.campaignName };
-
-  if (toChannel) {
-    if (!db.settings.textChannelId) throw new Error('Defina o canal de texto nas configurações.');
-    const guild = await client.guilds.fetch(GUILD_ID);
-    const channel = await guild.channels.fetch(db.settings.textChannelId);
-    if (!channel) throw new Error('Defina o canal de texto nas configurações.');
-    await enviarEmbeds(channel, pagina);
-    return { sent: ['canal'] };
-  }
-
-  const sent = [];
-  const failed = [];
-  for (const id of characterIds) {
-    const character = getItem('characters', id);
-    if (!character?.discordUserId) {
-      failed.push(`${character?.name ?? id} (sem vínculo — o jogador precisa usar /vincular)`);
-      continue;
-    }
-    try {
-      const user = await client.users.fetch(character.discordUserId);
-      await enviarEmbeds(user, pagina);
-      sent.push(character.name);
-    } catch {
-      failed.push(`${character.name} (DM bloqueada nas configurações de privacidade do jogador)`);
-    }
-  }
-  return { sent, failed };
-}
-
-// Avisa o jogador por DM que chegou a vez dele — PV, CA, condições ativas e, se
-// tiver, as magias/habilidades cadastradas na ficha (pra ele saber o que pode fazer
-// sem precisar abrir mais nada). Best-effort: nunca lança erro, o turno segue de
-// qualquer jeito mesmo se a DM falhar (bloqueada, bot fora do ar, etc).
-export async function notifyTurn(character, { round, entry } = {}) {
-  if (!client || !character?.discordUserId) return false;
-  try {
-    const hp = entry?.hp ?? character.hp;
-    const maxHp = entry?.maxHp ?? character.maxHp;
-    const fields = [];
-    if (maxHp) fields.push({ name: '❤️ PV', value: `${hp ?? '?'}/${maxHp}`, inline: true });
-    if (character.ac != null && character.ac !== '') fields.push({ name: '🛡️ CA', value: String(character.ac), inline: true });
-    const conds = entry?.conditions || [];
-    if (conds.length) fields.push({ name: '⚠️ Condições ativas', value: conds.join(', '), inline: false });
-    const spells = character.spells || [];
-    if (spells.length) {
-      fields.push({
-        name: '✨ Magias',
-        value: spells.map((s) => `**${s.name}** ${s.level ? `(nível ${s.level})` : '(truque)'}`).join('\n').slice(0, 1000),
-        inline: false,
-      });
-    }
-    const feats = character.features || [];
-    if (feats.length) {
-      fields.push({
-        name: '⭐ Habilidades',
-        value: feats.map((f) => `**${f.name}**${f.source ? ` _(${f.source})_` : ''}`).join('\n').slice(0, 1000),
-        inline: false,
-      });
-    }
-    const embed = new EmbedBuilder()
-      .setTitle(`🎲 É a sua vez, ${character.name}!`)
-      .setColor(0x6e5bc4)
-      .setFooter({ text: 'Ação, ação bônus (se tiver), movimento e reação quando fizer sentido.' });
-    if (round) embed.setDescription(`Rodada ${round}`);
-    if (fields.length) embed.addFields(fields);
-    if (/^https?:\/\//i.test(character.imageUrl || '')) embed.setThumbnail(character.imageUrl);
-    const user = await client.users.fetch(character.discordUserId);
-    await user.send({ embeds: [embed] });
-    return true;
-  } catch {
-    return false;
-  }
+  if (!db.settings.textChannelId) throw new Error('Defina o canal de texto nas configurações.');
+  const guild = await client.guilds.fetch(GUILD_ID);
+  const channel = await guild.channels.fetch(db.settings.textChannelId);
+  if (!channel) throw new Error('Defina o canal de texto nas configurações.');
+  await enviarEmbeds(channel, { titulo: `📜 ${title || 'Handout'}`, cor: 0xc4a747, texto: content, imageUrl, rodape: db.settings.campaignName });
+  return { sent: ['canal'] };
 }
 
 export function botStatus() {

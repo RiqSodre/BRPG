@@ -166,13 +166,12 @@ export function createMesaWss() {
       if (msg.type === 'hello') {
         const papelPedido = msg.role === 'dm' ? 'dm' : 'player';
         // O portal do jogador (req.brpgAuthRequired, ligado no upgrade de /portal-ws)
-        // exige uma sessão de Mestre ou jogador vinculado. mesa.html e o painel do
-        // Mestre chegam por /mesa e nunca passam por aqui — continuam sem login, como
-        // sempre foram, pra não quebrar quem já usa o sistema sem configurar o portal.
-        if (req?.brpgAuthRequired) {
-          const info = req.brpgAuthInfo;
-          const autorizado = info && (papelPedido === 'dm' ? info.role === 'dm' : info.role === 'dm' || info.role === 'player');
-          if (!autorizado) { ws.close(4001, 'not_authorized'); return; }
+        // exige sessão de login válida — e só resolve pra "player", não existe um
+        // login de Mestre por aqui. mesa.html e o painel do Mestre chegam por /mesa e
+        // nunca passam por aqui — continuam sem login, como sempre foram.
+        if (req?.brpgAuthRequired && (!req.brpgAuthInfo || papelPedido === 'dm')) {
+          ws.close(4001, 'not_authorized');
+          return;
         }
         client.role = papelPedido;
         const v = views();

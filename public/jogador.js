@@ -1,27 +1,12 @@
-// Portal do jogador. Fase 0 resolvia só o login; a partir daqui (Fase 1), um jogador
-// vinculado sai do card e entra na visão ao vivo (mapa + iniciativa + a própria ficha
-// sempre à mão) — a mesma tela que mesa.html mostra, só que atrás do login e com o
-// personagem da sessão já identificado. Quem é Mestre ou ainda não tem vínculo continua
-// vendo só a mensagem de orientação.
+// Portal do jogador. Login nativo: escolhe o próprio personagem numa lista e digita a
+// senha que o Mestre deu — sem conta externa nenhuma, o sistema roda sozinho. Um
+// personagem logado sai do card e entra na visão ao vivo (mapa + iniciativa + a própria
+// ficha sempre à mão) — a mesma tela que mesa.html mostra, só que atrás do login.
 const card = document.getElementById('portal-card');
 const wrap = document.getElementById('portal-wrap');
 const live = document.getElementById('portal-live');
-const params = new URLSearchParams(location.search);
 
 const escPortal = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-
-const ROLE_MSG = {
-  dm: () => `
-    <div class="portal-badge">👑 Mestre</div>
-    <h1>Você é o Mestre</h1>
-    <p>Este portal é para os jogadores acompanharem a campanha. Use o painel principal para gerenciar a mesa.</p>
-    <a class="portal-btn" href="/" style="background:var(--accent);">Ir para o painel</a>`,
-  unlinked: (u) => `
-    <div class="portal-badge">⛓️ Sem vínculo</div>
-    <h1>Olá, ${escPortal(u.globalName)}!</h1>
-    <p>Você entrou com o Discord, mas ainda não tem um personagem vinculado. No servidor da campanha, use <code>/vincular</code> e escolha seu personagem — depois volte aqui.</p>
-    <button class="portal-btn" id="btn-checar-vinculo" style="background:var(--accent);">Já vinculei, checar de novo</button>`,
-};
 
 // Um script por vez, na ordem certa: <script> criado por JS não garante ordem de
 // execução sozinho (isso só vale para tags estáticas do HTML), então cada um só é
@@ -43,7 +28,7 @@ async function bootLiveView(character) {
   window.MESA_WS_PATH = '/portal-ws';
   window.MEU_PERSONAGEM_ID = character?.id || null;
   document.getElementById('btn-portal-logout').onclick = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' });
+    await fetch('/api/portal/logout', { method: 'POST' });
     location.reload();
   };
   try {
@@ -55,47 +40,67 @@ async function bootLiveView(character) {
   }
 }
 
-async function init() {
-  const r = await fetch('/api/auth-status').then((r2) => r2.json()).catch(() => null);
-
-  if (!r || !r.configured) {
-    card.innerHTML = `
-      <h1>Portal ainda não configurado</h1>
-      <p>O Mestre precisa configurar o login com Discord (DISCORD_CLIENT_ID e DISCORD_CLIENT_SECRET no .env) antes que os jogadores possam entrar.</p>`;
-    return;
-  }
-
-  if (!r.loggedIn) {
-    const erro = params.get('erro') === 'acesso_negado'
-      ? '<p style="color:var(--danger);">Login cancelado ou negado. Tente novamente.</p>' : '';
+// Tela de login: um personagem por botão (retrato + nome) e um campo de senha embaixo.
+function renderLoginForm(roster, erro) {
+  if (!roster.length) {
     card.innerHTML = `
       <h1>Portal do Jogador</h1>
-      <p>Entre com sua conta do Discord para acompanhar sua ficha, inventário e a campanha em tempo real.</p>
-      ${erro}
-      <a class="portal-btn" href="/auth/discord">🎮 Entrar com Discord</a>`;
+      <p>O Mestre ainda não criou nenhum personagem de jogador. Peça pra ele cadastrar sua ficha no painel.</p>`;
     return;
   }
+  card.innerHTML = `
+    <h1>Portal do Jogador</h1>
+    <p>Escolha seu personagem e digite a senha que o Mestre te deu.</p>
+    <div class="portal-roster">
+      ${roster.map((c) => `
+        <button type="button" class="portal-roster-item" data-id="${escPortal(c.id)}">
+          ${c.imageUrl ? `<img src="${escPortal(c.imageUrl)}" alt="" />` : `<span class="portal-roster-initial">${escPortal((c.name || '?').trim().slice(0, 1).toUpperCase())}</span>`}
+          <span class="portal-roster-name">${escPortal(c.name)}</span>
+        </button>`).join('')}
+    </div>
+    <form class="portal-login-form" id="portal-login-form">
+      <input type="password" name="passcode" placeholder="Senha" autocomplete="current-password" required />
+      <button class="portal-btn" type="submit" id="portal-login-submit" disabled>Entrar</button>
+    </form>
+    ${erro ? `<p class="portal-login-erro">${escPortal(erro)}</p>` : ''}`;
 
-  const u = r.discordUser;
+  let selecionado = null;
+  const submitBtn = document.getElementById('portal-login-submit');
+  document.querySelectorAll('.portal-roster-item').forEach((btn) => btn.onclick = () => {
+    selecionado = btn.dataset.id;
+    document.querySelectorAll('.portal-roster-item').forEach((b) => b.classList.toggle('selected', b === btn));
+    submitBtn.disabled = false;
+  });
 
-  if (r.role === 'player') {
-    // A visão ao vivo já tem seu próprio "Sair" no cabeçalho — o card de login não
-    // aparece mais enquanto a sessão for válida.
-    wrap.classList.add('hidden');
-    live.classList.remove('hidden');
-    await bootLiveView(r.character);
-    return;
-  }
+  document.getElementById('portal-login-form').onsubmit = async (e) => {
+    e.preventDefault();
+    if (!selecionado) return;
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Entrando...';
+    const passcode = new FormData(e.target).get('passcode');
+    const r = await fetch('/api/portal/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ characterId: selecionado, passcode }),
+    }).then((r2) => r2.json()).catch(() => ({ ok: false, erro: 'Não consegui falar com o servidor.' }));
 
-  const avatar = u.avatarUrl ? `<img class="portal-avatar" src="${escPortal(u.avatarUrl)}" alt="" />` : '';
-  card.innerHTML = `${avatar}${ROLE_MSG[r.role](u, r.character)}<br/><button class="portal-logout" id="btn-logout">Sair</button>`;
-  document.getElementById('btn-logout').onclick = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' });
-    location.reload();
+    if (r.ok) { await entrarComoJogador(r.character); return; }
+    renderLoginForm(roster, r.erro || 'Não foi possível entrar.');
   };
-  if (r.role === 'unlinked') {
-    document.getElementById('btn-checar-vinculo').onclick = () => init();
-  }
+}
+
+async function entrarComoJogador(character) {
+  wrap.classList.add('hidden');
+  live.classList.remove('hidden');
+  await bootLiveView(character);
+}
+
+async function init() {
+  const me = await fetch('/api/portal/me').then((r) => r.json()).catch(() => null);
+  if (me?.character) { await entrarComoJogador(me.character); return; }
+
+  const roster = await fetch('/api/portal/roster').then((r) => r.json()).catch(() => []);
+  renderLoginForm(roster);
 }
 
 init();

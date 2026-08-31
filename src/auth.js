@@ -1,95 +1,61 @@
-// Login dos jogadores via Discord OAuth2 + resolução de papel (Mestre x jogador).
-// Não mexe em nada do painel do Mestre: esta é uma superfície nova e paralela.
-// Enquanto DISCORD_CLIENT_ID/SECRET não estiverem no .env, o portal do jogador
-// mostra um aviso de "não configurado" em vez de quebrar — o painel do Mestre
-// (que não passa por aqui) continua funcionando normalmente.
-import { getDb } from './store.js';
+// Login dos jogadores: nativo, sem nenhuma conta externa. Cada personagem de jogador
+// ganha uma senha definida pelo Mestre na ficha (aba Personagens → Editar); o jogador
+// entra no portal escolhendo o próprio personagem numa lista e digitando essa senha.
+// O sistema roda inteiramente sozinho — nada aqui depende do Discord estar no ar,
+// configurado ou sequer instalado.
+import { getDb, getItem } from './store.js';
 
-const AUTH_BASE = 'https://discord.com/api/oauth2';
-const API_BASE = 'https://discord.com/api/v10';
+// Trava simples contra tentativa de força bruta num PIN curto — não é criptografia (a
+// senha fica em texto puro no campaign.json, como o resto dos dados da campanha; é o
+// mesmo nível de proteção que qualquer outro campo do arquivo). Só desacelera quem
+// fica chutando números. Fica em memória — reseta ao reiniciar o servidor, o que é
+// aceitável pro tamanho do problema (um jogo caseiro, não um serviço público).
+const tentativas = new Map(); // characterId -> { falhas, bloqueadoAte }
+const MAX_TENTATIVAS = 8;
+const BLOQUEIO_MS = 5 * 60 * 1000;
 
-export function oauthConfigured() {
-  return Boolean(process.env.DISCORD_CLIENT_ID && process.env.DISCORD_CLIENT_SECRET);
+// Lista pública pro seletor de personagem na tela de login — nunca a senha nem
+// qualquer outro dado sensível da ficha.
+export function rosterPublico() {
+  return getDb().characters
+    .filter((c) => c.type === 'pc')
+    .map((c) => ({ id: c.id, name: c.name, imageUrl: c.imageUrl || '' }));
 }
 
-function redirectUri(req) {
-  // Permite configurar explicitamente (necessário atrás de túnel/domínio público);
-  // em localhost, deduz do próprio request.
-  if (process.env.DISCORD_REDIRECT_URI) return process.env.DISCORD_REDIRECT_URI;
-  return `${req.protocol}://${req.get('host')}/auth/discord/callback`;
-}
+export function login(characterId, passcode) {
+  const ch = getItem('characters', characterId);
+  if (!ch || ch.type !== 'pc') return { ok: false, erro: 'Personagem não encontrado.' };
 
-export function buildAuthUrl(req) {
-  const params = new URLSearchParams({
-    client_id: process.env.DISCORD_CLIENT_ID,
-    redirect_uri: redirectUri(req),
-    response_type: 'code',
-    scope: 'identify',
-    prompt: 'none',
-  });
-  return `${AUTH_BASE}/authorize?${params}`;
-}
+  const t = tentativas.get(characterId);
+  if (t?.bloqueadoAte && t.bloqueadoAte > Date.now()) {
+    const min = Math.ceil((t.bloqueadoAte - Date.now()) / 60000);
+    return { ok: false, erro: `Muitas tentativas erradas — espere ${min} minuto(s) e tente de novo.` };
+  }
 
-export async function exchangeCode(req, code) {
-  const body = new URLSearchParams({
-    client_id: process.env.DISCORD_CLIENT_ID,
-    client_secret: process.env.DISCORD_CLIENT_SECRET,
-    grant_type: 'authorization_code',
-    code,
-    redirect_uri: redirectUri(req),
-  });
-  const r = await fetch(`${AUTH_BASE}/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body,
-  });
-  if (!r.ok) throw new Error(`Discord recusou o login (${r.status}).`);
-  return r.json(); // { access_token, ... }
-}
+  if (!ch.passcode) return { ok: false, erro: `O Mestre ainda não definiu uma senha para ${ch.name}.` };
+  if (String(passcode || '') !== String(ch.passcode)) {
+    const falhas = (t?.falhas || 0) + 1;
+    tentativas.set(characterId, {
+      falhas,
+      bloqueadoAte: falhas >= MAX_TENTATIVAS ? Date.now() + BLOQUEIO_MS : (t?.bloqueadoAte ?? null),
+    });
+    return { ok: false, erro: 'Senha incorreta.' };
+  }
 
-export async function fetchDiscordUser(accessToken) {
-  const r = await fetch(`${API_BASE}/users/@me`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
-  if (!r.ok) throw new Error('Não consegui confirmar sua identidade no Discord.');
-  const u = await r.json();
-  return {
-    id: u.id,
-    username: u.username,
-    globalName: u.global_name || u.username,
-    avatarUrl: u.avatar
-      ? `https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.png?size=128`
-      : null,
-  };
+  tentativas.delete(characterId);
+  return { ok: true, character: { id: ch.id, name: ch.name } };
 }
-
-// IDs do(s) Mestre(s): GM_DISCORD_ID aceita um id ou uma lista separada por vírgula.
-function gmIds() {
-  return String(process.env.GM_DISCORD_ID || '').split(',').map((s) => s.trim()).filter(Boolean);
-}
-
-// A partir do id do Discord já autenticado, decide o papel e, se for jogador,
-// qual personagem é o dele. Nunca devolve segredos — só a decisão de acesso.
-export function resolveRole(discordUserId) {
-  if (gmIds().includes(discordUserId)) return { role: 'dm', character: null };
-  const ch = getDb().characters.find((c) => c.type === 'pc' && c.discordUserId === discordUserId);
-  if (ch) return { role: 'player', character: { id: ch.id, name: ch.name } };
-  return { role: 'unlinked', character: null };
-}
-
-// ---------- Middlewares ----------
 
 export function requireAuth(req, res, next) {
-  if (!req.session?.discordUser) return res.status(401).json({ error: 'not_authenticated' });
+  if (!req.session?.characterId) return res.status(401).json({ error: 'not_authenticated' });
   next();
 }
 
-export function requireRole(...roles) {
-  return (req, res, next) => {
-    if (!req.session?.discordUser) return res.status(401).json({ error: 'not_authenticated' });
-    const { role } = resolveRole(req.session.discordUser.id);
-    if (!roles.includes(role)) return res.status(403).json({ error: 'forbidden' });
-    req.playerRole = role;
-    next();
-  };
+// A partir do id salvo na sessão, resolve o personagem — null se ele foi excluído (ou
+// deixou de ser PC) depois do login, em vez de a sessão apontar pra um fantasma.
+export function sessionCharacter(req) {
+  const id = req.session?.characterId;
+  if (!id) return null;
+  const ch = getItem('characters', id);
+  return ch && ch.type === 'pc' ? { id: ch.id, name: ch.name } : null;
 }

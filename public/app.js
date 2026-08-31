@@ -408,9 +408,9 @@ function renderCharacters() {
       ${c.imageUrl ? `<img class="thumb" src="${esc(c.imageUrl)}" alt="" onerror="this.remove()" />` : ''}
       <h3>${esc(c.name)}</h3>
       <div class="meta">${[esc([c.race, c.klass, c.level ? `nível ${c.level}` : ''].filter(Boolean).join(' · ')), c.player ? `<svg class="icon"><use href="#i-game-controller"/></svg>${esc(c.player)}` : ''].filter(Boolean).join(' · ')}</div>
-      ${c.discordUserId
-        ? `<button type="button" class="badge gold badge-btn" data-unlink-discord="${c.id}" title="Clique para desvincular do Discord"><svg class="icon"><use href="#i-link"/></svg>Discord: ${esc(c.discordTag || 'vinculado')}<svg class="icon"><use href="#i-x"/></svg></button>`
-        : '<span class="badge" title="O jogador usa /vincular no Discord"><svg class="icon"><use href="#i-link-break"/></svg>sem vínculo</span>'}
+      ${c.passcode
+        ? '<span class="badge gold" title="O jogador entra no portal com o nome do personagem + essa senha — troque em Editar"><svg class="icon"><use href="#i-link"/></svg>Portal: senha definida</span>'
+        : '<span class="badge" title="Defina uma senha em Editar para liberar o portal a esse jogador"><svg class="icon"><use href="#i-link-break"/></svg>Portal: sem senha</span>'}
       ${c.ac || c.maxHp ? `<div class="meta"><svg class="icon"><use href="#i-shield"/></svg> CA ${esc(c.ac ?? '?')} · <svg class="icon"><use href="#i-heart-straight"/></svg> ${esc(c.hp ?? '?')}/${esc(c.maxHp ?? '?')} PV</div>` : ''}
       <div class="desc">${esc(c.description || '')}</div>
       <div class="row">
@@ -478,12 +478,6 @@ function renderCharacters() {
     if (confirm('Excluir este personagem?')) { await api(`/characters/${b.dataset.delChar}`, { method: 'DELETE' }); refresh(); }
   });
   $$('#tab-characters [data-inv]').forEach((b) => b.onclick = () => inventoryModal(chars.find((c) => c.id === b.dataset.inv)));
-  $$('#tab-characters [data-unlink-discord]').forEach((b) => b.onclick = async () => {
-    const ch = chars.find((c) => c.id === b.dataset.unlinkDiscord);
-    if (!confirm(`Desvincular o Discord de ${ch?.name}? O jogador precisará usar /vincular de novo.`)) return;
-    const r = await tryApi(() => api(`/characters/${b.dataset.unlinkDiscord}`, { method: 'PUT', body: { discordUserId: null, discordTag: null } }), 'Vínculo com o Discord removido.');
-    if (r) refresh();
-  });
   $$('#tab-characters [data-improv]').forEach((b) => b.onclick = () => improvModal(chars.find((c) => c.id === b.dataset.improv)));
   $$('#tab-characters [data-speak]').forEach((b) => b.onclick = () => speakModal(chars.find((c) => c.id === b.dataset.speak)));
   $$('#tab-characters [data-embody]').forEach((b) => b.onclick = () => {
@@ -543,7 +537,7 @@ function renderItems() {
       <h2><svg class="icon"><use href="#i-backpack"/></svg>Itens</h2>
       <div class="actions"><button class="btn gold" id="btn-new-item">+ Novo item</button></div>
     </div>
-    <p class="help-text">Crie o item uma vez aqui e entregue a quantos personagens quiser. Ao entregar, o jogador recebe um card do item por DM no Discord — e pode consultar a mochila a qualquer momento com <code>/inventario</code>.</p>
+    <p class="help-text">Crie o item uma vez aqui e entregue a quantos personagens quiser. Ao entregar, o item já aparece na hora na ficha do jogador, no portal.</p>
 
     <div class="settings-section" style="margin-top:14px;">
       <h3 style="display:flex;align-items:center;gap:8px;"><svg class="icon"><use href="#i-link"/></svg>Quem está com o quê</h3>
@@ -553,9 +547,9 @@ function renderItems() {
           <div class="inv-owner-row">
             <span class="inv-owner-name">
               <svg class="icon"><use href="#i-${c.type === 'pc' ? 'game-controller' : 'mask-happy'}"/></svg> <b>${esc(c.name)}</b>
-              ${c.type === 'pc' ? (c.discordUserId
-                ? `<span class="badge gold" title="Recebe itens por DM e pode usar /inventario"><svg class="icon"><use href="#i-link"/></svg>${esc(c.discordTag || 'vinculado')}</span>`
-                : '<span class="badge" title="O jogador precisa usar /vincular no Discord"><svg class="icon"><use href="#i-link-break"/></svg>sem vínculo</span>') : ''}
+              ${c.type === 'pc' ? (c.passcode
+                ? '<span class="badge gold" title="Esse jogador pode ver a mochila ao vivo no portal"><svg class="icon"><use href="#i-link"/></svg>Portal: senha definida</span>'
+                : '<span class="badge" title="Defina uma senha em Editar para liberar o portal a esse jogador"><svg class="icon"><use href="#i-link-break"/></svg>Portal: sem senha</span>') : ''}
             </span>
             <div class="inv-chips">
               ${(c.inventory || []).map((l) => {
@@ -633,35 +627,24 @@ function giveItemModal(it) {
   const pcs = state.characters.filter((c) => c.type === 'pc');
   const npcs = state.characters.filter((c) => c.type === 'npc');
   if (!pcs.length && !npcs.length) return toast('Crie um personagem primeiro.', true);
-  const opts = [
-    ...pcs.map((c) => ({ value: c.id, label: `${c.name}${c.discordUserId ? '' : ' (sem vínculo no Discord)'}` })),
-    ...npcs.map((c) => ({ value: c.id, label: c.name })),
-  ];
+  const opts = [...pcs, ...npcs].map((c) => ({ value: c.id, label: c.name }));
   openModal(`Entregar ${esc(it.name)}`, `
     ${fieldSelect('Para quem', 'charId', opts, opts[0].value)}
     <div class="field">
       <label>Quantidade</label>
       <input name="qty" type="number" min="1" step="1" value="1" />
     </div>
-    <label class="tool-check" style="margin:8px 0;">
-      <input type="checkbox" name="notify" checked /> Avisar o jogador por DM no Discord (card do item)
-    </label>
-    <p class="help-text">Sem vínculo no Discord, o item entra na mochila mesmo assim — o jogador só não recebe o aviso. Ele vincula com <code>/vincular</code>. Para <b>tirar</b> itens, use o X na mochila.</p>
+    <p class="help-text">O item já aparece na hora na ficha do jogador, no portal. Para <b>tirar</b> itens, use o X na mochila.</p>
   `, async (data) => {
-    const notify = $('#modal-form [name="notify"]').checked;
     // Lança em vez de "corrigir": o modal fica aberto mostrando o motivo,
     // e o Mestre não recebe o oposto do que pediu.
     const qty = Math.floor(Number(data.qty));
     if (!Number.isFinite(qty) || qty < 1) {
       throw new Error('A quantidade precisa ser um número inteiro de 1 para cima. Para tirar itens, use o X na mochila.');
     }
-    const r = await api(`/characters/${data.charId}/inventory`, {
-      method: 'POST',
-      body: { itemId: it.id, qty, notify },
-    });
+    await api(`/characters/${data.charId}/inventory`, { method: 'POST', body: { itemId: it.id, qty } });
     const quem = state.characters.find((c) => c.id === data.charId)?.name || 'personagem';
-    if (r.aviso) toast(`${it.name} foi para a mochila de ${quem}, mas o DM falhou: ${r.aviso}`, true);
-    else toast(`${it.name} entregue a ${quem}${notify ? ' e avisado no Discord!' : '.'}`);
+    toast(`${it.name} entregue a ${quem}.`);
   }, 'Entregar');
 }
 
@@ -672,9 +655,9 @@ function inventoryModal(ch) {
 
   $('#modal').innerHTML = `
     <h3 style="display:flex;align-items:center;gap:8px;"><svg class="icon"><use href="#i-backpack"/></svg>Mochila de ${esc(ch.name)}</h3>
-    ${ch.discordUserId
-      ? `<p class="help-text"><svg class="icon"><use href="#i-link"/></svg> Vinculado a <b>${esc(ch.discordTag || 'jogador')}</b> — ele pode ver isso com <code>/inventario</code>.</p>`
-      : '<p class="help-text"><svg class="icon"><use href="#i-link-break"/></svg> Sem vínculo no Discord — o jogador precisa usar <code>/vincular</code> para receber itens e consultar a mochila.</p>'}
+    ${ch.type === 'pc' ? (ch.passcode
+      ? '<p class="help-text"><svg class="icon"><use href="#i-link"/></svg> Esse jogador vê essa mochila ao vivo no portal.</p>'
+      : '<p class="help-text"><svg class="icon"><use href="#i-link-break"/></svg> Defina uma senha em Editar para liberar o portal a esse jogador.</p>') : ''}
     <div id="inv-list" style="max-height:340px;overflow-y:auto;margin:10px 0;">
       ${inv.length ? inv.map((l) => {
         const cor = corDaRaridade(l.item.rarity);
@@ -688,7 +671,6 @@ function inventoryModal(ch) {
             <small style="color:${cor};"> ${esc(l.item.rarity || '')}</small>
           </span>
           <input class="input inv-qty" type="number" min="0" value="${l.qty}" data-inv-qty="${l.itemId}" style="width:56px;text-align:center;" title="Quantidade (0 remove)" />
-          <button class="btn small ghost" data-inv-send="${l.itemId}" title="Reenviar o card deste item por DM"><svg class="icon"><use href="#i-envelope-simple"/></svg></button>
           <button class="btn small danger" data-inv-del="${l.itemId}" title="Tirar da mochila"><svg class="icon"><use href="#i-trash"/></svg></button>
         </div>`;
       }).join('') : '<div class="empty" style="font-size:13px;">Mochila vazia.</div>'}
@@ -716,8 +698,6 @@ function inventoryModal(ch) {
     await refresh();
     inventoryModal(state.characters.find((c) => c.id === ch.id));
   });
-  $$('#inv-list [data-inv-send]').forEach((b) => b.onclick = () =>
-    tryApi(() => api(`/characters/${ch.id}/inventory/${b.dataset.invSend}/notify`, { method: 'POST' }), 'Card reenviado no Discord!'));
 }
 
 // Escolhe um item do catálogo para dar a um personagem específico.
@@ -753,6 +733,7 @@ function charModal(c = {}) {
     <input type="hidden" name="type" value="${c.type}" />
     ${field('Nome', 'name', c.name)}
     ${isPc ? field('Jogador (quem joga)', 'player', c.player) : ''}
+    ${isPc ? field('Senha do portal (o jogador usa pra entrar em /jogador.html)', 'passcode', c.passcode, 'text', 'ex: draco123') : ''}
     <div class="field-row">
       ${field('Raça', 'race', c.race)}
       ${field('Classe/Ocupação', 'klass', c.klass)}
@@ -911,25 +892,14 @@ function characterSheetModal(ch) {
 }
 
 function handoutModal() {
-  const pcs = state.characters.filter((c) => c.type === 'pc');
   openModal('Enviar handout', `
-    ${fieldSelect('Para quem?', 'target', [
-      { value: 'all', label: 'Todos (no canal de texto)' },
-      ...pcs.map((c) => ({
-        value: c.id,
-        label: `${c.name}${c.discordUserId ? ` — DM para ${c.discordTag || 'jogador'}` : ' — SEM VÍNCULO (use /vincular)'}`,
-      })),
-    ], 'all')}
+    <p class="help-text">Vai pro canal de texto configurado em ⚙️ Config — todo mundo vê ao mesmo tempo.</p>
     ${field('Título', 'title', '', 'text', 'Uma carta amassada')}
     ${fieldArea('Conteúdo', 'content', '', '"Encontre-me na cripta à meia-noite. Venha só. — V."')}
     ${field('URL da imagem (opcional)', 'imageUrl', '', 'text', 'mapa, carta, brasão...')}
   `, async (data) => {
     const r = await tryApi(() => api('/handout', { method: 'POST', body: data }));
-    if (r) {
-      let msg = r.sent?.length ? `Enviado para: ${r.sent.join(', ')}.` : '';
-      if (r.failed?.length) msg += ` Falhou: ${r.failed.join('; ')}`;
-      toast(msg || 'Nada foi enviado.', Boolean(r.failed?.length));
-    }
+    if (r) toast(r.sent?.length ? 'Handout postado no canal!' : 'Nada foi enviado.', !r.sent?.length);
   }, 'Enviar');
 }
 
@@ -1602,9 +1572,7 @@ function renderMapTab() {
             </div>
             <div class="ov-panel">
               <span class="ov-group-label">Jogadores</span>
-              <a class="ov-btn" href="/mesa.html" target="_blank" title="Abrir a tela dos jogadores (segunda tela / Discord)"><svg class="icon"><use href="#i-desktop"/></svg>Tela dos jogadores</a>
-              <span class="ov-sep"></span>
-              <label class="tool-check" title="Manda uma DM no Discord pro jogador vinculado quando chega a vez dele — com PV, CA, condições e as magias/habilidades da ficha"><input type="checkbox" id="turn-dm" /> <svg class="icon"><use href="#i-paper-plane-tilt"/></svg> Avisar turno por DM</label>
+              <a class="ov-btn" href="/mesa.html" target="_blank" title="Abrir a tela dos jogadores (segunda tela, sem login)"><svg class="icon"><use href="#i-desktop"/></svg>Tela dos jogadores</a>
               <span class="ov-sep"></span>
               <button class="ov-btn" id="btn-sound-toggle" title="Soundboard: solta efeitos no canal de voz (atalhos 1-9)"><svg class="icon"><use href="#i-speaker-high"/></svg>Sons</button>
             </div>
@@ -1780,14 +1748,6 @@ function renderMapTab() {
         : 'Os jogadores voltam a ver só o estado dos inimigos (Ferido, Quase morto...).');
     };
 
-    $('#turn-dm').onchange = (e) => {
-      state.battle.turnDm = e.target.checked;
-      pushBattle();
-      toast(e.target.checked
-        ? 'Vou avisar cada jogador por DM quando chegar a vez dele.'
-        : 'Aviso de turno por DM desligado.');
-    };
-
     // Botão de som mostra/esconde o soundboard de batalha
     $('#btn-sound-toggle').onclick = () => {
       const p = $('#soundboard-panel');
@@ -1887,7 +1847,6 @@ function renderMapTab() {
   const map = activeMap();
   $('#fog-enabled').checked = Boolean(map?.fog?.enabled);
   $('#show-enemy-hp').checked = Boolean(state.battle.showEnemyHp);
-  $('#turn-dm').checked = Boolean(state.battle.turnDm);
   $('#vision-enabled').checked = Boolean(state.battle.vision?.enabled);
   $('#vision-radius').value = state.battle.vision?.radius ?? 12;
   bmap.setData({ map, battle: state.battle, combat: state.combat });
