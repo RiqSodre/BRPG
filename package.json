@@ -1,7 +1,7 @@
 {
   "name": "mesa-do-mestre",
   "version": "0.1.0",
-  "description": "Assistente do Mestre para campanhas de RPG via Discord — história, cenas, NPCs, áudio imersivo e IA.",
+  "description": "Assistente do Mestre para campanhas de RPG de mesa — história, cenas, personagens, mapa de batalha e IA, com um portal para os jogadores acompanharem ao vivo.",
   "type": "module",
   "main": "src/index.js",
   "scripts": {
@@ -11,19 +11,14 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
-    "@discordjs/voice": "^0.19.2",
-    "@snazzah/davey": "^0.1.6",
-    "discord.js": "^14.16.3",
     "dotenv": "^16.4.5",
     "express": "^4.21.2",
     "express-session": "^1.19.0",
     "ffmpeg-static": "^5.2.0",
     "groq-sdk": "^1.3.0",
-    "libsodium-wrappers": "^0.7.15",
     "msedge-tts": "^2.0.5",
     "multer": "^2.1.1",
     "openai": "^7.4.0",
-    "opusscript": "^0.1.1",
     "ws": "^8.21.0",
     "youtube-dl-exec": "^3.1.10"
   },

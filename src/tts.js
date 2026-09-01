@@ -1,5 +1,5 @@
-// Vozes de NPC via Edge TTS (gratuito): gera MP3 que o bot toca no canal
-// de voz por cima do ambiente. Cada NPC pode ter voz, tom e ritmo próprios.
+// Vozes de NPC via Edge TTS (gratuito): gera um MP3 que o Mestre ouve no próprio
+// navegador, pra ensaiar a voz antes da cena. Cada NPC pode ter voz, tom e ritmo próprios.
 import fs from 'fs';
 import path from 'path';
 import { MsEdgeTTS, OUTPUT_FORMAT } from 'msedge-tts';

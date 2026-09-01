@@ -1,19 +1,38 @@
 # 🐉 Mesa do Mestre
 
-Assistente do Mestre para campanhas de RPG jogadas via Discord. Centraliza **história, cenas, personagens, sessões e áudios** — e usa IA (GPT ou Llama, à sua escolha) que conhece toda a sua campanha para te ajudar a mestrar.
+Assistente do Mestre para campanhas de RPG de mesa. Centraliza **história, cenas,
+personagens, mapa de batalha e sessões** — com um portal para cada jogador acompanhar a
+própria ficha e o mapa ao vivo, e IA (GPT ou Llama, à sua escolha) que conhece toda a
+campanha para te ajudar a mestrar. Roda inteiramente no navegador, sem depender de
+nenhuma plataforma de terceiros.
 
 ## O que ele faz
 
-- **🎭 Cenas com som automático** — ao ativar uma cena no painel, o bot posta a descrição + imagem no canal de texto do Discord e **toca o áudio ambiente/música automaticamente** no canal de voz, em loop, com **crossfade** entre cenas.
-- **🎵 Mixer de verdade** — efeitos sonoros tocam **por cima** do ambiente sem interrompê-lo; volume master ao vivo. Busque e importe sons direto do **Freesound** ou do **YouTube** (via yt-dlp, já incluso) pelo painel — ótimo pra trilhas sonoras mais elaboradas que os loops curtos do Freesound.
-- **🗣️ Vozes de NPC (TTS)** — o bot **fala as falas dos NPCs** no canal de voz, com voz, tom e ritmo configuráveis por NPC (Edge TTS, gratuito). Ouça a prévia no navegador antes de soltar na mesa.
-- **🎙️ Cabine do Mestre** — fale pelos NPCs com **a sua voz transformada em tempo real** (pitch, reverb, distorção), com preset salvo por NPC. O painel captura seu microfone, aplica os efeitos e transmite pelo bot, por cima da música. Use fones e mute-se no Discord enquanto encarna. *Para os jogadores terem voz própria, cada um usa um modificador local (Voicemod/Clownfish) com microfone virtual — o Discord não permite que um bot transforme a voz de outros usuários.*
-- **✨ IA que entende a campanha** — chat do Mestre com acesso a toda a história, NPCs (e seus segredos), cenas e sessões. Pergunte "o que o taverneiro sabe sobre o culto?", improvise locais/NPCs/encontros, gere recaps épicos das sessões.
-- **🤖 Sons escolhidos por IA** — o botão "✨ Sons IA" numa cena faz a IA escolher os áudios da sua biblioteca que combinam com ela (pelas tags e descrição).
-- **🧙 Personagens** — fichas de PCs e NPCs (D&D 5e), com botão de **improvisar diálogo de NPC** na hora.
-- **📨 Handouts e segredos** — envie cartas, mapas e segredos ao canal de texto para todos verem.
-- **⚔️ Iniciativa esperta** — busque monstros no **bestiário SRD** (dnd5eapi.co), veja o stat block e adicione ao combate com iniciativa rolada. Condições, death saves e lembrete de CD de concentração ao tomar dano.
-- **🎲 Dados** — jogadores rolam com `/rolar 1d20+5` no Discord; o Mestre rola pelo painel.
+- **🎭 Cenas** — organize a campanha em cenas, com texto de leitura, imagem e trilha
+  sugerida. Ativar uma marca qual é a cena atual no painel.
+- **🗺️ Mapa de batalha ao vivo** — grid, névoa de guerra, tokens, iniciativa, condições,
+  death saves e dados 3D sincronizados — tudo em tempo real entre o painel do Mestre e a
+  tela dos jogadores.
+- **🎮 Portal do jogador** — cada jogador entra em `/jogador.html` com o próprio
+  personagem e uma senha (login nativo, sem conta externa) e acompanha o mapa, a
+  iniciativa e a **própria ficha completa** — sempre à mão, não só na sua vez.
+- **✨ IA que entende a campanha** — chat do Mestre com acesso a toda a história, NPCs
+  (e seus segredos), cenas e sessões. Pergunte "o que o taverneiro sabe sobre o culto?",
+  improvise locais/NPCs/encontros, gere recaps épicos das sessões.
+- **🤖 Sons escolhidos por IA** — o botão "✨ Sons IA" numa cena faz a IA escolher os
+  áudios da sua biblioteca que combinam com ela (pelas tags e descrição).
+- **🗣️ Prévia de voz de NPC (TTS)** — ouça no seu navegador como uma fala soaria, com
+  voz, tom e ritmo configuráveis por NPC (Edge TTS, gratuito) — útil pra ensaiar antes
+  da cena ou ler em voz alta na mesa.
+- **🧙 Personagens** — fichas completas de PCs e NPCs (D&D 5e): atributos, perícias,
+  proficiências, magias, habilidades, inventário, interpretação — com botão de
+  **improvisar diálogo de NPC** na hora.
+- **📚 Biblioteca de áudio** — organize efeitos por categoria e tags, importe do
+  Freesound ou do YouTube (via yt-dlp, já incluso) direto pra biblioteca.
+- **⚔️ Iniciativa esperta** — busque monstros no **bestiário SRD** (dnd5eapi.co), veja
+  o stat block e adicione ao combate com iniciativa rolada.
+- **🎲 Dados** — rolagem rápida na barra de topo ou o painel 3D sobre o mapa, visível
+  para todos que estiverem olhando (painel do Mestre e portal do jogador).
 
 ## Instalação
 
@@ -23,15 +42,7 @@ Assistente do Mestre para campanhas de RPG jogadas via Discord. Centraliza **his
 npm install
 ```
 
-### 2. Criar o bot no Discord
-
-1. Acesse https://discord.com/developers/applications → **New Application** → dê um nome (ex: "Mesa do Mestre").
-2. Na aba **Bot**: clique em **Reset Token** e copie o token (vai no `.env`).
-3. Na aba **Installation** (ou OAuth2 → URL Generator): gere um link de convite com escopos `bot` + `applications.commands` e permissões: *Send Messages, Embed Links, Connect, Speak, Use Slash Commands*.
-4. Abra o link gerado e adicione o bot ao servidor onde vocês jogam.
-5. No Discord, ative o **Modo Desenvolvedor** (Configurações → Avançado), clique com o botão direito no seu servidor → **Copiar ID do servidor**.
-
-### 3. Configurar o `.env`
+### 2. Configurar o `.env`
 
 ```powershell
 Copy-Item .env.example .env
@@ -39,14 +50,13 @@ Copy-Item .env.example .env
 
 Edite o `.env` e preencha:
 
-- `DISCORD_TOKEN` — token do bot (passo 2)
-- `DISCORD_GUILD_ID` — ID do servidor
 - `OPENAI_API_KEY` **ou** `GROQ_API_KEY` — pelo menos uma das duas, para o Assistente do Mestre funcionar:
   - `OPENAI_API_KEY` — chave criada em https://platform.openai.com/api-keys (GPT, pago por uso — uma sessão típica custa centavos)
   - `GROQ_API_KEY` — chave criada em https://groq.com (Llama 3.3 70B, **gratuito**)
   - Se definir as duas, o GPT é usado por padrão; force uma com `AI_PROVIDER=openai` ou `AI_PROVIDER=groq`
 - `FREESOUND_API_KEY` — opcional, para buscar sons pelo painel (grátis em https://freesound.org/apiv2/apply)
 - `YOUTUBE_COOKIES` / `YOUTUBE_COOKIES_FROM_BROWSER` — opcionais, só se a importação do YouTube reclamar (veja abaixo)
+- `SESSION_SECRET` — a chave que assina a sessão dos jogadores no portal (veja abaixo)
 
 #### Quando o YouTube pede login ("Sign in to confirm you're not a bot")
 
@@ -82,11 +92,10 @@ Se o painel roda como serviço ou por um atalho que não vê o PATH novo, aponte
 Quem não quiser lidar com isso tem dois caminhos que não dependem do YouTube: enviar o arquivo
 de áudio direto pela aba 🎵 do painel, ou usar a busca do Freesound.
 
-#### Portal do jogador (em construção, opcional)
+#### Portal do jogador
 
-Um portal onde cada jogador acompanha a própria ficha, o mapa e a iniciativa em tempo
-real, sem precisar de compartilhamento de tela — está sendo construído na branch
-`feat/player-portal`. O login é nativo, sem conta externa nenhuma:
+Cada jogador acompanha a própria ficha, o mapa e a iniciativa em tempo real — sem precisar de
+compartilhamento de tela nem de conta em nenhuma plataforma. O login é nativo:
 
 1. Defina `SESSION_SECRET` no `.env` (qualquer texto longo e aleatório) — assina o
    cookie de sessão dos jogadores.
@@ -98,36 +107,44 @@ real, sem precisar de compartilhamento de tela — está sendo construído na br
 Sem `SESSION_SECRET` definido, uma chave de desenvolvimento é usada — funciona para
 testar localmente, mas troque antes de expor o painel além do seu computador.
 
-### 4. Rodar
+Se preferir uma tela compartilhada única (TV física na mesa, por exemplo) em vez de cada
+jogador na própria tela, `/mesa.html` continua disponível — mostra o mesmo mapa e
+iniciativa, sem exigir login.
+
+### 3. Rodar
 
 ```powershell
 npm start
 ```
 
-Abra **http://localhost:3000** — esse é o seu painel do Mestre (só você vê; os jogadores veem apenas o que o bot posta no Discord).
+Abra **http://localhost:3000** — esse é o seu painel do Mestre. Os jogadores acessam
+`http://localhost:3000/jogador.html` (ou o endereço da sua rede/hospedagem).
 
 ## Fluxo de uma sessão
 
-1. **Antes:** escreva a história na aba 📜, cadastre NPCs na 🧙, monte as cenas na 🎭 com seus áudios (ou deixe a IA escolher com "✨ Sons IA"). Poste o recap da sessão anterior (aba 🗓️).
-2. **Começando:** entre no canal de voz com seus amigos e use `/entrar` no Discord (ou o botão "Conectar voz" no painel).
-3. **Durante:** ative as cenas conforme o jogo avança — descrição, imagem e som saem automaticamente. Dispare efeitos pelo soundboard da cena. Use o ✨ Assistente quando os jogadores te surpreenderem. Rode combates na aba ⚔️.
+1. **Antes:** escreva a história na aba 📜, cadastre NPCs e PCs na 🧙 (com senha do
+   portal pra cada jogador), monte as cenas na 🎭 com seus áudios (ou deixe a IA
+   escolher com "✨ Sons IA"). Poste o recap da sessão anterior (aba 🗓️).
+2. **Começando:** cada jogador abre `/jogador.html` no próprio dispositivo e entra com
+   o personagem.
+3. **Durante:** ative as cenas conforme o jogo avança. Use o ✨ Assistente quando os
+   jogadores te surpreenderem. Rode combates na aba ⚔️ — mapa, iniciativa e ficha do
+   turno aparecem ao vivo pra todo mundo.
 4. **Depois:** anote o que rolou na aba 🗓️ e gere o recap com um clique.
 
 ## Estrutura
 
 ```
 src/
-  index.js    # ponto de entrada (servidor + bot)
-  server.js   # painel web + API REST
-  bot.js      # bot do Discord (voz, cenas, /rolar, handouts no canal)
-  mixer.js    # mixer PCM: ambiente + efeitos + voz ao vivo, crossfade, loop
-  tts.js      # vozes de NPC via Edge TTS
+  index.js    # ponto de entrada (inicia o armazenamento e o servidor)
+  server.js   # painel web + API REST + WebSocket da mesa
+  auth.js     # login nativo do portal (personagem + senha)
+  dice.js     # rolagem de dados
+  tts.js      # prévia de voz de NPC via Edge TTS
   ai.js       # integração com GPT/Groq (contexto = campanha inteira)
   store.js    # armazenamento em JSON (data/campaign.json)
-  realtime.js # mesa em tempo real: painel do Mestre <-> tela dos jogadores (WebSocket)
-scripts/
-  smoke-mixer.js # teste do mixer: node scripts/smoke-mixer.js
-public/       # interface do painel (mesa.html = tela dos jogadores)
+  realtime.js # mesa em tempo real: painel do Mestre <-> tela dos jogadores <-> portal (WebSocket)
+public/       # interface do painel; mesa.html = tela compartilhada; jogador.html = portal do jogador
 data/
   campaign.json  # sua campanha (faça backup deste arquivo!)
   audio/         # seus arquivos de áudio

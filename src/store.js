@@ -23,9 +23,6 @@ const DEFAULTS = {
   settings: {
     campaignName: 'Minha Campanha',
     system: 'D&D 5e',
-    textChannelId: '',
-    voiceChannelId: '',
-    volume: 0.4,
     obsidian: {
       vaultPath: '',
       folderPlayers: 'Players',

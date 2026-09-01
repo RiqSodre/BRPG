@@ -44,7 +44,7 @@ function portraitOf(name, db) {
 }
 
 // Ficha "segura" pro jogador: só o que é público durante o jogo (pro HUD de turno) —
-// nunca os segredos, a voz/TTS (é coisa de NPC mesmo) ou dados internos do Discord.
+// nunca os segredos nem a voz/TTS (é coisa de NPC mesmo).
 function publicSheet(c, db) {
   return {
     id: c.id,
