@@ -238,6 +238,7 @@ function renderAll() {
   renderCharacters();
   renderItems();
   renderAudio();
+  renderBoothTab();
   renderMapTab();
   renderBestiarioTab();
   renderSessions();
@@ -370,6 +371,7 @@ function renderCharacters() {
         <div class="row">
           <button class="btn small gold" data-improv="${c.id}"><svg class="icon"><use href="#i-mask-happy"/></svg>Improvisar</button>
           <button class="btn small" data-speak="${c.id}"><svg class="icon"><use href="#i-chat-circle-text"/></svg>Falar</button>
+          <button class="btn small ghost" data-embody="${c.id}"><svg class="icon"><use href="#i-microphone"/></svg>Encarnar</button>
           <button class="btn small ghost" data-inv="${c.id}" title="Mochila deste NPC"><svg class="icon"><use href="#i-backpack"/></svg>${(c.inventory || []).length ? ` ${c.inventory.length}` : ''}</button>
           <button class="btn small ghost" data-sheet-char="${c.id}" title="Ver ficha"><svg class="icon"><use href="#i-clipboard-text"/></svg></button>
           <button class="btn small ghost" data-edit-char="${c.id}"><svg class="icon"><use href="#i-pencil-simple"/></svg></button>
@@ -453,6 +455,12 @@ function renderCharacters() {
   $$('#tab-characters [data-inv]').forEach((b) => b.onclick = () => inventoryModal(chars.find((c) => c.id === b.dataset.inv)));
   $$('#tab-characters [data-improv]').forEach((b) => b.onclick = () => improvModal(chars.find((c) => c.id === b.dataset.improv)));
   $$('#tab-characters [data-speak]').forEach((b) => b.onclick = () => speakModal(chars.find((c) => c.id === b.dataset.speak)));
+  $$('#tab-characters [data-embody]').forEach((b) => b.onclick = () => {
+    const npc = chars.find((c) => c.id === b.dataset.embody);
+    $('.nav-btn[data-tab="booth"]').click();
+    $('#booth-npc').value = npc.id;
+    boothLoadPreset(npc);
+  });
 }
 
 // ---------- Itens: catálogo + mochila ----------
@@ -1123,6 +1131,282 @@ function renderAudio() {
     typeSel.onchange = toggleCat;
     toggleCat();
   });
+}
+
+// ---------- Cabine do Mestre ----------
+// Tabela única dos controles: monta o HTML, liga os eventos, formata os valores e diz
+// em que campo do NPC cada efeito é salvo. Com onze efeitos, manter essas quatro coisas
+// em quatro lugares diferentes era garantia de um deles ficar para trás.
+const pctFmt = (v) => `${Math.round(v * 100)}%`;
+const stFmt = (v) => `${v > 0 ? '+' : ''}${v} st`;
+const BOOTH_SLIDERS = [
+  { key: 'pitch', npc: 'fxPitch', label: 'Tom (pitch)', min: -12, max: 12, step: 0.5, def: 0, fmt: stFmt },
+  { key: 'timbre', npc: 'fxTimbre', label: 'Timbre (corpo ↔ fino)', min: -1, max: 1, step: 0.05, def: 0,
+    fmt: (v) => (v === 0 ? 'neutro' : v < 0 ? `corpo ${Math.round(-v * 100)}%` : `fino ${Math.round(v * 100)}%`) },
+  { key: 'reverb', npc: 'fxReverb', label: 'Reverb', min: 0, max: 1, step: 0.05, def: 0, fmt: pctFmt },
+  { key: 'echo', npc: 'fxEcho', label: 'Eco', min: 0, max: 1, step: 0.05, def: 0, fmt: pctFmt },
+  { key: 'distortion', npc: 'fxDist', label: 'Distorção', min: 0, max: 1, step: 0.05, def: 0, fmt: pctFmt },
+  { key: 'robot', npc: 'fxRobot', label: 'Robô', min: 0, max: 1, step: 0.05, def: 0, fmt: pctFmt },
+  { key: 'radio', npc: 'fxRadio', label: 'Rádio/comunicador', min: 0, max: 1, step: 0.05, def: 0, fmt: pctFmt },
+  { key: 'tremor', npc: 'fxTremor', label: 'Tremor', min: 0, max: 1, step: 0.05, def: 0, fmt: pctFmt },
+  { key: 'dual', npc: 'fxDual', label: 'Voz dupla', min: 0, max: 1, step: 0.05, def: 0, fmt: pctFmt },
+  { key: 'dualPitch', npc: 'fxDualPitch', label: 'Intervalo da 2ª voz', min: -12, max: 12, step: 0.5, def: -12, fmt: stFmt },
+  { key: 'gain', npc: 'fxGain', label: 'Ganho da voz', min: 0.5, max: 3.5, step: 0.1, def: 2, fmt: (v) => `${v.toFixed(1)}×` },
+];
+
+const VOICE_CATS = [
+  { id: 'todas', label: 'Todas', icon: 'waveform' },
+  { id: 'monstros', label: 'Monstros', icon: 'hand-fist' },
+  { id: 'mortosvivos', label: 'Mortos-vivos', icon: 'skull' },
+  { id: 'feericos', label: 'Feéricos', icon: 'sparkle' },
+  { id: 'arcano', label: 'Arcano & construtos', icon: 'gear' },
+  { id: 'divino', label: 'Divino & planar', icon: 'star' },
+  { id: 'povo', label: 'Povo & vilões', icon: 'users' },
+];
+
+// Banco de vozes: cada preset lista só o que foge do padrão — o resto vem do `def` da
+// tabela acima, então uma voz nunca herda sobra da anterior.
+const VOICE_PRESETS = [
+  // --- Monstros & feras ---
+  { id: 'ogro', cat: 'monstros', name: 'Ogro brutamontes', hint: 'grave, encorpado e sujo',
+    fx: { pitch: -7, timbre: -0.7, distortion: 0.25, reverb: 0.1, gain: 2.2 } },
+  { id: 'dragao', cat: 'monstros', name: 'Dragão ancião', hint: 'duas gargantas, sala imensa',
+    fx: { pitch: -9, timbre: -0.6, reverb: 0.45, echo: 0.15, distortion: 0.2, dual: 0.5, dualPitch: -12, gain: 2.4 } },
+  { id: 'goblin', cat: 'monstros', name: 'Goblin esganiçado', hint: 'agudo, fino e rápido',
+    fx: { pitch: 6, timbre: 0.5, distortion: 0.15, gain: 1.9 } },
+  { id: 'kobold', cat: 'monstros', name: 'Kobold nervoso', hint: 'agudinho e trêmulo',
+    fx: { pitch: 8, timbre: 0.6, tremor: 0.3 } },
+  { id: 'aberracao', cat: 'monstros', name: 'Aberração sussurrante', hint: 'coro dissonante e errado',
+    fx: { pitch: -3, timbre: -0.2, reverb: 0.5, echo: 0.2, dual: 0.6, dualPitch: 5 } },
+  { id: 'lobisomem', cat: 'monstros', name: 'Lobisomem', hint: 'rosnado rasgado',
+    fx: { pitch: -5, timbre: -0.4, distortion: 0.45, gain: 2.3 } },
+  { id: 'troll', cat: 'monstros', name: 'Troll da ponte', hint: 'lerdo, cavernoso e nasalado',
+    fx: { pitch: -6, timbre: -0.5, distortion: 0.15, reverb: 0.25, tremor: 0.15 } },
+
+  // --- Mortos-vivos & espectros ---
+  { id: 'fantasma', cat: 'mortosvivos', name: 'Fantasma', hint: 'distante, ecoando e instável',
+    fx: { pitch: -2, timbre: 0.2, reverb: 0.85, echo: 0.4, tremor: 0.25, gain: 1.8 } },
+  { id: 'lich', cat: 'mortosvivos', name: 'Lich', hint: 'grave, seca, com sombra de oitava',
+    fx: { pitch: -6, timbre: -0.3, reverb: 0.6, echo: 0.25, dual: 0.4, dualPitch: -12 } },
+  { id: 'zumbi', cat: 'mortosvivos', name: 'Zumbi', hint: 'arrastada e sem fôlego',
+    fx: { pitch: -4, timbre: -0.5, distortion: 0.3, tremor: 0.45, gain: 2 } },
+  { id: 'banshee', cat: 'mortosvivos', name: 'Banshee', hint: 'lamento agudo em duas alturas',
+    fx: { pitch: 4, reverb: 0.7, echo: 0.3, tremor: 0.5, dual: 0.35, dualPitch: 7 } },
+  { id: 'cripta', cat: 'mortosvivos', name: 'Voz da cripta', hint: 'saindo de dentro da pedra',
+    fx: { pitch: -5, timbre: -0.45, reverb: 0.65, echo: 0.45, gain: 2.2 } },
+
+  // --- Feéricos & pequenos ---
+  { id: 'fada', cat: 'feericos', name: 'Fada', hint: 'aguda, cintilante e leve',
+    fx: { pitch: 9, timbre: 0.4, reverb: 0.3, echo: 0.15 } },
+  { id: 'gnomo', cat: 'feericos', name: 'Gnomo inventor', hint: 'miúda e tagarela',
+    fx: { pitch: 5, timbre: 0.3 } },
+  { id: 'duende', cat: 'feericos', name: 'Duende travesso', hint: 'agudinha, saltitante, com eco',
+    fx: { pitch: 7, timbre: 0.2, echo: 0.25, tremor: 0.15 } },
+  { id: 'crianca', cat: 'feericos', name: 'Criança', hint: 'clara e sem peso',
+    fx: { pitch: 4, timbre: 0.25, gain: 1.8 } },
+  { id: 'espirito-bosque', cat: 'feericos', name: 'Espírito do bosque', hint: 'ao longe, entre as árvores',
+    fx: { pitch: 2, timbre: 0.15, reverb: 0.6, echo: 0.35, dual: 0.3, dualPitch: 12 } },
+
+  // --- Arcano & construtos ---
+  { id: 'automato', cat: 'arcano', name: 'Autômato', hint: 'metálica e mecânica',
+    fx: { pitch: -1, robot: 0.7, radio: 0.25 } },
+  { id: 'golem', cat: 'arcano', name: 'Golem de pedra', hint: 'lenta, pesada, quase sem agudos',
+    fx: { pitch: -8, timbre: -0.8, distortion: 0.3, robot: 0.25, reverb: 0.2 } },
+  { id: 'elemental-fogo', cat: 'arcano', name: 'Elemental de fogo', hint: 'crepitante e ondulante',
+    fx: { pitch: -2, timbre: 0.1, distortion: 0.5, tremor: 0.2, reverb: 0.25 } },
+  { id: 'mensagem', cat: 'arcano', name: 'Mensagem arcana', hint: 'chiado de comunicação à distância',
+    fx: { radio: 0.9, echo: 0.2, gain: 2.2 } },
+  { id: 'simulacro', cat: 'arcano', name: 'Simulacro', hint: 'a mesma voz, meio semitom fora',
+    fx: { timbre: 0.05, reverb: 0.35, dual: 0.6, dualPitch: 0.5 } },
+  { id: 'espelho', cat: 'arcano', name: 'Voz do espelho', hint: 'invertida, vindo do outro lado',
+    fx: { pitch: -3, timbre: 0.2, reverb: 0.55, echo: 0.5, radio: 0.35 } },
+
+  // --- Divino & planar ---
+  { id: 'celestial', cat: 'divino', name: 'Celestial', hint: 'coro em oitava, catedral',
+    fx: { pitch: 2, timbre: 0.2, reverb: 0.8, echo: 0.2, dual: 0.5, dualPitch: 12 } },
+  { id: 'demonio', cat: 'divino', name: 'Demônio', hint: 'oitava abaixo, rasgada',
+    fx: { pitch: -7, timbre: -0.5, distortion: 0.4, reverb: 0.3, dual: 0.55, dualPitch: -12, gain: 2.4 } },
+  { id: 'deus-antigo', cat: 'divino', name: 'Deus antigo', hint: 'enorme, sem fim, com quinta',
+    fx: { pitch: -10, timbre: -0.6, reverb: 0.9, echo: 0.35, dual: 0.45, dualPitch: 7, gain: 2.5 } },
+  { id: 'astral', cat: 'divino', name: 'Voz do plano astral', hint: 'flutuante e desfocada',
+    fx: { reverb: 0.7, echo: 0.5, radio: 0.3, tremor: 0.15 } },
+  { id: 'juiz', cat: 'divino', name: 'Juiz dos mortos', hint: 'sentença dita numa sala vazia',
+    fx: { pitch: -5, timbre: -0.35, reverb: 0.75, dual: 0.3, dualPitch: -12, gain: 2.3 } },
+
+  // --- Povo & vilões ---
+  { id: 'taverneiro', cat: 'povo', name: 'Taverneiro rouco', hint: 'grave, gasta de tanto gritar',
+    fx: { pitch: -3, timbre: -0.3, distortion: 0.2 } },
+  { id: 'nobre', cat: 'povo', name: 'Nobre afetado', hint: 'clara, empinada, nasal',
+    fx: { pitch: 2, timbre: 0.35, reverb: 0.12 } },
+  { id: 'velho-sabio', cat: 'povo', name: 'Velho sábio', hint: 'trêmula e pausada',
+    fx: { pitch: -2, timbre: -0.15, tremor: 0.35, reverb: 0.15 } },
+  { id: 'conspirador', cat: 'povo', name: 'Sussurro conspirador', hint: 'baixinha, colada no ouvido',
+    fx: { pitch: -1, timbre: 0.15, echo: 0.1, reverb: 0.05, gain: 1.4 } },
+  { id: 'arauto', cat: 'povo', name: 'Arauto do rei', hint: 'projetada, praça cheia',
+    fx: { pitch: -1, timbre: -0.1, reverb: 0.4, echo: 0.15, gain: 2.6 } },
+  { id: 'bruxa', cat: 'povo', name: 'Bruxa do pântano', hint: 'aguda, rachada e trêmula',
+    fx: { pitch: 3, timbre: 0.3, distortion: 0.25, tremor: 0.4 } },
+  { id: 'encapuzado', cat: 'povo', name: 'Vilão encapuzado', hint: 'grave e controlada',
+    fx: { pitch: -4, timbre: -0.25, reverb: 0.2, gain: 2.1 } },
+];
+
+let boothRendered = false;
+let boothPresetCat = 'todas';
+let boothPresetBusca = '';
+let boothPresetAtivo = '';
+
+// Aplica um conjunto de efeitos de uma vez: completa o que o preset não define, atualiza
+// os controles na tela e manda para o motor de áudio.
+function boothSetFx(fx) {
+  for (const s of BOOTH_SLIDERS) booth.fx[s.key] = fx[s.key] ?? s.def;
+  for (const s of BOOTH_SLIDERS) {
+    const el = $(`#booth-sl-${s.key}`);
+    if (!el) continue;
+    el.value = booth.fx[s.key];
+    $(`#booth-sl-${s.key}-val`).textContent = s.fmt(booth.fx[s.key]);
+  }
+  boothApplyFx();
+}
+
+function renderVoicePresets() {
+  $('#booth-preset-cats').innerHTML = VOICE_CATS.map((c) => `
+    <button class="sfx-cat-chip ${c.id === boothPresetCat ? 'active' : ''}" data-vcat="${c.id}">
+      <svg class="icon"><use href="#i-${c.icon}"/></svg>${c.label}
+    </button>`).join('');
+
+  const busca = boothPresetBusca.trim().toLowerCase();
+  const lista = VOICE_PRESETS.filter((p) => {
+    if (boothPresetCat !== 'todas' && p.cat !== boothPresetCat) return false;
+    if (!busca) return true;
+    const cat = VOICE_CATS.find((c) => c.id === p.cat)?.label || '';
+    return `${p.name} ${p.hint} ${cat}`.toLowerCase().includes(busca);
+  });
+
+  $('#booth-preset-grid').innerHTML = lista.length
+    ? lista.map((p) => `
+      <button class="voice-preset ${p.id === boothPresetAtivo ? 'active' : ''}" data-vpreset="${p.id}">
+        <span class="vp-name">${esc(p.name)}</span>
+        <span class="vp-hint">${esc(p.hint)}</span>
+      </button>`).join('')
+    : '<p class="help-text">Nenhuma voz com esse nome.</p>';
+
+  $$('#booth-preset-cats [data-vcat]').forEach((b) => b.onclick = () => {
+    boothPresetCat = b.dataset.vcat;
+    renderVoicePresets();
+  });
+  $$('#booth-preset-grid [data-vpreset]').forEach((b) => b.onclick = () => {
+    const p = VOICE_PRESETS.find((x) => x.id === b.dataset.vpreset);
+    boothPresetAtivo = p.id;
+    boothSetFx(p.fx);
+    renderVoicePresets();
+    toast(`Voz "${p.name}" carregada.`);
+  });
+}
+
+function renderBoothTab() {
+  if (!boothRendered) {
+    boothRendered = true;
+    $('#tab-booth').innerHTML = `
+      <div class="tab-header"><h2><svg class="icon"><use href="#i-microphone"/></svg>Cabine do Mestre</h2></div>
+      <p class="help-text">Fale pelos NPCs com a sua voz transformada, ouvida ao vivo aqui no navegador.
+      <b>Use fones de ouvido</b> pra não pegar seu próprio áudio de volta no microfone. Jogando à distância?
+      Roteie a saída de áudio do sistema pro seu app de chamada com um cabo de áudio virtual
+      (VB-Audio Cable, VoiceMeeter...) pra os jogadores ouvirem — a mesma técnica que cada jogador
+      pode usar pra transformar a própria voz.</p><br/>
+      <div class="booth-layout">
+      <div class="card">
+        <div class="row" style="align-items:center;">
+          <button class="btn danger" id="booth-toggle"><svg class="icon"><use href="#i-microphone"/></svg>Ativar voz</button>
+          <span id="booth-status" class="help-text">microfone desligado</span>
+        </div>
+        <div class="row" style="align-items:center; margin-top:8px;">
+          <select id="booth-npc" style="flex:1;"></select>
+          <button class="btn small ghost" id="booth-load"><svg class="icon"><use href="#i-arrow-elbow-down-right"/></svg>Carregar preset</button>
+          <button class="btn small ghost" id="booth-save"><svg class="icon"><use href="#i-floppy-disk"/></svg>Salvar no NPC</button>
+        </div>
+        <div class="booth-sliders">
+          ${BOOTH_SLIDERS.map((s) => `
+            <label>${s.label} <span id="booth-sl-${s.key}-val">${s.fmt(s.def)}</span>
+              <input type="range" id="booth-sl-${s.key}" min="${s.min}" max="${s.max}" step="${s.step}" value="${s.def}" /></label>`).join('')}
+        </div>
+        <p class="help-text" style="margin-top:6px;">O <b>timbre</b> muda o tamanho da criatura sem mexer no tom; a <b>voz dupla</b> soma uma segunda altura à sua (oitava abaixo = monstruoso, quinta acima = celestial, meio semitom = eco de outro mundo); o <b>tremor</b> faz a voz oscilar (velhos, assombrações, quem está com medo).</p>
+      </div>
+
+      <div class="card booth-bank">
+        <div class="row" style="align-items:center; gap:8px;">
+          <h3 style="margin:0; flex:1;"><svg class="icon"><use href="#i-users"/></svg>Banco de vozes</h3>
+          <input type="text" id="booth-preset-busca" placeholder="buscar voz..." style="width:180px;" />
+          <button class="btn small ghost" id="booth-preset-reset"><svg class="icon"><use href="#i-eraser"/></svg>Voz natural</button>
+        </div>
+        <p class="help-text">Um clique carrega a voz nos controles ao lado — dá para ajustar depois e salvar no NPC.</p>
+        <div class="sfx-cat-bar" id="booth-preset-cats"></div>
+        <div class="voice-preset-grid" id="booth-preset-grid"></div>
+      </div>
+      </div>`;
+
+    booth.onStatus = (msg, isError) => {
+      $('#booth-status').textContent = msg;
+      if (isError) toast(msg, true);
+      const toggleBtn = $('#booth-toggle');
+      toggleBtn.innerHTML = booth.active
+        ? '<svg class="icon"><use href="#i-stop"/></svg>Desativar voz'
+        : '<svg class="icon"><use href="#i-microphone"/></svg>Ativar voz';
+      toggleBtn.classList.toggle('gold', booth.active);
+      toggleBtn.classList.toggle('danger', !booth.active);
+    };
+
+    for (const s of BOOTH_SLIDERS) {
+      const el = $(`#booth-sl-${s.key}`);
+      el.oninput = () => {
+        booth.fx[s.key] = Number(el.value);
+        $(`#booth-sl-${s.key}-val`).textContent = s.fmt(booth.fx[s.key]);
+        // Mexeu no controle, a voz deixou de ser exatamente a do banco.
+        if (boothPresetAtivo) { boothPresetAtivo = ''; renderVoicePresets(); }
+        boothApplyFx();
+      };
+    }
+    $('#booth-preset-busca').oninput = (e) => { boothPresetBusca = e.target.value; renderVoicePresets(); };
+    $('#booth-preset-reset').onclick = () => {
+      boothPresetAtivo = '';
+      boothSetFx({});
+      renderVoicePresets();
+      toast('Efeitos zerados — sua voz natural.');
+    };
+    renderVoicePresets();
+    $('#booth-toggle').onclick = async () => {
+      if (booth.active) { boothStop(); return; }
+      await boothStart();
+    };
+    $('#booth-load').onclick = () => {
+      const npc = state.characters.find((c) => c.id === $('#booth-npc').value);
+      if (npc) boothLoadPreset(npc);
+    };
+    $('#booth-save').onclick = async () => {
+      const id = $('#booth-npc').value;
+      if (!id) return toast('Escolha um NPC primeiro.', true);
+      const body = {};
+      for (const s of BOOTH_SLIDERS) body[s.npc] = booth.fx[s.key];
+      await tryApi(() => api(`/characters/${id}`, { method: 'PUT', body }), 'Preset de voz salvo no NPC!');
+      refresh();
+    };
+  }
+  // Atualiza a lista de NPCs preservando a seleção
+  const sel = $('#booth-npc');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">— preset de NPC —</option>' +
+    state.characters.filter((c) => c.type === 'npc').map((c) =>
+      `<option value="${c.id}" ${c.id === current ? 'selected' : ''}>${esc(c.name)}${c.fxPitch != null ? ' (voz configurada)' : ''}</option>`).join('');
+}
+
+function boothLoadPreset(npc) {
+  // NPCs salvos antes dos efeitos novos não têm esses campos: o `??` da tabela devolve
+  // o padrão de cada um, então a voz antiga continua soando igual.
+  const fx = {};
+  for (const s of BOOTH_SLIDERS) fx[s.key] = npc[s.npc] ?? s.def;
+  boothPresetAtivo = '';
+  boothSetFx(fx);
+  renderVoicePresets();
+  toast(`Preset de "${npc.name}" carregado.`);
 }
 
 // ---------- Mapa de batalha ----------
