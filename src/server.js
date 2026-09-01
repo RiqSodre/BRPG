@@ -11,6 +11,7 @@ import ffmpegPath from 'ffmpeg-static';
 import {
   getDb, save, listItems, getItem, addItem, updateItem, removeItem, newId,
   DATA_DIR, AUDIO_DIR, MAPS_DIR, IMAGES_DIR, SAMPLES_DIR, MULTI,
+  withCampaign, dirsFor, forgetCampaign,
 } from './store.js';
 import { importFromVault, exportToVault } from './obsidian.js';
 import { rollDice } from './dice.js';
@@ -87,13 +88,69 @@ export function startServer() {
     app.get('/api/master/me', (req, res) => {
       res.json({ master: masters.masterSession(req) });
     });
+
+    // ---- Campanhas do Mestre (criar / listar / escolher / apagar) ----
+    // O Mestre só enxerga e mexe nas próprias campanhas (masters.campaignIds).
+    app.get('/api/campaigns', masters.requireMaster, wrap(async (req, res) => {
+      const ids = masters.campaignsOf(req.session.masterId);
+      const list = ids
+        .filter((id) => fs.existsSync(dirsFor(id).file)) // não ressuscita campanha apagada fora do app
+        .map((id) => {
+          const db = withCampaign(id, () => getDb());
+          return {
+            id,
+            name: db.settings.campaignName,
+            system: db.settings.system,
+            selected: id === req.session.campaignId,
+          };
+        });
+      res.json(list);
+    }));
+
+    app.post('/api/campaigns', masters.requireMaster, wrap(async (req, res) => {
+      const id = newId();
+      const name = String(req.body.name || '').trim() || 'Nova Campanha';
+      withCampaign(id, () => { getDb().settings.campaignName = name; save(); });
+      masters.linkCampaign(req.session.masterId, id);
+      req.session.campaignId = id; // já entra na campanha recém-criada
+      req.session.save(() => res.json({ id, name }));
+    }));
+
+    app.post('/api/campaigns/:id/select', masters.requireMaster, wrap(async (req, res) => {
+      if (!masters.ownsCampaign(req.session.masterId, req.params.id)) return res.status(403).json({ error: 'forbidden' });
+      req.session.campaignId = req.params.id;
+      req.session.save(() => res.json({ ok: true }));
+    }));
+
+    app.delete('/api/campaigns/:id', masters.requireMaster, wrap(async (req, res) => {
+      if (!masters.ownsCampaign(req.session.masterId, req.params.id)) return res.status(403).json({ error: 'forbidden' });
+      forgetCampaign(req.params.id);
+      fs.rmSync(dirsFor(req.params.id).base, { recursive: true, force: true });
+      masters.unlinkCampaign(req.session.masterId, req.params.id);
+      if (req.session.campaignId === req.params.id) delete req.session.campaignId;
+      req.session.save(() => res.json({ ok: true }));
+    }));
   }
 
   // ---- Login do jogador (nativo — personagem + senha, sem conta externa) ----
+  // No modo multi o portal precisa saber DE QUAL campanha é o jogador — isso (link de
+  // convite com a campanha, WebSocket por mesa) chega na próxima etapa. Até lá, o portal
+  // responde um 409 honesto em vez de estourar no getDb() sem campanha ativa. No
+  // self-hosted (MULTI=false) nada disso roda: o portal funciona como sempre.
+  const portalPendenteMulti = (req, res) => {
+    if (!MULTI) return false;
+    res.status(409).json({ error: 'portal_multi_pendente', message: 'O portal do jogador no modo multi chega na próxima etapa.' });
+    return true;
+  };
+
   // Lista pública pro seletor de personagem na tela de login.
-  app.get('/api/portal/roster', wrap(async (req, res) => res.json(auth.rosterPublico())));
+  app.get('/api/portal/roster', wrap(async (req, res) => {
+    if (portalPendenteMulti(req, res)) return;
+    res.json(auth.rosterPublico());
+  }));
 
   app.post('/api/portal/login', wrap(async (req, res) => {
+    if (portalPendenteMulti(req, res)) return;
     const r = auth.login(req.body.characterId, req.body.passcode);
     if (!r.ok) return res.status(401).json(r);
     req.session.characterId = r.character.id;
@@ -106,8 +163,26 @@ export function startServer() {
 
   // Quem está logado agora — null se ninguém (a tela de login decide sozinha o que mostrar).
   app.get('/api/portal/me', (req, res) => {
+    if (portalPendenteMulti(req, res)) return;
     res.json({ character: auth.sessionCharacter(req) });
   });
+
+  // ---- Portão de contexto de campanha (só no modo multi) ----
+  // Daqui pra baixo estão as rotas do PAINEL DO MESTRE — inclusive /api/state, que
+  // devolve o db inteiro (notas e segredos). No self-hosted isso roda em rede confiável
+  // e fica aberto, como sempre. No modo público exige um Mestre logado, dono da campanha
+  // selecionada, e roda tudo dentro dela (withCampaign). Rotas registradas ANTES daqui
+  // (login do Mestre, CRUD de campanhas, portal do jogador) já responderam e não passam
+  // por este portão.
+  if (MULTI) {
+    app.use('/api', masters.requireMaster, (req, res, next) => {
+      const cid = req.session.campaignId;
+      if (!cid) return res.status(409).json({ error: 'no_campaign', message: 'Escolha uma campanha primeiro.' });
+      if (!masters.ownsCampaign(req.session.masterId, cid)) return res.status(403).json({ error: 'forbidden' });
+      if (!fs.existsSync(dirsFor(cid).file)) return res.status(404).json({ error: 'campaign_not_found' });
+      withCampaign(cid, () => next());
+    });
+  }
 
   // ---- Estado geral ----
   app.get('/api/state', wrap(async (req, res) => {
