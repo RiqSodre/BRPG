@@ -1,9 +1,25 @@
 // Hub de tempo real da mesa: o painel do Mestre publica, as telas dos jogadores escutam.
 // Um único WebSocket em /mesa; cada cliente diz se é 'dm' ou 'player' ao conectar.
+//
+// No modo multi cada mesa é um "balde" separado (buckets), e um broadcast só alcança os
+// clientes da mesma campanha — nada vaza de uma mesa pra outra. No self-hosted existe uma
+// campanha só: todos caem no balde sentinela SINGLE e o comportamento é o de sempre.
 import { WebSocketServer } from 'ws';
-import { getDb, save, getItem } from './store.js';
+import { getDb, save, getItem, withCampaign, activeCampaignId } from './store.js';
 
-const clients = new Set(); // { ws, role }
+// campaignId -> Set<client>. Chave SINGLE agrupa o self-hosted (sem campanha).
+const SINGLE = '__single__';
+const buckets = new Map();
+const keyOf = (campaignId) => campaignId ?? SINGLE;
+function bucket(key) {
+  let s = buckets.get(key);
+  if (!s) { s = new Set(); buckets.set(key, s); }
+  return s;
+}
+// Roda fn no contexto da campanha (multi) ou direto (single). Deixa getDb()/save()
+// mirarem a mesa certa dentro dos handlers de mensagem do WebSocket, que rodam fora
+// do pipeline HTTP e por isso não herdam o withCampaign das rotas.
+const inCampaign = (campaignId, fn) => (campaignId == null ? fn() : withCampaign(campaignId, fn));
 
 // Estado do inimigo sem entregar o número: é o que a mesa enxerga olhando pra criatura.
 export function hpLabel(pct) {
@@ -137,17 +153,22 @@ function send(ws, payload) {
   if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(payload));
 }
 
-// Reenvia o estado da mesa para todos — cada papel recebe a sua versão.
-export function broadcastTable() {
+// Reenvia o estado da mesa para todos os clientes DA MESMA campanha — cada papel recebe
+// a sua versão. A campanha vem do contexto ativo (a rota HTTP já roda dentro dela; o
+// handler de WebSocket é envolvido em inCampaign antes de chamar aqui).
+export function broadcastTable(campaignId = activeCampaignId()) {
+  const set = buckets.get(keyOf(campaignId));
+  if (!set || !set.size) return;
   const { dm, player } = views();
-  for (const c of clients) {
+  for (const c of set) {
     send(c.ws, { type: 'table', ...(c.role === 'dm' ? dm : player) });
   }
 }
 
-// Eventos efêmeros (ping do Mestre no mapa) — não persistem no JSON.
+// Eventos efêmeros (ping do Mestre no mapa) — não persistem no JSON. Só para a campanha corrente.
 function broadcastEvent(payload) {
-  for (const c of clients) send(c.ws, payload);
+  const set = buckets.get(keyOf(activeCampaignId()));
+  if (set) for (const c of set) send(c.ws, payload);
 }
 
 // Devolve o WebSocketServer da mesa. Quem chama cuida do upgrade — o servidor HTTP
@@ -156,20 +177,28 @@ export function createMesaWss() {
   const wss = new WebSocketServer({ noServer: true });
 
   wss.on('connection', (ws, req) => {
-    const client = { ws, role: 'player' };
-    clients.add(client);
+    // Campanha resolvida no upgrade (null no self-hosted → balde SINGLE).
+    const campaignId = req?.brpgCampaignId ?? null;
+    const key = keyOf(campaignId);
+    const client = { ws, role: 'player', campaignId };
+    bucket(key).add(client);
 
-    ws.on('message', (data) => {
+    ws.on('message', (data) => inCampaign(campaignId, () => {
       let msg;
       try { msg = JSON.parse(data.toString()); } catch { return; }
 
       if (msg.type === 'hello') {
         const papelPedido = msg.role === 'dm' ? 'dm' : 'player';
         // O portal do jogador (req.brpgAuthRequired, ligado no upgrade de /portal-ws)
-        // exige sessão de login válida — e só resolve pra "player", não existe um
-        // login de Mestre por aqui. mesa.html e o painel do Mestre chegam por /mesa e
-        // nunca passam por aqui — continuam sem login, como sempre foram.
-        if (req?.brpgAuthRequired && (!req.brpgAuthInfo || papelPedido === 'dm')) {
+        // exige sessão de login válida — e só resolve pra "player", nunca "dm".
+        if (req?.brpgAuthRequired && (!req.brpgPlayer || papelPedido === 'dm')) {
+          ws.close(4001, 'not_authorized');
+          return;
+        }
+        // No modo multi, o papel de Mestre por /mesa exige uma sessão de Mestre dona
+        // desta campanha — senão qualquer um abriria o painel de mesa alheia. No
+        // self-hosted (brpgDmRequiresMaster ausente) /mesa segue aberto, como sempre.
+        if (papelPedido === 'dm' && req?.brpgDmRequiresMaster && !req?.brpgIsMaster) {
           ws.close(4001, 'not_authorized');
           return;
         }
@@ -207,10 +236,10 @@ export function createMesaWss() {
         // o mesmo resultado (cada tela roda sua própria física, mas pousa nos mesmos números).
         broadcastEvent({ type: 'diceRoll', dice: msg.dice });
       }
-    });
+    }));
 
-    ws.on('close', () => clients.delete(client));
-    ws.on('error', () => clients.delete(client));
+    ws.on('close', () => bucket(key).delete(client));
+    ws.on('error', () => bucket(key).delete(client));
   });
 
   return wss;

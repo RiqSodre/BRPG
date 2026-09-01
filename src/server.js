@@ -68,6 +68,9 @@ export function startServer() {
     });
   };
 
+  // Existe uma campanha com esse id em disco? (só faz sentido no modo multi)
+  const campanhaExiste = (cid) => !!cid && fs.existsSync(dirsFor(cid).file);
+
   // ---- Login do Mestre (só no modo multi — por código de convite) ----
   // No self-hosted o painel não tem login: estas rotas nem existem, pra não dar a
   // impressão de que há uma conta a criar quando roda em casa.
@@ -133,27 +136,41 @@ export function startServer() {
   }
 
   // ---- Login do jogador (nativo — personagem + senha, sem conta externa) ----
-  // No modo multi o portal precisa saber DE QUAL campanha é o jogador — isso (link de
-  // convite com a campanha, WebSocket por mesa) chega na próxima etapa. Até lá, o portal
-  // responde um 409 honesto em vez de estourar no getDb() sem campanha ativa. No
-  // self-hosted (MULTI=false) nada disso roda: o portal funciona como sempre.
-  const portalPendenteMulti = (req, res) => {
-    if (!MULTI) return false;
-    res.status(409).json({ error: 'portal_multi_pendente', message: 'O portal do jogador no modo multi chega na próxima etapa.' });
-    return true;
+  // No self-hosted há uma campanha só e o portal opera direto nela. No modo multi o
+  // jogador chega por um link com a campanha (?c=<id>); ao entrar, a campanha fica presa
+  // à sessão dele em session.playerCid — uma chave separada do campaignId do Mestre, pra
+  // um Mestre e um jogador no mesmo navegador não se atropelarem.
+  //
+  // Resolve a campanha do portal: no multi, do ?c= (tela de login) ou da sessão (já
+  // logado); no single, sempre null (uma campanha só). Devolve undefined se, no multi,
+  // não veio campanha válida — o chamador responde 404.
+  const resolvePortalCid = (req, hint) => {
+    if (!MULTI) return null;
+    const cid = hint || (typeof req.query.c === 'string' ? req.query.c : null) || req.session?.playerCid || null;
+    return campanhaExiste(cid) ? cid : undefined;
   };
 
   // Lista pública pro seletor de personagem na tela de login.
   app.get('/api/portal/roster', wrap(async (req, res) => {
-    if (portalPendenteMulti(req, res)) return;
-    res.json(auth.rosterPublico());
+    if (!MULTI) return res.json(auth.rosterPublico());
+    const cid = resolvePortalCid(req);
+    if (!cid) return res.status(404).json({ error: 'campaign_not_found' });
+    res.json(withCampaign(cid, () => auth.rosterPublico()));
   }));
 
   app.post('/api/portal/login', wrap(async (req, res) => {
-    if (portalPendenteMulti(req, res)) return;
-    const r = auth.login(req.body.characterId, req.body.passcode);
+    if (!MULTI) {
+      const r = auth.login(req.body.characterId, req.body.passcode);
+      if (!r.ok) return res.status(401).json(r);
+      req.session.characterId = r.character.id;
+      return req.session.save(() => res.json(r));
+    }
+    const cid = resolvePortalCid(req, req.body.c);
+    if (!cid) return res.status(404).json({ error: 'campaign_not_found' });
+    const r = withCampaign(cid, () => auth.login(req.body.characterId, req.body.passcode));
     if (!r.ok) return res.status(401).json(r);
     req.session.characterId = r.character.id;
+    req.session.playerCid = cid; // prende o jogador a esta campanha
     req.session.save(() => res.json(r));
   }));
 
@@ -163,8 +180,10 @@ export function startServer() {
 
   // Quem está logado agora — null se ninguém (a tela de login decide sozinha o que mostrar).
   app.get('/api/portal/me', (req, res) => {
-    if (portalPendenteMulti(req, res)) return;
-    res.json({ character: auth.sessionCharacter(req) });
+    if (!MULTI) return res.json({ character: auth.sessionCharacter(req) });
+    const cid = req.session?.playerCid;
+    if (!campanhaExiste(cid)) return res.json({ character: null });
+    res.json({ character: withCampaign(cid, () => auth.sessionCharacter(req)) });
   });
 
   // ---- Portão de contexto de campanha (só no modo multi) ----
@@ -722,16 +741,43 @@ export function startServer() {
   };
 
   // Um único despachante de upgrade: /mesa (painel do Mestre e mesa.html) e
-  // /portal-ws (jogador.html, autenticado) compartilham o mesmo mesaWss — é a mesma
-  // mesa — só o segundo exige uma sessão de jogador válida.
+  // /portal-ws (jogador.html, autenticado) compartilham o mesmo mesaWss.
   server.on('upgrade', (req, socket, head) => {
-    const { pathname } = new URL(req.url, 'http://localhost');
+    const url = new URL(req.url, 'http://localhost');
+    const { pathname } = url;
     if (pathname !== '/mesa' && pathname !== '/portal-ws') { socket.destroy(); return; }
     const conectar = () => mesaWss.handleUpgrade(req, socket, head, (ws) => mesaWss.emit('connection', ws, req));
-    if (pathname !== '/portal-ws') { conectar(); return; }
+
+    // Self-hosted: uma campanha só. /mesa segue aberto (rede confiável); /portal-ws
+    // exige sessão de jogador válida. É o comportamento de sempre.
+    if (!MULTI) {
+      if (pathname !== '/portal-ws') { conectar(); return; }
+      sessionMiddleware(req, respostaFalsa(), () => {
+        req.brpgAuthRequired = true;
+        req.brpgPlayer = auth.sessionCharacter(req); // null se a sessão não é de um jogador logado
+        conectar();
+      });
+      return;
+    }
+
+    // Modo multi: a sessão (e ?c= pra tela compartilhada) decide a campanha e o papel.
     sessionMiddleware(req, respostaFalsa(), () => {
-      req.brpgAuthRequired = true;
-      req.brpgAuthInfo = auth.sessionCharacter(req); // null se a sessão não é de um jogador logado
+      if (pathname === '/portal-ws') {
+        // Jogador: a campanha veio no login do portal (session.playerCid).
+        const cid = req.session?.playerCid || null;
+        req.brpgCampaignId = campanhaExiste(cid) ? cid : null;
+        req.brpgAuthRequired = true;
+        req.brpgPlayer = req.brpgCampaignId ? withCampaign(req.brpgCampaignId, () => auth.sessionCharacter(req)) : null;
+        conectar();
+        return;
+      }
+      // /mesa: painel do Mestre (dm) ou tela compartilhada (player, via ?c=).
+      const qc = url.searchParams.get('c');
+      const cid = req.session?.campaignId || qc || null;
+      if (!campanhaExiste(cid)) { socket.destroy(); return; } // sem mesa válida não há o que espelhar
+      req.brpgCampaignId = cid;
+      req.brpgIsMaster = !!(req.session?.masterId && masters.ownsCampaign(req.session.masterId, cid));
+      req.brpgDmRequiresMaster = true;
       conectar();
     });
   });
