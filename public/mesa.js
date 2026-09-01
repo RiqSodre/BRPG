@@ -8,6 +8,13 @@ let lastFocusKey = null;
 let emCombate = false;
 let ultimoCombate = null;
 
+// Definidos pelo jogador.js ANTES de carregar este script, para a mesma tela servir dois
+// usos: mesa.html (compartilhada, sem login, como sempre foi) e o portal autenticado
+// (window.MEU_PERSONAGEM_ID aponta o personagem da sessão, e a conexão exige login).
+// Sem eles, tudo se comporta exatamente como antes.
+const WS_PATH = window.MESA_WS_PATH || '/mesa';
+const MEU_ID = window.MEU_PERSONAGEM_ID || null;
+
 // Reenquadra do zero: na batalha em andamento, se houver; no mapa inteiro, se não.
 function enquadrar({ smooth = true } = {}) {
   if (!focusCurrentTurn(ultimoCombate, { smooth })) bmap.fit();
@@ -160,7 +167,7 @@ function renderParty(characters) {
   party = characters || [];
   const bar = el('player-sheets');
   bar.innerHTML = party.map((c) => `
-    <button class="party-chip" data-sheet="${esc(c.id)}" title="Ver a ficha de ${esc(c.name)}">
+    <button class="party-chip${c.id === MEU_ID ? ' mine' : ''}" data-sheet="${esc(c.id)}" title="Ver a ficha de ${esc(c.name)}">
       ${c.imageUrl ? `<img src="${esc(c.imageUrl)}" alt="" />` : '<span class="party-chip-initial">' + esc((c.name || '?').trim().slice(0, 1).toUpperCase()) + '</span>'}
       ${esc(c.name)}
     </button>`).join('');
@@ -168,6 +175,15 @@ function renderParty(characters) {
   // A ficha aberta segue o estado da mesa (PV, itens que o Mestre acabou de entregar).
   if (sheetOpenId) {
     if (party.some((c) => c.id === sheetOpenId)) renderSheet(); else closeSheet();
+  }
+  // Botão "Minha ficha" — só existe no portal autenticado (mesa.html não tem o elemento,
+  // e sem login ninguém sabe qual personagem é "seu"). Desabilita se o personagem
+  // vinculado sumiu do grupo (excluído ou desvinculado) em vez de abrir uma ficha morta.
+  const btnMinha = el('btn-minha-ficha');
+  if (btnMinha) {
+    const meu = MEU_ID && party.some((c) => c.id === MEU_ID);
+    btnMinha.disabled = !meu;
+    btnMinha.onclick = meu ? () => openSheet(MEU_ID) : null;
   }
 }
 
@@ -285,7 +301,7 @@ function renderCombatLog(log) {
 
 function connect() {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const ws = new WebSocket(`${proto}//${location.host}/mesa`);
+  const ws = new WebSocket(`${proto}//${location.host}${WS_PATH}`);
 
   ws.onopen = () => {
     setStatus(true, 'ao vivo');
@@ -329,7 +345,10 @@ function connect() {
       Dice3D.roll(msg.dice);
     }
   };
-  ws.onclose = () => {
+  ws.onclose = (ev) => {
+    // O portal (server.js/realtime.js) fecha com 4001 quando a sessão não é válida ou
+    // não tem personagem vinculado — reconectar em loop só bateria na mesma recusa.
+    if (ev.code === 4001) { setStatus(false, 'Sessão não autorizada — faça login de novo.'); return; }
     setStatus(false, 'reconectando...');
     setTimeout(connect, 2000);
   };

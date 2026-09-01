@@ -102,7 +102,7 @@ export function buildCampaignContext() {
   return parts.join('\n\n');
 }
 
-const SYSTEM_PROMPT = `Você é o Assistente do Mestre de uma campanha de RPG de mesa (D&D 5e) jogada em português via Discord.
+const SYSTEM_PROMPT = `Você é o Assistente do Mestre de uma campanha de RPG de mesa (D&D 5e) jogada em português.
 Você conhece TODA a campanha pelo contexto abaixo, incluindo segredos que os jogadores não sabem.
 Suas funções: responder dúvidas sobre a história e os personagens, sugerir ganchos e consequências,
 improvisar NPCs/diálogos/nomes/lojas/encontros no tom da campanha, ajudar com regras de D&D 5e,
@@ -143,7 +143,7 @@ export async function generateRecap(sessionId) {
   if (!session) throw new Error('Sessão não encontrada.');
   return ask([{
     role: 'user',
-    content: `Gere um recap épico e curto (2-4 parágrafos) da última sessão para eu postar no Discord antes da próxima. ` +
+    content: `Gere um recap épico e curto (2-4 parágrafos) da última sessão para eu compartilhar com o grupo antes da próxima. ` +
       `Tom de narrador, em português, SEM revelar segredos que os jogadores não descobriram. ` +
       `Se houver um "Log de combate" no contexto da campanha, use os eventos dele pra deixar as partes de luta ` +
       `mais precisas e dramáticas (quem quase caiu, reviravoltas, o golpe decisivo) — sem virar uma lista de números. ` +

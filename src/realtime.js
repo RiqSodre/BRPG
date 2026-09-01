@@ -44,7 +44,7 @@ function portraitOf(name, db) {
 }
 
 // Ficha "segura" pro jogador: só o que é público durante o jogo (pro HUD de turno) —
-// nunca os segredos, a voz/TTS (é coisa de NPC mesmo) ou dados internos do Discord.
+// nunca os segredos nem a voz/TTS (é coisa de NPC mesmo).
 function publicSheet(c, db) {
   return {
     id: c.id,
@@ -155,7 +155,7 @@ function broadcastEvent(payload) {
 export function createMesaWss() {
   const wss = new WebSocketServer({ noServer: true });
 
-  wss.on('connection', (ws) => {
+  wss.on('connection', (ws, req) => {
     const client = { ws, role: 'player' };
     clients.add(client);
 
@@ -164,7 +164,16 @@ export function createMesaWss() {
       try { msg = JSON.parse(data.toString()); } catch { return; }
 
       if (msg.type === 'hello') {
-        client.role = msg.role === 'dm' ? 'dm' : 'player';
+        const papelPedido = msg.role === 'dm' ? 'dm' : 'player';
+        // O portal do jogador (req.brpgAuthRequired, ligado no upgrade de /portal-ws)
+        // exige sessão de login válida — e só resolve pra "player", não existe um
+        // login de Mestre por aqui. mesa.html e o painel do Mestre chegam por /mesa e
+        // nunca passam por aqui — continuam sem login, como sempre foram.
+        if (req?.brpgAuthRequired && (!req.brpgAuthInfo || papelPedido === 'dm')) {
+          ws.close(4001, 'not_authorized');
+          return;
+        }
+        client.role = papelPedido;
         const v = views();
         send(ws, { type: 'table', ...(client.role === 'dm' ? v.dm : v.player) });
         return;

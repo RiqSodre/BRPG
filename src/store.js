@@ -23,9 +23,6 @@ const DEFAULTS = {
   settings: {
     campaignName: 'Minha Campanha',
     system: 'D&D 5e',
-    textChannelId: '',
-    voiceChannelId: '',
-    volume: 0.4,
     obsidian: {
       vaultPath: '',
       folderPlayers: 'Players',
@@ -40,7 +37,8 @@ const DEFAULTS = {
   // Catálogo de itens: criado uma vez, entregue a quantos personagens quiser.
   items: [],      // { id, name, description, rarity, type, imageUrl, updatedAt }
   // characters[].inventory = [{ itemId, qty }] — a mochila aponta para o catálogo
-  characters: [], // { id, name, type: 'pc'|'npc', player, race, klass, level, ac, hp, maxHp, stats, description, secrets, voice, imageUrl, inventory }
+  // passcode: só em PCs — a senha que o jogador usa pra entrar no portal (jogador.html).
+  characters: [], // { id, name, type: 'pc'|'npc', player, passcode, race, klass, level, ac, hp, maxHp, stats, description, secrets, voice, imageUrl, inventory }
   scenes: [],     // { id, title, readAloud, gmNotes, imageUrl, ambientAudioId, musicAudioId, sfxIds, npcIds }
   audio: [],      // { id, name, filename, type: 'ambient'|'music'|'sfx', category, tags, volume }
                   // category só se aplica a sfx: 'combate'|'criaturas'|'objetos'|'ambiente'|'magia'|'social'|'geral'
@@ -52,8 +50,7 @@ const DEFAULTS = {
   maps: [],       // { id, name, cols, rows, cellSize, filename, imageUrl, img: { x, y, scale }, fog: { enabled, revealed: ['c,r'] } }
   // showEnemyHp: quando falso, os jogadores veem só a barra e o estado dos inimigos, não os números.
   // vision: campo de visão automático — cada PC revela um raio (em metros) ao redor de si.
-  // turnDm: quando ligado, o bot manda uma DM pro jogador vinculado sempre que chega a vez dele.
-  battle: { mapId: null, tokens: [], ping: null, showEnemyHp: false, vision: { enabled: false, radius: 12 }, turnDm: false },
+  battle: { mapId: null, tokens: [], ping: null, showEnemyHp: false, vision: { enabled: false, radius: 12 } },
   // tokens: { id, name, kind: 'pc'|'npc'|'enemy', col, row, size, color, imageUrl, hp, maxHp, hidden, charId, combatName }
   activeSceneId: null,
 };

@@ -1,9 +1,8 @@
 import 'dotenv/config';
 import { initStore } from './store.js';
-import { startBot } from './bot.js';
 import { startServer } from './server.js';
 
-// ffmpeg empacotado — o @discordjs/voice o encontra pelo PATH do processo
+// ffmpeg empacotado — o yt-dlp o usa pra extrair o áudio dos vídeos importados
 import ffmpegPath from 'ffmpeg-static';
 import path from 'path';
 if (ffmpegPath) {
@@ -11,10 +10,9 @@ if (ffmpegPath) {
   process.env.FFMPEG_PATH = ffmpegPath;
 }
 
-// Rede de segurança: uma promise rejeitada sem dono (ex: a API do Discord
-// recusando uma resposta atrasada) derrubaria o processo inteiro no Node —
-// e com ele o painel, a tela dos jogadores e o bot, no meio da sessão.
-// Aqui a falha é registrada e a mesa continua de pé.
+// Rede de segurança: uma promise rejeitada sem dono derrubaria o processo
+// inteiro no Node — e com ele o painel e a tela dos jogadores, no meio da
+// sessão. Aqui a falha é registrada e a mesa continua de pé.
 process.on('unhandledRejection', (err) => {
   console.error('[aviso] Promise rejeitada sem tratamento:', err?.message || err);
 });
@@ -22,10 +20,5 @@ process.on('unhandledRejection', (err) => {
 initStore();
 startServer();
 if (process.env.BRPG_DEMO === '1') {
-  console.log('[demo] Modo demo: painel web com dados de exemplo, bot do Discord desligado de propósito.');
-} else {
-  startBot().catch((err) => {
-    console.error('[bot] Falha ao iniciar o bot do Discord:', err.message);
-    console.error('[bot] O painel continua funcionando sem o bot.');
-  });
+  console.log('[demo] Modo demo: painel web com dados de exemplo.');
 }

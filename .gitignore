@@ -9,3 +9,6 @@ data/
 data-demo/audio/
 data-demo/maps/
 data-demo/images/
+data-demo/tts/
+server.log
+server.err.log

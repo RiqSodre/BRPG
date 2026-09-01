@@ -3,8 +3,9 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import express from 'express';
+import session from 'express-session';
+import { EventEmitter } from 'events';
 import multer from 'multer';
-import { WebSocketServer } from 'ws';
 import youtubedl from 'youtube-dl-exec';
 import ffmpegPath from 'ffmpeg-static';
 import {
@@ -12,10 +13,11 @@ import {
   DATA_DIR, AUDIO_DIR, MAPS_DIR, IMAGES_DIR, SAMPLES_DIR,
 } from './store.js';
 import { importFromVault, exportToVault } from './obsidian.js';
-import * as bot from './bot.js';
+import { rollDice } from './dice.js';
 import * as ai from './ai.js';
 import * as tts from './tts.js';
 import { createMesaWss, broadcastTable } from './realtime.js';
+import * as auth from './auth.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -38,6 +40,18 @@ const imageUpload = diskUpload(IMAGES_DIR, /\.(png|jpe?g|webp|gif)$/i, 10);
 export function startServer() {
   const app = express();
   app.use(express.json({ limit: '2mb' }));
+  // Sessão do PORTAL DO JOGADOR (login nativo — personagem + senha). O painel do
+  // Mestre não usa sessão nem cookie — continua acessado direto, sem login, como sempre foi.
+  // Fica numa variável porque o handshake do WebSocket do portal (/portal-ws, mais
+  // abaixo) também precisa rodar esse mesmo middleware fora do pipeline de rotas.
+  const sessionMiddleware = session({
+    name: 'brpg.sid',
+    secret: process.env.SESSION_SECRET || 'dev-only-troque-no-.env',
+    resave: false,
+    saveUninitialized: false,
+    cookie: { httpOnly: true, sameSite: 'lax', maxAge: 30 * 24 * 60 * 60 * 1000 },
+  });
+  app.use(sessionMiddleware);
   app.use(express.static(path.join(__dirname, '..', 'public')));
   app.use('/audio-files', express.static(AUDIO_DIR));
   app.use('/tts-files', express.static(tts.TTS_DIR));
@@ -52,9 +66,29 @@ export function startServer() {
     });
   };
 
+  // ---- Login do jogador (nativo — personagem + senha, sem conta externa) ----
+  // Lista pública pro seletor de personagem na tela de login.
+  app.get('/api/portal/roster', wrap(async (req, res) => res.json(auth.rosterPublico())));
+
+  app.post('/api/portal/login', wrap(async (req, res) => {
+    const r = auth.login(req.body.characterId, req.body.passcode);
+    if (!r.ok) return res.status(401).json(r);
+    req.session.characterId = r.character.id;
+    req.session.save(() => res.json(r));
+  }));
+
+  app.post('/api/portal/logout', (req, res) => {
+    req.session.destroy(() => res.json({ ok: true }));
+  });
+
+  // Quem está logado agora — null se ninguém (a tela de login decide sozinha o que mostrar).
+  app.get('/api/portal/me', (req, res) => {
+    res.json({ character: auth.sessionCharacter(req) });
+  });
+
   // ---- Estado geral ----
   app.get('/api/state', wrap(async (req, res) => {
-    res.json({ ...getDb(), bot: bot.botStatus() });
+    res.json(getDb());
   }));
 
   app.put('/api/settings', wrap(async (req, res) => {
@@ -120,13 +154,8 @@ export function startServer() {
     const linha = ch.inventory.find((l) => l.itemId === item.id);
     if (linha) linha.qty += qty; else ch.inventory.push({ itemId: item.id, qty });
     save();
-
-    let aviso = null;
-    if (req.body.notify) {
-      try { await bot.sendItemToPlayer(ch, item, qty); }
-      catch (e) { aviso = e.message; }
-    }
-    res.json({ inventory: ch.inventory, aviso });
+    // O jogador já vê o item chegar ao vivo no próprio portal — não precisa de aviso à parte.
+    res.json({ inventory: ch.inventory });
   }));
 
   // Ajusta a quantidade (0 ou menos remove o item da mochila).
@@ -147,16 +176,6 @@ export function startServer() {
     ch.inventory = ch.inventory.filter((l) => l.itemId !== req.params.itemId);
     save();
     res.json({ inventory: ch.inventory });
-  }));
-
-  // Reenvia o item por DM, sem mexer na quantidade.
-  app.post('/api/characters/:id/inventory/:itemId/notify', wrap(async (req, res) => {
-    const ch = acharPersonagem(req.params.id);
-    const item = getItem('items', req.params.itemId);
-    if (!item) throw new Error('Item não encontrado no catálogo.');
-    const linha = ch.inventory.find((l) => l.itemId === item.id);
-    await bot.sendItemToPlayer(ch, item, linha?.qty ?? 1);
-    res.json({ ok: true });
   }));
 
   // ---- Biblioteca de áudio ----
@@ -181,102 +200,27 @@ export function startServer() {
     res.json({ ok: true });
   }));
 
-  // ---- Controles de som no Discord ----
-  app.post('/api/sound/play/:id', wrap(async (req, res) => {
-    const audio = getItem('audio', req.params.id);
-    if (!audio) throw new Error('Áudio não encontrado.');
-    if (audio.type === 'sfx') bot.playSfx(audio);
-    else bot.playAmbient(audio);
-    res.json({ ok: true });
-  }));
-  app.post('/api/sound/stop', wrap(async (req, res) => {
-    bot.stopAll();
-    res.json({ ok: true });
-  }));
-  app.post('/api/sound/volume', wrap(async (req, res) => {
-    bot.setVolume(Number(req.body.volume));
-    res.json({ ok: true });
-  }));
-
-  // ---- Cenas: ativação = posta no Discord + toca o som automaticamente ----
+  // ---- Cenas: ativar marca qual é a cena corrente ----
   app.post('/api/scenes/:id/activate', wrap(async (req, res) => {
     const scene = getItem('scenes', req.params.id);
     if (!scene) throw new Error('Cena não encontrada.');
     const db = getDb();
     db.activeSceneId = scene.id;
     save();
-
-    const result = { posted: false, audio: null, warnings: [] };
-    try {
-      result.posted = await bot.postScene(scene);
-      if (!result.posted) result.warnings.push('Defina o canal de texto nas configurações para postar a cena.');
-    } catch (e) {
-      result.warnings.push(`Falha ao postar no Discord: ${e.message}`);
-    }
-
-    const trackId = scene.ambientAudioId || scene.musicAudioId;
-    if (trackId) {
-      const audio = getItem('audio', trackId);
-      if (audio) {
-        try {
-          if (!bot.isInVoice()) {
-            result.warnings.push('O bot não está no canal de voz — use /entrar no Discord ou conecte pelo painel.');
-          } else {
-            bot.playAmbient(audio);
-            result.audio = audio.name;
-          }
-        } catch (e) {
-          result.warnings.push(e.message);
-        }
-      }
-    }
-    res.json(result);
-  }));
-
-  // ---- Discord ----
-  app.get('/api/discord/channels', wrap(async (req, res) => res.json(await bot.listChannels())));
-  app.post('/api/discord/join', wrap(async (req, res) => {
-    const name = await bot.joinChannel(req.body.channelId);
-    res.json({ ok: true, channel: name });
-  }));
-  app.post('/api/discord/leave', wrap(async (req, res) => {
-    bot.leaveVoice();
     res.json({ ok: true });
   }));
-  app.post('/api/discord/post', wrap(async (req, res) => {
-    const reason = bot.postBlockedReason();
-    if (reason) throw new Error(reason);
-    const ok = await bot.postMessage(req.body.content);
-    if (!ok) throw new Error('Não foi possível postar no Discord. Confira o canal de texto em ⚙️ Config.');
-    res.json({ ok });
-  }));
 
-  // ---- Vozes de NPC (TTS) ----
+  // ---- Vozes de NPC (TTS) — prévia local, tocada no navegador do Mestre ----
   app.get('/api/tts/voices', wrap(async (req, res) => res.json(tts.VOICES)));
   app.post('/api/tts/speak', wrap(async (req, res) => {
-    const { text, npcId, discord } = req.body;
+    const { text, npcId } = req.body;
     let voiceOpts = {};
     if (npcId) {
       const npc = getItem('characters', npcId);
       if (npc) voiceOpts = { voice: npc.ttsVoice || undefined, rate: npc.ttsRate || 0, pitch: npc.ttsPitch || 0 };
     }
     const result = await tts.synthesize(text, voiceOpts);
-    let warning = null;
-    if (discord) {
-      try { bot.playFile(result.filePath, 1); } catch (e) { warning = e.message; }
-    }
-    res.json({ url: result.url, warning });
-  }));
-
-  // ---- Handouts ----
-  app.post('/api/handout', wrap(async (req, res) => {
-    const { target, title, content, imageUrl } = req.body;
-    const result = await bot.sendHandout({
-      toChannel: target === 'all',
-      characterIds: target === 'all' ? [] : [target],
-      title, content, imageUrl,
-    });
-    res.json(result);
+    res.json({ url: result.url });
   }));
 
   // ---- IA ----
@@ -305,11 +249,8 @@ export function startServer() {
 
   // ---- Dados (rolagem local no painel) ----
   app.post('/api/roll', wrap(async (req, res) => {
-    const result = bot.rollDice(req.body.expr);
+    const result = rollDice(req.body.expr);
     if (result.error) throw new Error(result.error);
-    if (req.body.announce) {
-      await bot.postMessage(`🎲 O Mestre rolou \`${req.body.expr}\`: ${result.detail} = **${result.total}**`).catch(() => {});
-    }
     res.json(result);
   }));
 
@@ -636,42 +577,12 @@ export function startServer() {
   // ---- Combate / iniciativa ----
   app.put('/api/combat', wrap(async (req, res) => {
     const db = getDb();
-    const antes = db.combat || {};
-    const chaveAntes = `${antes.round}:${antes.turn}`;
     db.combat = req.body;
     save();
-    broadcastTable(); // a mesa mostra de quem é o turno e os PV
-
-    // Avisa o jogador por DM quando a vez muda de combatente — nunca trava o save
-    // do combate se a DM falhar (best-effort, ver notifyTurn em bot.js).
-    if (db.battle?.turnDm && db.combat.active) {
-      const chaveDepois = `${db.combat.round}:${db.combat.turn}`;
-      if (chaveDepois !== chaveAntes) {
-        const entry = db.combat.entries[db.combat.turn];
-        const ch = entry?.charId && db.characters.find((c) => c.id === entry.charId);
-        if (ch?.type === 'pc' && ch.discordUserId) {
-          bot.notifyTurn(ch, { round: db.combat.round, entry }).catch(() => {});
-        }
-      }
-    }
-
+    // A ficha do turno já aparece ao vivo no portal e na tela dos jogadores — de quem
+    // é a vez, PV, condições, tudo em tempo real, sem precisar de aviso à parte.
+    broadcastTable();
     res.json(db.combat);
-  }));
-  app.post('/api/combat/announce', wrap(async (req, res) => {
-    const reason = bot.postBlockedReason();
-    if (reason) throw new Error(reason);
-    const { combat } = getDb();
-    if (!combat.entries.length) throw new Error('Não há combatentes na iniciativa para postar.');
-    const lines = combat.entries
-      .map((e, i) => {
-        const conds = (e.conditions || []).length ? ` · _${e.conditions.join(', ')}_` : '';
-        const down = e.hp <= 0 && e.maxHp ? ' ☠️' : '';
-        return `${i === combat.turn ? '▶️' : '▫️'} **${e.init}** — ${e.name}${e.maxHp ? ` (${e.hp}/${e.maxHp} PV)` : ''}${down}${conds}`;
-      })
-      .join('\n');
-    const ok = await bot.postMessage(`⚔️ **Iniciativa — Rodada ${combat.round}**\n${lines}`);
-    if (!ok) throw new Error('Não foi possível postar a iniciativa no Discord.');
-    res.json({ ok });
   }));
 
   // ---- Obsidian: importar / exportar dados da campanha ----
@@ -699,37 +610,32 @@ export function startServer() {
   // Mesa em tempo real (mapa de batalha) — painel do Mestre e telas dos jogadores
   const mesaWss = createMesaWss();
 
-  // Cabine do Mestre: o navegador envia PCM (s16le 48kHz estéreo) já com efeitos
-  const boothWss = new WebSocketServer({ noServer: true });
-  boothWss.on('connection', (ws) => {
-    ws.on('message', (data, isBinary) => {
-      if (isBinary) { bot.boothPush(Buffer.from(data)); return; }
-      try {
-        const msg = JSON.parse(data.toString());
-        if (msg.type === 'start') {
-          try {
-            bot.boothStart(msg.gain ?? 2);
-            ws.send(JSON.stringify({ type: 'started' }));
-          } catch (e) {
-            ws.send(JSON.stringify({ type: 'error', error: e.message }));
-          }
-        } else if (msg.type === 'gain') {
-          bot.boothSetGain(msg.gain);
-        } else if (msg.type === 'stop') {
-          bot.boothStop();
-        }
-      } catch { /* mensagem inválida, ignora */ }
-    });
-    ws.on('close', () => bot.boothStop());
-  });
+  // Handshake mínimo pra rodar o middleware de sessão fora do pipeline do Express: o
+  // upgrade do WebSocket é uma requisição HTTP normal (cookie incluso), mas não passa
+  // por app.use(). express-session só lê req.session daqui — nunca escreve resposta —
+  // então um objeto falso com os métodos que ele espera encontrar basta.
+  const respostaFalsa = () => {
+    const res = new EventEmitter();
+    res.writeHead = () => res;
+    res.getHeader = () => undefined;
+    res.setHeader = () => res;
+    res.end = () => res;
+    return res;
+  };
 
-  // Um único despachante de upgrade: dois WebSocketServer presos ao mesmo servidor
-  // HTTP recusariam o handshake um do outro.
+  // Um único despachante de upgrade: /mesa (painel do Mestre e mesa.html) e
+  // /portal-ws (jogador.html, autenticado) compartilham o mesmo mesaWss — é a mesma
+  // mesa — só o segundo exige uma sessão de jogador válida.
   server.on('upgrade', (req, socket, head) => {
     const { pathname } = new URL(req.url, 'http://localhost');
-    const target = pathname === '/mesa' ? mesaWss : pathname === '/booth' ? boothWss : null;
-    if (!target) { socket.destroy(); return; }
-    target.handleUpgrade(req, socket, head, (ws) => target.emit('connection', ws, req));
+    if (pathname !== '/mesa' && pathname !== '/portal-ws') { socket.destroy(); return; }
+    const conectar = () => mesaWss.handleUpgrade(req, socket, head, (ws) => mesaWss.emit('connection', ws, req));
+    if (pathname !== '/portal-ws') { conectar(); return; }
+    sessionMiddleware(req, respostaFalsa(), () => {
+      req.brpgAuthRequired = true;
+      req.brpgAuthInfo = auth.sessionCharacter(req); // null se a sessão não é de um jogador logado
+      conectar();
+    });
   });
 
   return app;

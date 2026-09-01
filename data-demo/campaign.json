@@ -2,9 +2,6 @@
   "settings": {
     "campaignName": "As Correntes de Valmora",
     "system": "D&D 5e",
-    "textChannelId": "",
-    "voiceChannelId": "",
-    "volume": 0.4,
     "obsidian": {
       "vaultPath": "",
       "folderPlayers": "Players",
@@ -13,7 +10,10 @@
       "folderScenes": "Locais e Ganchos",
       "folderSessions": "Sessões",
       "folderLore": "Guia geral"
-    }
+    },
+    "textChannelId": "",
+    "voiceChannelId": "",
+    "volume": 0.4
   },
   "story": [
     {
@@ -72,14 +72,14 @@
       "id": "pc001demo",
       "name": "Kessia Thornwood",
       "type": "pc",
-      "player": "Jogador 1",
+      "player": "Bi",
       "race": "Elfa",
       "klass": "Patrulheira",
       "subclass": "Caçadora",
-      "level": 3,
-      "ac": 15,
-      "hp": 28,
-      "maxHp": 28,
+      "level": "3",
+      "ac": "15",
+      "hp": "28",
+      "maxHp": "28",
       "stats": "",
       "description": "Elfa do bosque, magra e silenciosa, sempre com o arco a tiracolo. Saiu de Ashmoor há um ano rastreando o motivo do desaparecimento do seu clã.",
       "secrets": "O clã de Kessia não foi \"expulso\" — foi dizimado pela Companhia da Maré Cinzenta quando descobriram uma relíquia enterrada na floresta. Ela ainda não sabe.",
@@ -150,24 +150,24 @@
         {
           "name": "Marca do Caçador",
           "level": 1,
-          "description": "Marca uma criatura à vista; enquanto marcada, +1d6 de dano em ataques contra ela e vantagem em testes de Sabedoria (Percepção/Sobrevivência) pra rastreá-la.",
-          "imageUrl": "",
           "school": "adivinhação",
           "castingTime": "1 ação bônus",
           "range": "27 metros",
           "components": "V",
-          "duration": "Concentração, até 1 hora"
+          "duration": "Concentração, até 1 hora",
+          "description": "Marca uma criatura à vista; enquanto marcada, +1d6 de dano em ataques contra ela e vantagem em testes de Sabedoria (Percepção/Sobrevivência) pra rastreá-la.",
+          "imageUrl": ""
         },
         {
           "name": "Enfeitiçar Animal",
           "level": 1,
-          "description": "Encanta até três feras por até 24 horas, tornando-as amigáveis.",
-          "imageUrl": "",
           "school": "encantamento",
           "castingTime": "1 ação",
           "range": "9 metros",
           "components": "V, S",
-          "duration": "24 horas"
+          "duration": "24 horas",
+          "description": "Encanta até três feras por até 24 horas, tornando-as amigáveis.",
+          "imageUrl": ""
         }
       ],
       "alignment": "NB",
@@ -175,7 +175,9 @@
       "ideals": "A natureza sempre encontra um equilíbrio; cabe a mim ajudar quando ele se rompe.",
       "bonds": "Meu clã sumiu de Ashmoor há um ano. Vou descobrir o que aconteceu, custe o que custar.",
       "flaws": "Confia mais em animais do que em pessoas — já causou mais de um mal-entendido caro.",
-      "updatedAt": "2026-07-10T19:00:00.000Z"
+      "updatedAt": "2026-09-01T00:54:28.527Z",
+      "passcode": "teste123",
+      "proficiencies": ""
     },
     {
       "id": "pc002demo",
@@ -649,6 +651,12 @@
         "round": 2,
         "turn": 1,
         "text": "Rodada 2 — vez de Nyra Duskwhisper"
+      },
+      {
+        "ts": 1788258740995,
+        "round": 2,
+        "turn": 1,
+        "text": "Monstro (em branco) entrou no combate"
       }
     ]
   },

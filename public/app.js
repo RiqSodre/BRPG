@@ -233,29 +233,16 @@ $$('.nav-btn').forEach((btn) => {
 function renderAll() {
   $('#campaign-name').textContent = state.settings.campaignName || 'Mesa do Mestre';
   $('#campaign-system').textContent = state.settings.system || '';
-  renderBotStatus();
   renderScenes();
   renderStory();
   renderCharacters();
   renderItems();
   renderAudio();
-  renderBoothTab();
   renderMapTab();
   renderBestiarioTab();
   renderSessions();
   renderAiTab();
   renderSettings();
-  $('#volume').value = state.settings.volume ?? 0.4;
-}
-
-function renderBotStatus() {
-  const b = state.bot;
-  $('#bot-status').innerHTML = b.connected
-    ? `<span class="dot on"></span> ${esc(b.tag)}${b.inVoice ? ' · <svg class="icon"><use href="#i-microphone"/></svg> em voz' : ''}`
-    : '<span class="dot off"></span> Bot desconectado';
-  $('#now-playing').innerHTML = b.nowPlaying
-    ? `<svg class="icon"><use href="#i-music-notes"/></svg>Tocando: ${esc(b.nowPlaying.name)}`
-    : '<svg class="icon"><use href="#i-speaker-slash"/></svg>Nenhum som tocando';
 }
 
 // ---------- Cenas ----------
@@ -266,11 +253,10 @@ function renderScenes() {
       <h2><svg class="icon"><use href="#i-mask-happy"/></svg>Cenas</h2>
       <div class="actions"><button class="btn" id="btn-new-scene">+ Nova cena</button></div>
     </div>
-    <p class="help-text">Ativar uma cena posta a descrição e a imagem no canal de texto do Discord e <b>toca o áudio dela automaticamente</b> no canal de voz.</p><br/>
+    <p class="help-text">Ative uma cena para marcá-la como a atual — o card fica destacado, pra você (e quem olhar o painel com você) saber onde a mesa está agora.</p><br/>
     <div class="grid">${scenes.map((s) => {
       const amb = state.audio.find((a) => a.id === s.ambientAudioId);
       const mus = state.audio.find((a) => a.id === s.musicAudioId);
-      const sfx = (s.sfxIds || []).map((id) => state.audio.find((a) => a.id === id)).filter(Boolean);
       return `
       <div class="card ${s.id === state.activeSceneId ? 'active-scene' : ''}">
         ${s.imageUrl ? `<img class="thumb" src="${esc(s.imageUrl)}" alt="" onerror="this.remove()" />` : ''}
@@ -280,8 +266,6 @@ function renderScenes() {
           ${amb ? `<span class="badge gold"><svg class="icon"><use href="#i-cloud-fog"/></svg>${esc(amb.name)}</span>` : ''}
           ${mus ? `<span class="badge gold"><svg class="icon"><use href="#i-music-notes"/></svg>${esc(mus.name)}</span>` : ''}
         </div>
-        ${sfx.length ? `<div class="row">${sfx.map((a) =>
-          `<button class="btn small ghost" data-sfx="${a.id}" title="Tocar efeito no Discord"><svg class="icon"><use href="#i-waveform"/></svg>${esc(a.name)}</button>`).join('')}</div>` : ''}
         <div class="row">
           <button class="btn small gold" data-activate="${s.id}">▶ Ativar cena</button>
           <button class="btn small ghost" data-edit-scene="${s.id}">Editar</button>
@@ -298,16 +282,8 @@ function renderScenes() {
   });
   $$('#tab-scenes [data-activate]').forEach((b) => b.onclick = async () => {
     const r = await tryApi(() => api(`/scenes/${b.dataset.activate}/activate`, { method: 'POST' }));
-    if (r) {
-      let msg = 'Cena ativada!';
-      if (r.audio) msg += ` Tocando "${r.audio}".`;
-      if (r.warnings?.length) msg += ` ${r.warnings.join(' ')}`;
-      toast(msg, r.warnings?.length > 0 && !r.posted);
-      refresh();
-    }
+    if (r) { toast('Cena ativada!'); refresh(); }
   });
-  $$('#tab-scenes [data-sfx]').forEach((b) => b.onclick = () =>
-    tryApi(() => api(`/sound/play/${b.dataset.sfx}`, { method: 'POST' }), 'Efeito tocado!'));
   $$('#tab-scenes [data-suggest]').forEach((b) => b.onclick = async () => {
     b.disabled = true; b.textContent = 'Pensando...';
     const r = await tryApi(() => api(`/ai/suggest-audio/${b.dataset.suggest}`, { method: 'POST', body: { apply: true } }));
@@ -319,7 +295,7 @@ function renderScenes() {
 function sceneModal(scene = {}) {
   openModal(scene.id ? 'Editar cena' : 'Nova cena', `
     ${field('Título', 'title', scene.title, 'text', 'A Taverna do Javali Dourado')}
-    ${fieldArea('Texto de leitura (vai para o Discord ao ativar)', 'readAloud', scene.readAloud, 'O que os jogadores veem/ouvem/sentem...')}
+    ${fieldArea('Texto de leitura', 'readAloud', scene.readAloud, 'O que os jogadores veem/ouvem/sentem...')}
     ${fieldArea('Notas do Mestre (privadas)', 'gmNotes', scene.gmNotes, 'Segredos, gatilhos, o que pode acontecer...')}
     ${field('URL da imagem (opcional)', 'imageUrl', scene.imageUrl, 'text', 'https://...')}
     <div class="field-row">
@@ -394,7 +370,6 @@ function renderCharacters() {
         <div class="row">
           <button class="btn small gold" data-improv="${c.id}"><svg class="icon"><use href="#i-mask-happy"/></svg>Improvisar</button>
           <button class="btn small" data-speak="${c.id}"><svg class="icon"><use href="#i-chat-circle-text"/></svg>Falar</button>
-          <button class="btn small ghost" data-embody="${c.id}"><svg class="icon"><use href="#i-microphone"/></svg>Encarnar</button>
           <button class="btn small ghost" data-inv="${c.id}" title="Mochila deste NPC"><svg class="icon"><use href="#i-backpack"/></svg>${(c.inventory || []).length ? ` ${c.inventory.length}` : ''}</button>
           <button class="btn small ghost" data-sheet-char="${c.id}" title="Ver ficha"><svg class="icon"><use href="#i-clipboard-text"/></svg></button>
           <button class="btn small ghost" data-edit-char="${c.id}"><svg class="icon"><use href="#i-pencil-simple"/></svg></button>
@@ -408,9 +383,9 @@ function renderCharacters() {
       ${c.imageUrl ? `<img class="thumb" src="${esc(c.imageUrl)}" alt="" onerror="this.remove()" />` : ''}
       <h3>${esc(c.name)}</h3>
       <div class="meta">${[esc([c.race, c.klass, c.level ? `nível ${c.level}` : ''].filter(Boolean).join(' · ')), c.player ? `<svg class="icon"><use href="#i-game-controller"/></svg>${esc(c.player)}` : ''].filter(Boolean).join(' · ')}</div>
-      ${c.discordUserId
-        ? `<button type="button" class="badge gold badge-btn" data-unlink-discord="${c.id}" title="Clique para desvincular do Discord"><svg class="icon"><use href="#i-link"/></svg>Discord: ${esc(c.discordTag || 'vinculado')}<svg class="icon"><use href="#i-x"/></svg></button>`
-        : '<span class="badge" title="O jogador usa /vincular no Discord"><svg class="icon"><use href="#i-link-break"/></svg>sem vínculo</span>'}
+      ${c.passcode
+        ? '<span class="badge gold" title="O jogador entra no portal com o nome do personagem + essa senha — troque em Editar"><svg class="icon"><use href="#i-link"/></svg>Portal: senha definida</span>'
+        : '<span class="badge" title="Defina uma senha em Editar para liberar o portal a esse jogador"><svg class="icon"><use href="#i-link-break"/></svg>Portal: sem senha</span>'}
       ${c.ac || c.maxHp ? `<div class="meta"><svg class="icon"><use href="#i-shield"/></svg> CA ${esc(c.ac ?? '?')} · <svg class="icon"><use href="#i-heart-straight"/></svg> ${esc(c.hp ?? '?')}/${esc(c.maxHp ?? '?')} PV</div>` : ''}
       <div class="desc">${esc(c.description || '')}</div>
       <div class="row">
@@ -437,7 +412,6 @@ function renderCharacters() {
     <div class="tab-header">
       <h2><svg class="icon"><use href="#i-users"/></svg>Personagens</h2>
       <div class="actions">
-        <button class="btn ghost" id="btn-handout"><svg class="icon"><use href="#i-envelope-simple"/></svg>Handout</button>
         <button class="btn" id="btn-new-pc">+ Jogador</button>
         <button class="btn gold" id="btn-new-npc">+ NPC</button>
       </div>
@@ -471,33 +445,20 @@ function renderCharacters() {
 
   $('#btn-new-pc').onclick = () => charModal({ type: 'pc' });
   $('#btn-new-npc').onclick = () => charModal({ type: 'npc' });
-  $('#btn-handout').onclick = () => handoutModal();
   $$('#tab-characters [data-edit-char]').forEach((b) => b.onclick = () => charModal(chars.find((c) => c.id === b.dataset.editChar)));
   $$('#tab-characters [data-sheet-char]').forEach((b) => b.onclick = () => characterSheetModal(chars.find((c) => c.id === b.dataset.sheetChar)));
   $$('#tab-characters [data-del-char]').forEach((b) => b.onclick = async () => {
     if (confirm('Excluir este personagem?')) { await api(`/characters/${b.dataset.delChar}`, { method: 'DELETE' }); refresh(); }
   });
   $$('#tab-characters [data-inv]').forEach((b) => b.onclick = () => inventoryModal(chars.find((c) => c.id === b.dataset.inv)));
-  $$('#tab-characters [data-unlink-discord]').forEach((b) => b.onclick = async () => {
-    const ch = chars.find((c) => c.id === b.dataset.unlinkDiscord);
-    if (!confirm(`Desvincular o Discord de ${ch?.name}? O jogador precisará usar /vincular de novo.`)) return;
-    const r = await tryApi(() => api(`/characters/${b.dataset.unlinkDiscord}`, { method: 'PUT', body: { discordUserId: null, discordTag: null } }), 'Vínculo com o Discord removido.');
-    if (r) refresh();
-  });
   $$('#tab-characters [data-improv]').forEach((b) => b.onclick = () => improvModal(chars.find((c) => c.id === b.dataset.improv)));
   $$('#tab-characters [data-speak]').forEach((b) => b.onclick = () => speakModal(chars.find((c) => c.id === b.dataset.speak)));
-  $$('#tab-characters [data-embody]').forEach((b) => b.onclick = () => {
-    const npc = chars.find((c) => c.id === b.dataset.embody);
-    $('.nav-btn[data-tab="booth"]').click();
-    $('#booth-npc').value = npc.id;
-    boothLoadPreset(npc);
-  });
 }
 
 // ---------- Itens: catálogo + mochila ----------
 const RARIDADES = ['Comum', 'Incomum', 'Raro', 'Muito raro', 'Lendário', 'Artefato'];
 const TIPOS_ITEM = ['Arma', 'Armadura', 'Poção', 'Pergaminho', 'Anel', 'Varinha', 'Maravilhoso', 'Tesouro', 'Equipamento', 'Outro'];
-// Mesmas cores do embed do Discord — a linguagem de loot que os jogadores já conhecem.
+// A linguagem de cor de raridade que quem já jogou WoW/D&D online reconhece de cara.
 const RARIDADE_COR = {
   'Comum': '#9d9d9d', 'Incomum': '#1eff00', 'Raro': '#0070dd',
   'Muito raro': '#a335ee', 'Lendário': '#ff8000', 'Artefato': '#e6cc80',
@@ -543,7 +504,7 @@ function renderItems() {
       <h2><svg class="icon"><use href="#i-backpack"/></svg>Itens</h2>
       <div class="actions"><button class="btn gold" id="btn-new-item">+ Novo item</button></div>
     </div>
-    <p class="help-text">Crie o item uma vez aqui e entregue a quantos personagens quiser. Ao entregar, o jogador recebe um card do item por DM no Discord — e pode consultar a mochila a qualquer momento com <code>/inventario</code>.</p>
+    <p class="help-text">Crie o item uma vez aqui e entregue a quantos personagens quiser. Ao entregar, o item já aparece na hora na ficha do jogador, no portal.</p>
 
     <div class="settings-section" style="margin-top:14px;">
       <h3 style="display:flex;align-items:center;gap:8px;"><svg class="icon"><use href="#i-link"/></svg>Quem está com o quê</h3>
@@ -553,9 +514,9 @@ function renderItems() {
           <div class="inv-owner-row">
             <span class="inv-owner-name">
               <svg class="icon"><use href="#i-${c.type === 'pc' ? 'game-controller' : 'mask-happy'}"/></svg> <b>${esc(c.name)}</b>
-              ${c.type === 'pc' ? (c.discordUserId
-                ? `<span class="badge gold" title="Recebe itens por DM e pode usar /inventario"><svg class="icon"><use href="#i-link"/></svg>${esc(c.discordTag || 'vinculado')}</span>`
-                : '<span class="badge" title="O jogador precisa usar /vincular no Discord"><svg class="icon"><use href="#i-link-break"/></svg>sem vínculo</span>') : ''}
+              ${c.type === 'pc' ? (c.passcode
+                ? '<span class="badge gold" title="Esse jogador pode ver a mochila ao vivo no portal"><svg class="icon"><use href="#i-link"/></svg>Portal: senha definida</span>'
+                : '<span class="badge" title="Defina uma senha em Editar para liberar o portal a esse jogador"><svg class="icon"><use href="#i-link-break"/></svg>Portal: sem senha</span>') : ''}
             </span>
             <div class="inv-chips">
               ${(c.inventory || []).map((l) => {
@@ -617,7 +578,7 @@ function itemModal(it = {}) {
       ${fieldSelect('Raridade', 'rarity', RARIDADES.map((r) => ({ value: r, label: r })), it.rarity || 'Comum')}
       ${fieldSelect('Tipo', 'type', TIPOS_ITEM.map((t) => ({ value: t, label: t })), it.type || 'Outro')}
     </div>
-    ${fieldArea('Descrição (o jogador vê isso no Discord)', 'description', it.description, 'Recupera 4d4+4 pontos de vida ao beber...')}
+    ${fieldArea('Descrição (o jogador vê isso na mochila, pelo portal)', 'description', it.description, 'Recupera 4d4+4 pontos de vida ao beber...')}
     ${fieldImage('Imagem do item', 'imageUrl', it.imageUrl ?? '')}
   `, async (data) => {
     data.imageUrl = await resolveImage('imageUrl', data);
@@ -633,35 +594,24 @@ function giveItemModal(it) {
   const pcs = state.characters.filter((c) => c.type === 'pc');
   const npcs = state.characters.filter((c) => c.type === 'npc');
   if (!pcs.length && !npcs.length) return toast('Crie um personagem primeiro.', true);
-  const opts = [
-    ...pcs.map((c) => ({ value: c.id, label: `${c.name}${c.discordUserId ? '' : ' (sem vínculo no Discord)'}` })),
-    ...npcs.map((c) => ({ value: c.id, label: c.name })),
-  ];
+  const opts = [...pcs, ...npcs].map((c) => ({ value: c.id, label: c.name }));
   openModal(`Entregar ${esc(it.name)}`, `
     ${fieldSelect('Para quem', 'charId', opts, opts[0].value)}
     <div class="field">
       <label>Quantidade</label>
       <input name="qty" type="number" min="1" step="1" value="1" />
     </div>
-    <label class="tool-check" style="margin:8px 0;">
-      <input type="checkbox" name="notify" checked /> Avisar o jogador por DM no Discord (card do item)
-    </label>
-    <p class="help-text">Sem vínculo no Discord, o item entra na mochila mesmo assim — o jogador só não recebe o aviso. Ele vincula com <code>/vincular</code>. Para <b>tirar</b> itens, use o X na mochila.</p>
+    <p class="help-text">O item já aparece na hora na ficha do jogador, no portal. Para <b>tirar</b> itens, use o X na mochila.</p>
   `, async (data) => {
-    const notify = $('#modal-form [name="notify"]').checked;
     // Lança em vez de "corrigir": o modal fica aberto mostrando o motivo,
     // e o Mestre não recebe o oposto do que pediu.
     const qty = Math.floor(Number(data.qty));
     if (!Number.isFinite(qty) || qty < 1) {
       throw new Error('A quantidade precisa ser um número inteiro de 1 para cima. Para tirar itens, use o X na mochila.');
     }
-    const r = await api(`/characters/${data.charId}/inventory`, {
-      method: 'POST',
-      body: { itemId: it.id, qty, notify },
-    });
+    await api(`/characters/${data.charId}/inventory`, { method: 'POST', body: { itemId: it.id, qty } });
     const quem = state.characters.find((c) => c.id === data.charId)?.name || 'personagem';
-    if (r.aviso) toast(`${it.name} foi para a mochila de ${quem}, mas o DM falhou: ${r.aviso}`, true);
-    else toast(`${it.name} entregue a ${quem}${notify ? ' e avisado no Discord!' : '.'}`);
+    toast(`${it.name} entregue a ${quem}.`);
   }, 'Entregar');
 }
 
@@ -672,9 +622,9 @@ function inventoryModal(ch) {
 
   $('#modal').innerHTML = `
     <h3 style="display:flex;align-items:center;gap:8px;"><svg class="icon"><use href="#i-backpack"/></svg>Mochila de ${esc(ch.name)}</h3>
-    ${ch.discordUserId
-      ? `<p class="help-text"><svg class="icon"><use href="#i-link"/></svg> Vinculado a <b>${esc(ch.discordTag || 'jogador')}</b> — ele pode ver isso com <code>/inventario</code>.</p>`
-      : '<p class="help-text"><svg class="icon"><use href="#i-link-break"/></svg> Sem vínculo no Discord — o jogador precisa usar <code>/vincular</code> para receber itens e consultar a mochila.</p>'}
+    ${ch.type === 'pc' ? (ch.passcode
+      ? '<p class="help-text"><svg class="icon"><use href="#i-link"/></svg> Esse jogador vê essa mochila ao vivo no portal.</p>'
+      : '<p class="help-text"><svg class="icon"><use href="#i-link-break"/></svg> Defina uma senha em Editar para liberar o portal a esse jogador.</p>') : ''}
     <div id="inv-list" style="max-height:340px;overflow-y:auto;margin:10px 0;">
       ${inv.length ? inv.map((l) => {
         const cor = corDaRaridade(l.item.rarity);
@@ -688,7 +638,6 @@ function inventoryModal(ch) {
             <small style="color:${cor};"> ${esc(l.item.rarity || '')}</small>
           </span>
           <input class="input inv-qty" type="number" min="0" value="${l.qty}" data-inv-qty="${l.itemId}" style="width:56px;text-align:center;" title="Quantidade (0 remove)" />
-          <button class="btn small ghost" data-inv-send="${l.itemId}" title="Reenviar o card deste item por DM"><svg class="icon"><use href="#i-envelope-simple"/></svg></button>
           <button class="btn small danger" data-inv-del="${l.itemId}" title="Tirar da mochila"><svg class="icon"><use href="#i-trash"/></svg></button>
         </div>`;
       }).join('') : '<div class="empty" style="font-size:13px;">Mochila vazia.</div>'}
@@ -716,8 +665,6 @@ function inventoryModal(ch) {
     await refresh();
     inventoryModal(state.characters.find((c) => c.id === ch.id));
   });
-  $$('#inv-list [data-inv-send]').forEach((b) => b.onclick = () =>
-    tryApi(() => api(`/characters/${ch.id}/inventory/${b.dataset.invSend}/notify`, { method: 'POST' }), 'Card reenviado no Discord!'));
 }
 
 // Escolhe um item do catálogo para dar a um personagem específico.
@@ -753,6 +700,7 @@ function charModal(c = {}) {
     <input type="hidden" name="type" value="${c.type}" />
     ${field('Nome', 'name', c.name)}
     ${isPc ? field('Jogador (quem joga)', 'player', c.player) : ''}
+    ${isPc ? field('Senha do portal (o jogador usa pra entrar em /jogador.html)', 'passcode', c.passcode, 'text', 'ex: draco123') : ''}
     <div class="field-row">
       ${field('Raça', 'race', c.race)}
       ${field('Classe/Ocupação', 'klass', c.klass)}
@@ -910,53 +858,24 @@ function characterSheetModal(ch) {
   }
 }
 
-function handoutModal() {
-  const pcs = state.characters.filter((c) => c.type === 'pc');
-  openModal('Enviar handout', `
-    ${fieldSelect('Para quem?', 'target', [
-      { value: 'all', label: 'Todos (no canal de texto)' },
-      ...pcs.map((c) => ({
-        value: c.id,
-        label: `${c.name}${c.discordUserId ? ` — DM para ${c.discordTag || 'jogador'}` : ' — SEM VÍNCULO (use /vincular)'}`,
-      })),
-    ], 'all')}
-    ${field('Título', 'title', '', 'text', 'Uma carta amassada')}
-    ${fieldArea('Conteúdo', 'content', '', '"Encontre-me na cripta à meia-noite. Venha só. — V."')}
-    ${field('URL da imagem (opcional)', 'imageUrl', '', 'text', 'mapa, carta, brasão...')}
-  `, async (data) => {
-    const r = await tryApi(() => api('/handout', { method: 'POST', body: data }));
-    if (r) {
-      let msg = r.sent?.length ? `Enviado para: ${r.sent.join(', ')}.` : '';
-      if (r.failed?.length) msg += ` Falhou: ${r.failed.join('; ')}`;
-      toast(msg || 'Nada foi enviado.', Boolean(r.failed?.length));
-    }
-  }, 'Enviar');
-}
-
 function speakModal(npc) {
   openModal(`${esc(npc.name)} fala...`, `
     ${fieldArea('O que o NPC diz?', 'text', '', '"Saiam da minha taverna, forasteiros!"')}
-    <div class="row">
-      <button type="button" class="btn ghost" id="btn-tts-preview"><svg class="icon"><use href="#i-headphones"/></svg>Ouvir aqui</button>
-    </div>
     <audio id="tts-audio" controls style="width:100%; margin-top:8px; display:none;"></audio>
-  `, async () => {}, 'Falar no Discord');
-
-  const speak = async (discord) => {
-    const text = $('#modal-form [name="text"]').value;
+  `, async () => {}, 'Ouvir');
+  // Substitui o submit padrão: o Mestre costuma ajustar o texto e ouvir de novo até
+  // acertar o tom — se o modal fechasse a cada clique, ele teria que reabrir toda vez.
+  $('#modal-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const text = new FormData(e.target).get('text');
     if (!text.trim()) return toast('Escreva a fala primeiro.', true);
-    const r = await tryApi(() => api('/tts/speak', { method: 'POST', body: { text, npcId: npc.id, discord } }));
+    const r = await tryApi(() => api('/tts/speak', { method: 'POST', body: { text, npcId: npc.id } }));
     if (!r) return;
-    if (discord) toast(r.warning || `${npc.name} falou no canal de voz!`, Boolean(r.warning));
-    if (!discord) {
-      const audio = $('#tts-audio');
-      audio.src = r.url;
-      audio.style.display = 'block';
-      audio.play();
-    }
+    const audio = $('#tts-audio');
+    audio.src = r.url;
+    audio.style.display = 'block';
+    audio.play();
   };
-  $('#btn-tts-preview').onclick = () => speak(false);
-  $('#modal-form').onsubmit = (e) => { e.preventDefault(); speak(true); };
 }
 
 function improvModal(npc) {
@@ -1016,7 +935,6 @@ const audioRowHtml = (a) => `
       : TYPE_LABEL[a.type] || a.type}</span>
     <span class="name"><b>${esc(a.name)}</b><br/><small style="color:var(--muted)">${(a.tags || []).map((t) => `#${esc(t)}`).join(' ')}</small></span>
     <audio controls preload="none" src="/audio-files/${esc(a.filename)}"></audio>
-    <button class="btn small gold" data-play-discord="${a.id}" title="Tocar no canal de voz do Discord"><svg class="icon"><use href="#i-broadcast"/></svg>Discord</button>
     <button class="btn small ghost" data-edit-audio="${a.id}"><svg class="icon"><use href="#i-pencil-simple"/></svg></button>
     <button class="btn small danger" data-del-audio="${a.id}"><svg class="icon"><use href="#i-trash"/></svg></button>
   </div>`;
@@ -1049,7 +967,7 @@ function renderAudio() {
         <input name="tags" placeholder="tags: taverna, chuva, combate..." />
         <button class="btn" type="submit"><svg class="icon"><use href="#i-upload-simple"/></svg>Enviar</button>
       </form>
-      <p class="help-text">A categoria só vale para efeitos — é por ela (e pelas tags) que o soundboard de batalha filtra rápido.</p>
+      <p class="help-text">A categoria só vale para efeitos — é por ela (e pelas tags) que a busca abaixo filtra rápido.</p>
     </div>
     <div class="card" style="margin-bottom:16px;">
       <h3 style="display:flex;align-items:center;gap:8px;"><svg class="icon"><use href="#i-magnifying-glass"/></svg>Buscar no Freesound</h3>
@@ -1181,8 +1099,6 @@ function renderAudio() {
     await tryApi(() => api('/audio', { method: 'POST', body: fd }), 'Áudio enviado!');
     refresh();
   };
-  $$('#tab-audio [data-play-discord]').forEach((b) => b.onclick = () =>
-    tryApi(() => api(`/sound/play/${b.dataset.playDiscord}`, { method: 'POST' }), 'Tocando no Discord!').then(refresh));
   $$('#tab-audio [data-del-audio]').forEach((b) => b.onclick = async () => {
     if (confirm('Excluir este áudio?')) { await api(`/audio/${b.dataset.delAudio}`, { method: 'DELETE' }); refresh(); }
   });
@@ -1207,284 +1123,6 @@ function renderAudio() {
     typeSel.onchange = toggleCat;
     toggleCat();
   });
-}
-
-// ---------- Cabine do Mestre ----------
-// Tabela única dos controles: monta o HTML, liga os eventos, formata os valores e diz
-// em que campo do NPC cada efeito é salvo. Com onze efeitos, manter essas quatro coisas
-// em quatro lugares diferentes era garantia de um deles ficar para trás.
-const pctFmt = (v) => `${Math.round(v * 100)}%`;
-const stFmt = (v) => `${v > 0 ? '+' : ''}${v} st`;
-const BOOTH_SLIDERS = [
-  { key: 'pitch', npc: 'fxPitch', label: 'Tom (pitch)', min: -12, max: 12, step: 0.5, def: 0, fmt: stFmt },
-  { key: 'timbre', npc: 'fxTimbre', label: 'Timbre (corpo ↔ fino)', min: -1, max: 1, step: 0.05, def: 0,
-    fmt: (v) => (v === 0 ? 'neutro' : v < 0 ? `corpo ${Math.round(-v * 100)}%` : `fino ${Math.round(v * 100)}%`) },
-  { key: 'reverb', npc: 'fxReverb', label: 'Reverb', min: 0, max: 1, step: 0.05, def: 0, fmt: pctFmt },
-  { key: 'echo', npc: 'fxEcho', label: 'Eco', min: 0, max: 1, step: 0.05, def: 0, fmt: pctFmt },
-  { key: 'distortion', npc: 'fxDist', label: 'Distorção', min: 0, max: 1, step: 0.05, def: 0, fmt: pctFmt },
-  { key: 'robot', npc: 'fxRobot', label: 'Robô', min: 0, max: 1, step: 0.05, def: 0, fmt: pctFmt },
-  { key: 'radio', npc: 'fxRadio', label: 'Rádio/comunicador', min: 0, max: 1, step: 0.05, def: 0, fmt: pctFmt },
-  { key: 'tremor', npc: 'fxTremor', label: 'Tremor', min: 0, max: 1, step: 0.05, def: 0, fmt: pctFmt },
-  { key: 'dual', npc: 'fxDual', label: 'Voz dupla', min: 0, max: 1, step: 0.05, def: 0, fmt: pctFmt },
-  { key: 'dualPitch', npc: 'fxDualPitch', label: 'Intervalo da 2ª voz', min: -12, max: 12, step: 0.5, def: -12, fmt: stFmt },
-  { key: 'gain', npc: 'fxGain', label: 'Ganho da voz', min: 0.5, max: 3.5, step: 0.1, def: 2, fmt: (v) => `${v.toFixed(1)}×` },
-];
-
-const VOICE_CATS = [
-  { id: 'todas', label: 'Todas', icon: 'waveform' },
-  { id: 'monstros', label: 'Monstros', icon: 'hand-fist' },
-  { id: 'mortosvivos', label: 'Mortos-vivos', icon: 'skull' },
-  { id: 'feericos', label: 'Feéricos', icon: 'sparkle' },
-  { id: 'arcano', label: 'Arcano & construtos', icon: 'gear' },
-  { id: 'divino', label: 'Divino & planar', icon: 'star' },
-  { id: 'povo', label: 'Povo & vilões', icon: 'users' },
-];
-
-// Banco de vozes: cada preset lista só o que foge do padrão — o resto vem do `def` da
-// tabela acima, então uma voz nunca herda sobra da anterior.
-const VOICE_PRESETS = [
-  // --- Monstros & feras ---
-  { id: 'ogro', cat: 'monstros', name: 'Ogro brutamontes', hint: 'grave, encorpado e sujo',
-    fx: { pitch: -7, timbre: -0.7, distortion: 0.25, reverb: 0.1, gain: 2.2 } },
-  { id: 'dragao', cat: 'monstros', name: 'Dragão ancião', hint: 'duas gargantas, sala imensa',
-    fx: { pitch: -9, timbre: -0.6, reverb: 0.45, echo: 0.15, distortion: 0.2, dual: 0.5, dualPitch: -12, gain: 2.4 } },
-  { id: 'goblin', cat: 'monstros', name: 'Goblin esganiçado', hint: 'agudo, fino e rápido',
-    fx: { pitch: 6, timbre: 0.5, distortion: 0.15, gain: 1.9 } },
-  { id: 'kobold', cat: 'monstros', name: 'Kobold nervoso', hint: 'agudinho e trêmulo',
-    fx: { pitch: 8, timbre: 0.6, tremor: 0.3 } },
-  { id: 'aberracao', cat: 'monstros', name: 'Aberração sussurrante', hint: 'coro dissonante e errado',
-    fx: { pitch: -3, timbre: -0.2, reverb: 0.5, echo: 0.2, dual: 0.6, dualPitch: 5 } },
-  { id: 'lobisomem', cat: 'monstros', name: 'Lobisomem', hint: 'rosnado rasgado',
-    fx: { pitch: -5, timbre: -0.4, distortion: 0.45, gain: 2.3 } },
-  { id: 'troll', cat: 'monstros', name: 'Troll da ponte', hint: 'lerdo, cavernoso e nasalado',
-    fx: { pitch: -6, timbre: -0.5, distortion: 0.15, reverb: 0.25, tremor: 0.15 } },
-
-  // --- Mortos-vivos & espectros ---
-  { id: 'fantasma', cat: 'mortosvivos', name: 'Fantasma', hint: 'distante, ecoando e instável',
-    fx: { pitch: -2, timbre: 0.2, reverb: 0.85, echo: 0.4, tremor: 0.25, gain: 1.8 } },
-  { id: 'lich', cat: 'mortosvivos', name: 'Lich', hint: 'grave, seca, com sombra de oitava',
-    fx: { pitch: -6, timbre: -0.3, reverb: 0.6, echo: 0.25, dual: 0.4, dualPitch: -12 } },
-  { id: 'zumbi', cat: 'mortosvivos', name: 'Zumbi', hint: 'arrastada e sem fôlego',
-    fx: { pitch: -4, timbre: -0.5, distortion: 0.3, tremor: 0.45, gain: 2 } },
-  { id: 'banshee', cat: 'mortosvivos', name: 'Banshee', hint: 'lamento agudo em duas alturas',
-    fx: { pitch: 4, reverb: 0.7, echo: 0.3, tremor: 0.5, dual: 0.35, dualPitch: 7 } },
-  { id: 'cripta', cat: 'mortosvivos', name: 'Voz da cripta', hint: 'saindo de dentro da pedra',
-    fx: { pitch: -5, timbre: -0.45, reverb: 0.65, echo: 0.45, gain: 2.2 } },
-
-  // --- Feéricos & pequenos ---
-  { id: 'fada', cat: 'feericos', name: 'Fada', hint: 'aguda, cintilante e leve',
-    fx: { pitch: 9, timbre: 0.4, reverb: 0.3, echo: 0.15 } },
-  { id: 'gnomo', cat: 'feericos', name: 'Gnomo inventor', hint: 'miúda e tagarela',
-    fx: { pitch: 5, timbre: 0.3 } },
-  { id: 'duende', cat: 'feericos', name: 'Duende travesso', hint: 'agudinha, saltitante, com eco',
-    fx: { pitch: 7, timbre: 0.2, echo: 0.25, tremor: 0.15 } },
-  { id: 'crianca', cat: 'feericos', name: 'Criança', hint: 'clara e sem peso',
-    fx: { pitch: 4, timbre: 0.25, gain: 1.8 } },
-  { id: 'espirito-bosque', cat: 'feericos', name: 'Espírito do bosque', hint: 'ao longe, entre as árvores',
-    fx: { pitch: 2, timbre: 0.15, reverb: 0.6, echo: 0.35, dual: 0.3, dualPitch: 12 } },
-
-  // --- Arcano & construtos ---
-  { id: 'automato', cat: 'arcano', name: 'Autômato', hint: 'metálica e mecânica',
-    fx: { pitch: -1, robot: 0.7, radio: 0.25 } },
-  { id: 'golem', cat: 'arcano', name: 'Golem de pedra', hint: 'lenta, pesada, quase sem agudos',
-    fx: { pitch: -8, timbre: -0.8, distortion: 0.3, robot: 0.25, reverb: 0.2 } },
-  { id: 'elemental-fogo', cat: 'arcano', name: 'Elemental de fogo', hint: 'crepitante e ondulante',
-    fx: { pitch: -2, timbre: 0.1, distortion: 0.5, tremor: 0.2, reverb: 0.25 } },
-  { id: 'mensagem', cat: 'arcano', name: 'Mensagem arcana', hint: 'chiado de comunicação à distância',
-    fx: { radio: 0.9, echo: 0.2, gain: 2.2 } },
-  { id: 'simulacro', cat: 'arcano', name: 'Simulacro', hint: 'a mesma voz, meio semitom fora',
-    fx: { timbre: 0.05, reverb: 0.35, dual: 0.6, dualPitch: 0.5 } },
-  { id: 'espelho', cat: 'arcano', name: 'Voz do espelho', hint: 'invertida, vindo do outro lado',
-    fx: { pitch: -3, timbre: 0.2, reverb: 0.55, echo: 0.5, radio: 0.35 } },
-
-  // --- Divino & planar ---
-  { id: 'celestial', cat: 'divino', name: 'Celestial', hint: 'coro em oitava, catedral',
-    fx: { pitch: 2, timbre: 0.2, reverb: 0.8, echo: 0.2, dual: 0.5, dualPitch: 12 } },
-  { id: 'demonio', cat: 'divino', name: 'Demônio', hint: 'oitava abaixo, rasgada',
-    fx: { pitch: -7, timbre: -0.5, distortion: 0.4, reverb: 0.3, dual: 0.55, dualPitch: -12, gain: 2.4 } },
-  { id: 'deus-antigo', cat: 'divino', name: 'Deus antigo', hint: 'enorme, sem fim, com quinta',
-    fx: { pitch: -10, timbre: -0.6, reverb: 0.9, echo: 0.35, dual: 0.45, dualPitch: 7, gain: 2.5 } },
-  { id: 'astral', cat: 'divino', name: 'Voz do plano astral', hint: 'flutuante e desfocada',
-    fx: { reverb: 0.7, echo: 0.5, radio: 0.3, tremor: 0.15 } },
-  { id: 'juiz', cat: 'divino', name: 'Juiz dos mortos', hint: 'sentença dita numa sala vazia',
-    fx: { pitch: -5, timbre: -0.35, reverb: 0.75, dual: 0.3, dualPitch: -12, gain: 2.3 } },
-
-  // --- Povo & vilões ---
-  { id: 'taverneiro', cat: 'povo', name: 'Taverneiro rouco', hint: 'grave, gasta de tanto gritar',
-    fx: { pitch: -3, timbre: -0.3, distortion: 0.2 } },
-  { id: 'nobre', cat: 'povo', name: 'Nobre afetado', hint: 'clara, empinada, nasal',
-    fx: { pitch: 2, timbre: 0.35, reverb: 0.12 } },
-  { id: 'velho-sabio', cat: 'povo', name: 'Velho sábio', hint: 'trêmula e pausada',
-    fx: { pitch: -2, timbre: -0.15, tremor: 0.35, reverb: 0.15 } },
-  { id: 'conspirador', cat: 'povo', name: 'Sussurro conspirador', hint: 'baixinha, colada no ouvido',
-    fx: { pitch: -1, timbre: 0.15, echo: 0.1, reverb: 0.05, gain: 1.4 } },
-  { id: 'arauto', cat: 'povo', name: 'Arauto do rei', hint: 'projetada, praça cheia',
-    fx: { pitch: -1, timbre: -0.1, reverb: 0.4, echo: 0.15, gain: 2.6 } },
-  { id: 'bruxa', cat: 'povo', name: 'Bruxa do pântano', hint: 'aguda, rachada e trêmula',
-    fx: { pitch: 3, timbre: 0.3, distortion: 0.25, tremor: 0.4 } },
-  { id: 'encapuzado', cat: 'povo', name: 'Vilão encapuzado', hint: 'grave e controlada',
-    fx: { pitch: -4, timbre: -0.25, reverb: 0.2, gain: 2.1 } },
-];
-
-let boothRendered = false;
-let boothPresetCat = 'todas';
-let boothPresetBusca = '';
-let boothPresetAtivo = '';
-
-// Aplica um conjunto de efeitos de uma vez: completa o que o preset não define, atualiza
-// os controles na tela e manda para o motor de áudio.
-function boothSetFx(fx) {
-  for (const s of BOOTH_SLIDERS) booth.fx[s.key] = fx[s.key] ?? s.def;
-  for (const s of BOOTH_SLIDERS) {
-    const el = $(`#booth-sl-${s.key}`);
-    if (!el) continue;
-    el.value = booth.fx[s.key];
-    $(`#booth-sl-${s.key}-val`).textContent = s.fmt(booth.fx[s.key]);
-  }
-  boothApplyFx();
-}
-
-function renderVoicePresets() {
-  $('#booth-preset-cats').innerHTML = VOICE_CATS.map((c) => `
-    <button class="sfx-cat-chip ${c.id === boothPresetCat ? 'active' : ''}" data-vcat="${c.id}">
-      <svg class="icon"><use href="#i-${c.icon}"/></svg>${c.label}
-    </button>`).join('');
-
-  const busca = boothPresetBusca.trim().toLowerCase();
-  const lista = VOICE_PRESETS.filter((p) => {
-    if (boothPresetCat !== 'todas' && p.cat !== boothPresetCat) return false;
-    if (!busca) return true;
-    const cat = VOICE_CATS.find((c) => c.id === p.cat)?.label || '';
-    return `${p.name} ${p.hint} ${cat}`.toLowerCase().includes(busca);
-  });
-
-  $('#booth-preset-grid').innerHTML = lista.length
-    ? lista.map((p) => `
-      <button class="voice-preset ${p.id === boothPresetAtivo ? 'active' : ''}" data-vpreset="${p.id}">
-        <span class="vp-name">${esc(p.name)}</span>
-        <span class="vp-hint">${esc(p.hint)}</span>
-      </button>`).join('')
-    : '<p class="help-text">Nenhuma voz com esse nome.</p>';
-
-  $$('#booth-preset-cats [data-vcat]').forEach((b) => b.onclick = () => {
-    boothPresetCat = b.dataset.vcat;
-    renderVoicePresets();
-  });
-  $$('#booth-preset-grid [data-vpreset]').forEach((b) => b.onclick = () => {
-    const p = VOICE_PRESETS.find((x) => x.id === b.dataset.vpreset);
-    boothPresetAtivo = p.id;
-    boothSetFx(p.fx);
-    renderVoicePresets();
-    toast(`Voz "${p.name}" carregada.`);
-  });
-}
-
-function renderBoothTab() {
-  if (!boothRendered) {
-    boothRendered = true;
-    $('#tab-booth').innerHTML = `
-      <div class="tab-header"><h2><svg class="icon"><use href="#i-microphone"/></svg>Cabine do Mestre</h2></div>
-      <p class="help-text">Fale pelos NPCs com a sua voz transformada: o som sai pelo bot, por cima da música ambiente.
-      <b>Use fones de ouvido</b> e, enquanto estiver no ar, <b>mute-se no Discord</b> para os jogadores não ouvirem sua voz dupla.</p><br/>
-      <div class="booth-layout">
-      <div class="card">
-        <div class="row" style="align-items:center;">
-          <button class="btn" id="booth-mic"><svg class="icon"><use href="#i-microphone"/></svg>Ativar microfone</button>
-          <span id="booth-status" class="help-text">microfone desligado</span>
-        </div>
-        <div class="row" style="align-items:center; margin-top:8px;">
-          <select id="booth-npc" style="flex:1;"></select>
-          <button class="btn small ghost" id="booth-load"><svg class="icon"><use href="#i-arrow-elbow-down-right"/></svg>Carregar preset</button>
-          <button class="btn small ghost" id="booth-save"><svg class="icon"><use href="#i-floppy-disk"/></svg>Salvar no NPC</button>
-        </div>
-        <div class="booth-sliders">
-          ${BOOTH_SLIDERS.map((s) => `
-            <label>${s.label} <span id="booth-sl-${s.key}-val">${s.fmt(s.def)}</span>
-              <input type="range" id="booth-sl-${s.key}" min="${s.min}" max="${s.max}" step="${s.step}" value="${s.def}" /></label>`).join('')}
-        </div>
-        <label style="font-size:13px;"><input type="checkbox" id="booth-monitor" /> <svg class="icon"><use href="#i-headphones"/></svg> Ouvir minha voz transformada (só com fones!)</label>
-        <button class="btn danger" id="booth-onair" style="margin-top:10px; font-size:16px;"><svg class="icon"><use href="#i-record"/></svg>ENTRAR NO AR</button>
-        <p class="help-text" style="margin-top:6px;">O <b>timbre</b> muda o tamanho da criatura sem mexer no tom; a <b>voz dupla</b> soma uma segunda altura à sua (oitava abaixo = monstruoso, quinta acima = celestial, meio semitom = eco de outro mundo); o <b>tremor</b> faz a voz oscilar (velhos, assombrações, quem está com medo).</p>
-      </div>
-
-      <div class="card booth-bank">
-        <div class="row" style="align-items:center; gap:8px;">
-          <h3 style="margin:0; flex:1;"><svg class="icon"><use href="#i-users"/></svg>Banco de vozes</h3>
-          <input type="text" id="booth-preset-busca" placeholder="buscar voz..." style="width:180px;" />
-          <button class="btn small ghost" id="booth-preset-reset"><svg class="icon"><use href="#i-eraser"/></svg>Voz natural</button>
-        </div>
-        <p class="help-text">Um clique carrega a voz nos controles ao lado — dá para ajustar depois e salvar no NPC.</p>
-        <div class="sfx-cat-bar" id="booth-preset-cats"></div>
-        <div class="voice-preset-grid" id="booth-preset-grid"></div>
-      </div>
-      </div>`;
-
-    booth.onStatus = (msg, isError) => {
-      $('#booth-status').textContent = msg;
-      if (isError) toast(msg, true);
-      const onAirBtn = $('#booth-onair');
-      onAirBtn.innerHTML = booth.onAir
-        ? '<svg class="icon"><use href="#i-stop"/></svg>SAIR DO AR'
-        : '<svg class="icon"><use href="#i-record"/></svg>ENTRAR NO AR';
-      onAirBtn.classList.toggle('gold', booth.onAir);
-    };
-
-    $('#booth-mic').onclick = async () => {
-      if (await boothInitMic()) $('#booth-status').textContent = 'Microfone pronto. Ajuste os efeitos e entre no ar.';
-    };
-    for (const s of BOOTH_SLIDERS) {
-      const el = $(`#booth-sl-${s.key}`);
-      el.oninput = () => {
-        booth.fx[s.key] = Number(el.value);
-        $(`#booth-sl-${s.key}-val`).textContent = s.fmt(booth.fx[s.key]);
-        // Mexeu no controle, a voz deixou de ser exatamente a do banco.
-        if (boothPresetAtivo) { boothPresetAtivo = ''; renderVoicePresets(); }
-        boothApplyFx();
-      };
-    }
-    $('#booth-preset-busca').oninput = (e) => { boothPresetBusca = e.target.value; renderVoicePresets(); };
-    $('#booth-preset-reset').onclick = () => {
-      boothPresetAtivo = '';
-      boothSetFx({});
-      renderVoicePresets();
-      toast('Efeitos zerados — sua voz natural.');
-    };
-    renderVoicePresets();
-    $('#booth-monitor').onchange = (e) => boothSetMonitor(e.target.checked);
-    $('#booth-onair').onclick = async () => {
-      if (booth.onAir) { boothOffAir(); return; }
-      await boothGoOnAir();
-    };
-    $('#booth-load').onclick = () => {
-      const npc = state.characters.find((c) => c.id === $('#booth-npc').value);
-      if (npc) boothLoadPreset(npc);
-    };
-    $('#booth-save').onclick = async () => {
-      const id = $('#booth-npc').value;
-      if (!id) return toast('Escolha um NPC primeiro.', true);
-      const body = {};
-      for (const s of BOOTH_SLIDERS) body[s.npc] = booth.fx[s.key];
-      await tryApi(() => api(`/characters/${id}`, { method: 'PUT', body }), 'Preset de voz salvo no NPC!');
-      refresh();
-    };
-  }
-  // Atualiza a lista de NPCs preservando a seleção
-  const sel = $('#booth-npc');
-  const current = sel.value;
-  sel.innerHTML = '<option value="">— preset de NPC —</option>' +
-    state.characters.filter((c) => c.type === 'npc').map((c) =>
-      `<option value="${c.id}" ${c.id === current ? 'selected' : ''}>${esc(c.name)}${c.fxPitch != null ? ' (voz configurada)' : ''}</option>`).join('');
-}
-
-function boothLoadPreset(npc) {
-  // NPCs salvos antes dos efeitos novos não têm esses campos: o `??` da tabela devolve
-  // o padrão de cada um, então a voz antiga continua soando igual.
-  const fx = {};
-  for (const s of BOOTH_SLIDERS) fx[s.key] = npc[s.npc] ?? s.def;
-  boothPresetAtivo = '';
-  boothSetFx(fx);
-  renderVoicePresets();
-  toast(`Preset de "${npc.name}" carregado.`);
 }
 
 // ---------- Mapa de batalha ----------
@@ -1602,11 +1240,7 @@ function renderMapTab() {
             </div>
             <div class="ov-panel">
               <span class="ov-group-label">Jogadores</span>
-              <a class="ov-btn" href="/mesa.html" target="_blank" title="Abrir a tela dos jogadores (segunda tela / Discord)"><svg class="icon"><use href="#i-desktop"/></svg>Tela dos jogadores</a>
-              <span class="ov-sep"></span>
-              <label class="tool-check" title="Manda uma DM no Discord pro jogador vinculado quando chega a vez dele — com PV, CA, condições e as magias/habilidades da ficha"><input type="checkbox" id="turn-dm" /> <svg class="icon"><use href="#i-paper-plane-tilt"/></svg> Avisar turno por DM</label>
-              <span class="ov-sep"></span>
-              <button class="ov-btn" id="btn-sound-toggle" title="Soundboard: solta efeitos no canal de voz (atalhos 1-9)"><svg class="icon"><use href="#i-speaker-high"/></svg>Sons</button>
+              <a class="ov-btn" href="/mesa.html" target="_blank" title="Abrir a tela dos jogadores (segunda tela, sem login)"><svg class="icon"><use href="#i-desktop"/></svg>Tela dos jogadores</a>
             </div>
             <div class="ov-panel ov-img hidden" id="img-align">
               <span class="ov-label">Ajustar imagem:</span>
@@ -1620,12 +1254,9 @@ function renderMapTab() {
             </div>
           </div>
 
-          <!-- Rodapé flutuante: soundboard sempre empilhado ACIMA da barra de dados (nunca
-               ao lado, mesmo se o soundboard for redimensionado) — e o HUD de turno alinhado
-               com a base desse empilhado, no canto inferior direito. -->
+          <!-- Rodapé flutuante: painel de dados e HUD de turno alinhados no canto inferior direito. -->
           <div class="map-overlay ov-bottom">
             <div class="ov-bottom-stack">
-              <div class="ov-panel ov-sounds hidden" id="soundboard-panel"></div>
               <div class="ov-panel dice-panel hidden" id="dice-panel"></div>
             </div>
             <div id="combat-hud" class="combat-hud"></div>
@@ -1685,13 +1316,6 @@ function renderMapTab() {
       if (!naAba || digitando || $('#modal-backdrop').classList.contains('hidden') === false) return;
 
       const sel = bmap.tokenById(bmap.selectedId);
-      // 1-9 soltam os efeitos do soundboard na voz, seguindo a lista visível
-      // (filtrou "sword" e apertou 1 = primeiro resultado do filtro)
-      if (/^[1-9]$/.test(e.key)) {
-        const sfx = sbVisiveis()[Number(e.key) - 1];
-        if (sfx) { e.preventDefault(); tocarSfx(sfx); }
-        return;
-      }
       if (e.key === ' ') { e.preventDefault(); nextTurn(1); }
       else if (e.key === 'Escape') { bmap.select(null); bmap.setAoe(null); }
       else if ((e.key === 'Delete' || e.key === 'Backspace') && sel) {
@@ -1778,21 +1402,6 @@ function renderMapTab() {
       toast(e.target.checked
         ? 'Os jogadores agora veem os PV exatos dos inimigos.'
         : 'Os jogadores voltam a ver só o estado dos inimigos (Ferido, Quase morto...).');
-    };
-
-    $('#turn-dm').onchange = (e) => {
-      state.battle.turnDm = e.target.checked;
-      pushBattle();
-      toast(e.target.checked
-        ? 'Vou avisar cada jogador por DM quando chegar a vez dele.'
-        : 'Aviso de turno por DM desligado.');
-    };
-
-    // Botão de som mostra/esconde o soundboard de batalha
-    $('#btn-sound-toggle').onclick = () => {
-      const p = $('#soundboard-panel');
-      p.classList.toggle('hidden');
-      $('#btn-sound-toggle').classList.toggle('active', !p.classList.contains('hidden'));
     };
 
     // Botão de dados mostra/esconde o painel de rolagem 3D
@@ -1887,145 +1496,19 @@ function renderMapTab() {
   const map = activeMap();
   $('#fog-enabled').checked = Boolean(map?.fog?.enabled);
   $('#show-enemy-hp').checked = Boolean(state.battle.showEnemyHp);
-  $('#turn-dm').checked = Boolean(state.battle.turnDm);
   $('#vision-enabled').checked = Boolean(state.battle.vision?.enabled);
   $('#vision-radius').value = state.battle.vision?.radius ?? 12;
   bmap.setData({ map, battle: state.battle, combat: state.combat });
-  renderSoundboard();
   renderDicePanel();
   renderMapSide();
 }
 
-// ---------- Soundboard de batalha ----------
-// Efeitos one-shot no canal de voz, sem sair do mapa. As abas de categoria filtram por
-// contexto (combate, criaturas...) e o campo de busca refina por nome/tag dentro dela.
-// Se não achar, o mesmo termo vai ao Freesound: importa (já na categoria da aba aberta)
-// e toca na hora. Os 9 primeiros da lista visível ganham atalho numérico.
-let sbFiltro = '';
-let sbCategoria = 'todos';
-let sbPreview = null;
-
-const sbVisiveis = () => {
-  const porCategoria = (state.audio || []).filter((a) => a.type === 'sfx'
-    && (sbCategoria === 'todos' || sfxCategory(a.category).value === sbCategoria));
-  const q = sbFiltro.trim().toLowerCase();
-  if (!q) return porCategoria;
-  return porCategoria.filter((a) => a.name.toLowerCase().includes(q)
-    || (a.tags || []).some((t) => t.toLowerCase().includes(q)));
-};
-
-function tocarSfx(audio) {
-  if (!audio) return;
-  if (!state.bot?.connected) return toast('O bot está desconectado — sem som no Discord.', true);
-  tryApi(() => api(`/sound/play/${audio.id}`, { method: 'POST' }), audio.name);
-}
-
-// Busca no Freesound o que está no filtro e deixa importar na hora.
-async function sbBuscarFreesound() {
-  const q = sbFiltro.trim();
-  const box = $('#sb-fs-results');
-  if (!box) return;
-  if (!q) return toast('Digite o que procura — ex: sword, thunder, scream (em inglês acha mais).', true);
-  box.innerHTML = '<span class="ov-label">Buscando no Freesound…</span>';
-  const results = await tryApi(() => api(`/freesound/search?q=${encodeURIComponent(q)}`));
-  if (!results) { box.innerHTML = ''; return; }
-  if (!results.length) { box.innerHTML = '<span class="ov-label">Nada encontrado no Freesound.</span>'; return; }
-
-  box.innerHTML = results.slice(0, 6).map((s, i) => `
-    <div class="sb-fs-row">
-      <button class="ov-btn" data-fs-prev="${i}" title="Ouvir só na sua máquina (a mesa não escuta)">▶</button>
-      <span class="sb-fs-name" title="${esc(s.name)} · ${Math.round(s.duration)}s · por ${esc(s.username)}">
-        ${esc(s.name.replace(/_/g, ' ').slice(0, 30))}${s.name.length > 30 ? '…' : ''}
-        <small>${Math.round(s.duration)}s</small>
-      </span>
-      <button class="ov-btn gold" data-fs-use="${i}" title="Baixar para a biblioteca e já usar"><svg class="icon"><use href="#i-download-simple"/></svg>Usar</button>
-    </div>`).join('')
-    + '<button class="ov-btn" id="sb-fs-close" title="Fechar os resultados"><svg class="icon"><use href="#i-x"/></svg>Fechar busca</button>';
-
-  $$('#sb-fs-results [data-fs-prev]').forEach((b) => b.onclick = () => {
-    const s = results[Number(b.dataset.fsPrev)];
-    if (sbPreview) sbPreview.pause();
-    sbPreview = new Audio(s.previewUrl);
-    sbPreview.play().catch(() => toast('Não consegui tocar a prévia.', true));
-  });
-
-  $$('#sb-fs-results [data-fs-use]').forEach((b) => b.onclick = async () => {
-    const s = results[Number(b.dataset.fsUse)];
-    b.disabled = true; b.textContent = 'Baixando…';
-    const r = await tryApi(() => api('/freesound/import', {
-      method: 'POST',
-      body: { name: s.name, previewUrl: s.previewUrl, type: 'sfx', category: sbCategoria === 'todos' ? 'geral' : sbCategoria, tags: s.tags },
-    }));
-    if (!r) { b.disabled = false; b.textContent = 'Usar'; return; }
-    if (sbPreview) { sbPreview.pause(); sbPreview = null; }
-    box.innerHTML = '';
-    await refresh(); // a biblioteca recarrega e o som já aparece no soundboard
-    toast(`"${s.name}" está no soundboard — aperte a tecla dele para tocar!`);
-  });
-
-  $('#sb-fs-close').onclick = () => { box.innerHTML = ''; };
-}
-
-function renderSoundboard() {
-  const el = $('#soundboard-panel');
-  if (!el) return;
-  // A estrutura é montada uma vez só: assim o campo de busca não perde o texto
-  // nem o foco a cada atualização da mesa. Depois só a lista é redesenhada.
-  if (!el.dataset.built) {
-    el.dataset.built = '1';
-    el.innerHTML = `
-      <div class="sb-head">
-        <span class="ov-label"><svg class="icon"><use href="#i-speaker-high"/></svg> Efeitos</span>
-        <label class="sr-only" for="sb-search">Filtrar efeitos ou buscar som novo</label>
-        <input id="sb-search" class="sb-search" placeholder="filtrar ou buscar som novo…" />
-        <button class="ov-btn" id="sb-fs" title="Buscar este termo no Freesound e usar na hora"><svg class="icon"><use href="#i-magnifying-glass"/></svg>Freesound</button>
-        <button class="ov-btn danger" id="sb-stop" title="Parar tudo que está tocando"><svg class="icon"><use href="#i-stop"/></svg></button>
-      </div>
-      <div class="sfx-cat-bar sb-cat-bar" id="sb-cat-bar"></div>
-      <div class="sb-list" id="sb-list"></div>
-      <div class="sb-fs-results" id="sb-fs-results"></div>`;
-    $('#sb-search').oninput = (e) => { sbFiltro = e.target.value; renderSbList(); };
-    $('#sb-search').onkeydown = (e) => { if (e.key === 'Enter') sbBuscarFreesound(); };
-    $('#sb-fs').onclick = () => sbBuscarFreesound();
-    $('#sb-stop').onclick = () => tryApi(() => api('/sound/stop', { method: 'POST' }), 'Som parado.');
-
-    $('#sb-cat-bar').innerHTML = [{ value: 'todos', label: 'Todos', icon: 'waveform' }, ...SFX_CATEGORIES]
-      .map((c) => sfxCategoryChip(c, sbCategoria === c.value)).join('');
-    $('#sb-cat-bar').onclick = (e) => {
-      const b = e.target.closest('[data-cat]');
-      if (!b) return;
-      sbCategoria = b.dataset.cat;
-      $$('#sb-cat-bar [data-cat]').forEach((x) => x.classList.toggle('active', x.dataset.cat === sbCategoria));
-      renderSbList();
-    };
-  }
-  renderSbList();
-}
-
-function renderSbList() {
-  const box = $('#sb-list');
-  if (!box) return;
-  const sfx = sbVisiveis();
-  const total = (state.audio || []).filter((a) => a.type === 'sfx').length;
-  box.innerHTML = sfx.length
-    ? sfx.map((a, i) => `
-      <button class="ov-btn sfx-btn" data-sfx-play="${a.id}" title="${esc(a.name)}${(a.tags || []).length ? ` · ${esc(a.tags.join(', '))}` : ''}">
-        ${i < 9 ? `<kbd class="sfx-key">${i + 1}</kbd>` : ''}${esc(a.name.replace(/_/g, ' ').slice(0, 22))}${a.name.length > 22 ? '…' : ''}
-      </button>`).join('')
-    : `<span class="ov-label">${total
-        ? `Nenhum som ${sbFiltro ? `com “${esc(sbFiltro)}” ` : ''}${sbCategoria !== 'todos' ? `em ${esc(sfxCategory(sbCategoria).label)} ` : ''}— use o Freesound para achar um novo.`
-        : 'Biblioteca vazia — busque um som no Freesound.'}</span>`;
-
-  $$('#sb-list [data-sfx-play]').forEach((b) => b.onclick = () =>
-    tocarSfx(sfx.find((a) => a.id === b.dataset.sfxPlay)));
-}
-
 // ---------- Dados 3D ----------
 // Painel de rolagem rápida sobre o mapa: escolhe o dado, ajusta quantidade/modificador
-// e rola. O resultado sai do mesmo /api/roll da rolagem rápida da barra de som — o dado
-// 3D nunca mostra um número diferente do que foi de fato sorteado (e, se marcado,
-// anunciado no Discord). A animação 3D é só a "pele": physics real em cada tela, mas
-// forçada (via Dice3D) a pousar nos valores que o servidor já sorteou.
+// e rola. O resultado sai do mesmo /api/roll da rolagem rápida da barra de topo — o dado
+// 3D nunca mostra um número diferente do que foi de fato sorteado. A animação 3D é só a
+// "pele": physics real em cada tela, mas forçada (via Dice3D) a pousar nos valores que
+// o servidor já sorteou.
 const DICE_SET = [4, 6, 8, 10, 12, 20, 100];
 let diceSides = 20;
 let diceQty = 1;
@@ -2044,7 +1527,6 @@ function renderDicePanel() {
       <input type="number" id="dice-qty" class="dice-num" min="1" max="20" value="${diceQty}" title="Quantidade de dados" />
       <span class="ov-label">×</span>
       <input type="number" id="dice-mod" class="dice-num" value="${diceMod}" title="Modificador (+/-)" />
-      <label class="tool-check" title="Também posta o resultado no canal de texto do Discord"><input type="checkbox" id="dice-announce" /> Discord</label>
       <button class="ov-btn gold" id="dice-roll-btn"><svg class="icon"><use href="#i-dice-six"/></svg>Rolar</button>`;
 
     $$('#dice-panel .dice-face').forEach((b) => b.onclick = () => {
@@ -2060,8 +1542,7 @@ function renderDicePanel() {
 async function rollDice3d() {
   const sinal = diceMod > 0 ? '+' : '';
   const expr = `${diceQty}d${diceSides}${diceMod ? `${sinal}${diceMod}` : ''}`;
-  const announce = Boolean($('#dice-announce')?.checked);
-  const r = await tryApi(() => api('/roll', { method: 'POST', body: { expr, announce } }));
+  const r = await tryApi(() => api('/roll', { method: 'POST', body: { expr } }));
   if (!r) return;
   const dice = { sides: diceSides, count: diceQty, rolls: r.rolls, mod: r.mod, total: r.total, roller: 'Mestre' };
   Dice3D.roll(dice);
@@ -2384,14 +1865,12 @@ function renderCombatHud() {
       <button class="btn small ghost" id="hud-prev" title="Voltar um turno">◀</button>
       <button class="btn gold" id="hud-next" title="Próximo turno (Espaço)">▶ Próximo</button>
       <button class="btn small" id="hud-roll" title="Rola a iniciativa de TODOS os combatentes e reordena"><svg class="icon"><use href="#i-dice-six"/></svg>Rolar iniciativa</button>
-      <button class="btn small ghost" id="hud-announce" title="Postar a ordem no Discord"><svg class="icon"><use href="#i-paper-plane-tilt"/></svg>Postar</button>
       <button class="btn small ghost danger" id="hud-end" title="Encerrar o combate"><svg class="icon"><use href="#i-stop"/></svg>Fim</button>
     </div>`;
 
   $('#hud-next').onclick = () => nextTurn(1);
   $('#hud-prev').onclick = () => nextTurn(-1);
   $('#hud-roll').onclick = rollInitiative;
-  $('#hud-announce').onclick = () => tryApi(() => api('/combat/announce', { method: 'POST' }), 'Iniciativa postada!');
   $('#hud-end').onclick = () => endCombat();
 }
 
@@ -2619,7 +2098,6 @@ function renderCombatOrder() {
     ${c.entries.length ? `
     <div class="co-turn-bar">
       <button class="btn small co-btn" id="co-next">▶ Próximo</button>
-      <button class="btn small ghost co-btn" id="co-announce" title="Postar no Discord"><svg class="icon"><use href="#i-paper-plane-tilt"/></svg></button>
       <button class="btn small danger co-btn" id="co-end" title="Encerrar combate"><svg class="icon"><use href="#i-x"/></svg>Fim</button>
     </div>` : ''}
     ${c.entries.length && temMapa && foraDoMapa ? `
@@ -2797,7 +2275,6 @@ function renderCombatOrder() {
   const coSort = $('#co-sort');
   const coSrd = $('#co-srd');
   const coNext = $('#co-next');
-  const coAnnounce = $('#co-announce');
   const coEnd = $('#co-end');
 
   if (coAdd) coAdd.onclick = () => {
@@ -2809,7 +2286,6 @@ function renderCombatOrder() {
   if (coSort) coSort.onclick = () => { c.entries.sort((a, b) => b.init - a.init); c.turn = 0; saveCombat(); };
   if (coSrd) coSrd.onclick = () => srdModal();
   if (coNext) coNext.onclick = () => nextTurn(1);
-  if (coAnnounce) coAnnounce.onclick = () => tryApi(() => api('/combat/announce', { method: 'POST' }), 'Iniciativa postada!');
   if (coEnd) coEnd.onclick = () => endCombat();
 }
 
@@ -3163,7 +2639,7 @@ function renderSessions() {
       <h2><svg class="icon"><use href="#i-calendar"/></svg>Sessões</h2>
       <div class="actions"><button class="btn" id="btn-new-session">+ Nova sessão</button></div>
     </div>
-    <p class="help-text">Anote o que aconteceu em cada sessão. A IA gera um <b>recap épico</b> para você postar no Discord antes da próxima.</p><br/>
+    <p class="help-text">Anote o que aconteceu em cada sessão. A IA gera um <b>recap épico</b> pra relembrar o grupo antes da próxima.</p><br/>
     <div class="grid">${[...state.sessions].reverse().map((s) => `
       <div class="card">
         <h3>${esc(s.title || 'Sessão')}</h3>
@@ -3171,7 +2647,6 @@ function renderSessions() {
         <div class="desc">${esc(s.recap || s.notes || '')}</div>
         <div class="row">
           <button class="btn small gold" data-recap="${s.id}"><svg class="icon"><use href="#i-sparkle"/></svg>Gerar recap</button>
-          ${s.recap ? `<button class="btn small" data-post-recap="${s.id}"><svg class="icon"><use href="#i-paper-plane-tilt"/></svg>Postar no Discord</button>` : ''}
           <button class="btn small ghost" data-edit-session="${s.id}">Editar</button>
           <button class="btn small danger" data-del-session="${s.id}"><svg class="icon"><use href="#i-trash"/></svg></button>
         </div>
@@ -3186,10 +2661,6 @@ function renderSessions() {
     b.disabled = true; b.textContent = 'Escrevendo...';
     await tryApi(() => api(`/ai/recap/${b.dataset.recap}`, { method: 'POST' }), 'Recap gerado!');
     refresh();
-  });
-  $$('#tab-sessions [data-post-recap]').forEach((b) => b.onclick = async () => {
-    const s = state.sessions.find((x) => x.id === b.dataset.postRecap);
-    await tryApi(() => api('/discord/post', { method: 'POST', body: { content: `**Recap — ${s.title || s.date}**\n\n${s.recap}` } }), 'Recap postado!');
   });
 }
 
@@ -3890,14 +3361,9 @@ function renderSettings() {
     <form class="settings-form" id="settings-form">
       <div><label>Nome da campanha</label><input name="campaignName" value="${esc(s.campaignName)}" /></div>
       <div><label>Sistema</label><input name="system" value="${esc(s.system)}" /></div>
-      <div><label>Canal de texto para cenas e recaps</label><select name="textChannelId" id="text-channel-select"><option value="">— carregando —</option></select></div>
       <button class="btn" type="submit">Salvar</button>
     </form>
     <br/>
-    <div class="help-text">
-      <b>Status do bot:</b> ${state.bot.connected ? `conectado como ${esc(state.bot.tag)}` : 'desconectado — confira o DISCORD_TOKEN no arquivo .env e reinicie.'}<br/>
-      Use <code>/entrar</code> no Discord (estando em um canal de voz) ou o botão "Conectar voz" na barra acima.
-    </div>
 
     <div class="settings-section">
       <h3 style="display:flex;align-items:center;gap:8px;"><svg class="icon"><use href="#i-note"/></svg>Obsidian</h3>
@@ -3923,8 +3389,6 @@ function renderSettings() {
       </div>
       <div id="obs-result" class="obs-result" style="display:none"></div>
     </div>`;
-
-  loadChannels();
 
   $('#settings-form').onsubmit = async (e) => {
     e.preventDefault();
@@ -3960,30 +3424,7 @@ function renderSettings() {
   };
 }
 
-async function loadChannels() {
-  try {
-    const { text, voice } = await api('/discord/channels');
-    const tSel = $('#text-channel-select');
-    if (tSel) {
-      tSel.innerHTML = `<option value="">— nenhum —</option>` +
-        text.map((ch) => `<option value="${ch.id}" ${ch.id === state.settings.textChannelId ? 'selected' : ''}># ${esc(ch.name)}</option>`).join('');
-    }
-    const vSel = $('#voice-channel-select');
-    vSel.innerHTML = `<option value="">canal de voz...</option>` +
-      voice.map((ch) => `<option value="${ch.id}" ${ch.id === state.settings.voiceChannelId ? 'selected' : ''}>${esc(ch.name)}</option>`).join('');
-  } catch { /* bot offline */ }
-}
-
-// ---------- Barra de som ----------
-$('#btn-join').onclick = async () => {
-  const channelId = $('#voice-channel-select').value;
-  if (!channelId) return toast('Escolha um canal de voz primeiro.', true);
-  const r = await tryApi(() => api('/discord/join', { method: 'POST', body: { channelId } }));
-  if (r) { toast(`Conectado em ${r.channel}!`); refresh(); }
-};
-$('#btn-leave').onclick = () => tryApi(() => api('/discord/leave', { method: 'POST' }), 'Saí do canal de voz.').then(refresh);
-$('#btn-stop-sound').onclick = () => tryApi(() => api('/sound/stop', { method: 'POST' }), 'Som parado.').then(refresh);
-$('#volume').onchange = (e) => tryApi(() => api('/sound/volume', { method: 'POST', body: { volume: Number(e.target.value) } }));
+// ---------- Barra de topo ----------
 $('#btn-roll').onclick = async () => {
   const expr = $('#dice-expr').value || '1d20';
   const r = await tryApi(() => api('/roll', { method: 'POST', body: { expr } }));
@@ -3996,11 +3437,3 @@ api('/tts/voices').then((v) => { ttsVoices = v; }).catch(() => {});
 refresh()
   .then(connectMesa)
   .catch((e) => toast(`Erro ao carregar: ${e.message}`, true));
-setInterval(async () => {
-  // mantém status do bot/som atualizado sem recarregar as abas de edição
-  try {
-    const fresh = await api('/state');
-    state.bot = fresh.bot;
-    renderBotStatus();
-  } catch { /* servidor reiniciando */ }
-}, 5000);
