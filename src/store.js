@@ -1,23 +1,76 @@
 // Armazenamento simples em JSON — sem banco de dados externo.
-// Tudo da campanha vive em data/campaign.json; áudios em data/audio/.
+//
+// Dois modos, decididos pelo flag BRPG_MULTI:
+//  - self-hosted (padrão): UMA campanha só, vivendo direto em data/campaign.json,
+//    com áudio/mapas/imagens em data/. É o comportamento de sempre — nada muda pra
+//    quem roda em casa; não há login nem contexto de campanha.
+//  - multi (BRPG_MULTI=1): VÁRIAS campanhas, cada uma isolada em
+//    data/campaigns/<id>/ (campaign.json + audio/ + maps/ + images/). Cada requisição
+//    roda dentro de withCampaign(id, ...) e o store resolve sozinho de qual mesa se
+//    trata — sem precisar passar o id por toda função.
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
+import { AsyncLocalStorage } from 'async_hooks';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Liga o modo multi-campanha (versão pública/hospedada). Fora dele o store é
+// single-tenant e todo o maquinário abaixo fica dormente.
+export const MULTI = process.env.BRPG_MULTI === '1';
+
 // BRPG_DATA_DIR permite apontar pra uma pasta de dados alternativa (ex: a demo em
 // data-demo/) sem tocar na campanha real — usado pelo `npm run demo`.
 export const DATA_DIR = process.env.BRPG_DATA_DIR
   ? path.resolve(__dirname, '..', process.env.BRPG_DATA_DIR)
   : path.join(__dirname, '..', 'data');
+
+// Pastas COMPARTILHADAS por todas as campanhas — não são dados privados de uma mesa:
+//  - sample-maps: arte que o operador larga na pasta, oferecida a qualquer campanha.
+//    Fica fora do Git de propósito — é arte de terceiros, não redistribuímos.
+//  - srd-pt (criada sob demanda pelo server): cache de tradução do bestiário, global por monstro.
+export const SAMPLES_DIR = path.join(DATA_DIR, 'sample-maps');
+
+// Dirs da campanha ÚNICA do modo self-hosted — exportados como sempre foram, pra
+// server.js seguir usando direto (multer, arquivos estáticos) sem saber de multi-tenancy.
 export const AUDIO_DIR = path.join(DATA_DIR, 'audio');
 export const MAPS_DIR = path.join(DATA_DIR, 'maps');
 export const IMAGES_DIR = path.join(DATA_DIR, 'images'); // retratos de personagens e tokens
-// Mapas de exemplo: o usuário larga as imagens aqui e elas aparecem na galeria do painel.
-// Fica fora do Git de propósito — é arte de terceiros, não redistribuímos no repositório.
-export const SAMPLES_DIR = path.join(DATA_DIR, 'sample-maps');
 const DB_FILE = path.join(DATA_DIR, 'campaign.json');
+// Raiz das campanhas no modo multi: data/campaigns/<id>/
+const CAMPAIGNS_ROOT = path.join(DATA_DIR, 'campaigns');
+
+// Contexto de campanha por requisição (modo multi). Fora de um withCampaign(...) — que
+// é o caso o tempo todo no self-hosted — o store opera na campanha única, exatamente
+// como antes. É o que deixa a mudança ser aditiva: nada no single mode enxerga isto.
+const als = new AsyncLocalStorage();
+export function withCampaign(campaignId, fn) {
+  return als.run({ campaignId }, fn);
+}
+export function activeCampaignId() {
+  return als.getStore()?.campaignId ?? null;
+}
+
+// Pastas de uma campanha específica no modo multi.
+export function dirsFor(campaignId) {
+  const base = path.join(CAMPAIGNS_ROOT, campaignId);
+  return {
+    base,
+    file: path.join(base, 'campaign.json'),
+    AUDIO_DIR: path.join(base, 'audio'),
+    MAPS_DIR: path.join(base, 'maps'),
+    IMAGES_DIR: path.join(base, 'images'),
+  };
+}
+
+// Pastas ativas conforme o contexto: as da campanha corrente (multi) ou as globais
+// (single). server.js passa a consultar isto quando precisar do dir certo por requisição.
+export function activeDirs() {
+  const id = activeCampaignId();
+  if (id == null) return { base: DATA_DIR, file: DB_FILE, AUDIO_DIR, MAPS_DIR, IMAGES_DIR };
+  return dirsFor(id);
+}
 
 const DEFAULTS = {
   settings: {
@@ -55,35 +108,75 @@ const DEFAULTS = {
   activeSceneId: null,
 };
 
-let db = null;
+// Mescla um campaign.json salvo sobre os defaults, cuidando de settings (e do
+// sub-objeto obsidian) em profundidade pra campos novos não sumirem em arquivos antigos.
+function mergeDefaults(saved) {
+  const d = { ...structuredClone(DEFAULTS), ...saved };
+  d.settings = { ...structuredClone(DEFAULTS.settings), ...saved.settings };
+  if (saved.settings?.obsidian) {
+    d.settings.obsidian = { ...structuredClone(DEFAULTS.settings.obsidian), ...saved.settings.obsidian };
+  }
+  return d;
+}
+
+// Garante as pastas de mídia e carrega (ou cria) o campaign.json de um conjunto de dirs.
+function loadOrCreate(file, dirs) {
+  for (const dir of [dirs.AUDIO_DIR, dirs.MAPS_DIR, dirs.IMAGES_DIR]) fs.mkdirSync(dir, { recursive: true });
+  if (fs.existsSync(file)) return mergeDefaults(JSON.parse(fs.readFileSync(file, 'utf8')));
+  const fresh = structuredClone(DEFAULTS);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(fresh, null, 2), 'utf8');
+  return fresh;
+}
+
+// db da campanha única (single mode) — o "db" de sempre.
+let singleDb = null;
+// Registro do modo multi: campaignId -> db em memória, carregado sob demanda.
+const multi = new Map();
 
 export function initStore() {
-  fs.mkdirSync(AUDIO_DIR, { recursive: true });
-  fs.mkdirSync(MAPS_DIR, { recursive: true });
-  fs.mkdirSync(IMAGES_DIR, { recursive: true });
   fs.mkdirSync(SAMPLES_DIR, { recursive: true });
-  if (fs.existsSync(DB_FILE)) {
-    const saved = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
-    db = { ...structuredClone(DEFAULTS), ...saved };
-    // Mescla settings profundamente para novos campos (ex: obsidian) não sumirem em arquivos antigos
-    db.settings = { ...structuredClone(DEFAULTS.settings), ...saved.settings };
-    if (saved.settings?.obsidian) {
-      db.settings.obsidian = { ...structuredClone(DEFAULTS.settings.obsidian), ...saved.settings.obsidian };
-    }
-  } else {
-    db = structuredClone(DEFAULTS);
-    save();
+  if (MULTI) {
+    // No modo multi não existe "a" campanha no boot — cada mesa carrega quando é acessada.
+    fs.mkdirSync(CAMPAIGNS_ROOT, { recursive: true });
+    return null;
+  }
+  singleDb = loadOrCreate(DB_FILE, { AUDIO_DIR, MAPS_DIR, IMAGES_DIR });
+  return singleDb;
+}
+
+function multiDb(id) {
+  let db = multi.get(id);
+  if (!db) {
+    const dirs = dirsFor(id);
+    db = loadOrCreate(dirs.file, dirs);
+    multi.set(id, db);
   }
   return db;
 }
 
+// Descarrega uma campanha da memória (ex: ao ser excluída). Não mexe em disco.
+export function forgetCampaign(id) {
+  multi.delete(id);
+}
+
 export function getDb() {
-  if (!db) initStore();
-  return db;
+  const id = activeCampaignId();
+  if (id == null) {
+    // Chamar o store sem campanha ativa no modo multi é erro de programação (uma rota
+    // que esqueceu de resolver a mesa) — falha alto e claro em vez de mexer no db errado.
+    if (MULTI) throw new Error('getDb() sem campanha ativa no modo multi — envolva a requisição em withCampaign().');
+    if (!singleDb) initStore();
+    return singleDb;
+  }
+  return multiDb(id);
 }
 
 export function save() {
-  fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2), 'utf8');
+  const id = activeCampaignId();
+  const db = id == null ? singleDb : multi.get(id);
+  if (!db) return;
+  fs.writeFileSync(activeDirs().file, JSON.stringify(db, null, 2), 'utf8');
 }
 
 export function newId() {
@@ -120,8 +213,10 @@ export function removeItem(collection, id) {
   const i = items.findIndex((x) => x.id === id);
   if (i === -1) return false;
   const [removed] = items.splice(i, 1);
-  // Apaga o arquivo físico (áudio ou imagem de mapa) junto com o registro
-  const dir = collection === 'audio' ? AUDIO_DIR : collection === 'maps' ? MAPS_DIR : null;
+  // Apaga o arquivo físico (áudio ou imagem de mapa) junto com o registro — na pasta
+  // da campanha corrente (multi) ou nas pastas globais (single).
+  const dirs = activeDirs();
+  const dir = collection === 'audio' ? dirs.AUDIO_DIR : collection === 'maps' ? dirs.MAPS_DIR : null;
   if (dir && removed.filename) {
     const f = path.join(dir, removed.filename);
     if (fs.existsSync(f)) fs.unlinkSync(f);
