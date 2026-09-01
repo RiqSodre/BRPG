@@ -10,7 +10,7 @@ import youtubedl from 'youtube-dl-exec';
 import ffmpegPath from 'ffmpeg-static';
 import {
   getDb, save, listItems, getItem, addItem, updateItem, removeItem, newId,
-  DATA_DIR, AUDIO_DIR, MAPS_DIR, IMAGES_DIR, SAMPLES_DIR,
+  DATA_DIR, AUDIO_DIR, MAPS_DIR, IMAGES_DIR, SAMPLES_DIR, MULTI,
 } from './store.js';
 import { importFromVault, exportToVault } from './obsidian.js';
 import { rollDice } from './dice.js';
@@ -18,6 +18,7 @@ import * as ai from './ai.js';
 import * as tts from './tts.js';
 import { createMesaWss, broadcastTable } from './realtime.js';
 import * as auth from './auth.js';
+import * as masters from './masters.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -65,6 +66,28 @@ export function startServer() {
       res.status(400).json({ error: err.message });
     });
   };
+
+  // ---- Login do Mestre (só no modo multi — por código de convite) ----
+  // No self-hosted o painel não tem login: estas rotas nem existem, pra não dar a
+  // impressão de que há uma conta a criar quando roda em casa.
+  if (MULTI) {
+    app.post('/api/master/login', wrap(async (req, res) => {
+      const r = masters.login(req.body.code);
+      if (!r.ok) return res.status(401).json(r);
+      req.session.masterId = r.master.id;
+      req.session.save(() => res.json({ ok: true, master: r.master }));
+    }));
+    app.post('/api/master/logout', (req, res) => {
+      // Tira só a identidade de Mestre e a campanha selecionada — não destrói a sessão
+      // inteira, que num mesmo navegador poderia carregar também um login de jogador.
+      delete req.session.masterId;
+      delete req.session.campaignId;
+      req.session.save(() => res.json({ ok: true }));
+    });
+    app.get('/api/master/me', (req, res) => {
+      res.json({ master: masters.masterSession(req) });
+    });
+  }
 
   // ---- Login do jogador (nativo — personagem + senha, sem conta externa) ----
   // Lista pública pro seletor de personagem na tela de login.
