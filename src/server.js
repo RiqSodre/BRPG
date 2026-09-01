@@ -11,7 +11,7 @@ import ffmpegPath from 'ffmpeg-static';
 import {
   getDb, save, listItems, getItem, addItem, updateItem, removeItem, newId,
   DATA_DIR, AUDIO_DIR, MAPS_DIR, IMAGES_DIR, SAMPLES_DIR, MULTI,
-  withCampaign, dirsFor, forgetCampaign,
+  withCampaign, dirsFor, forgetCampaign, activeDirs,
 } from './store.js';
 import { importFromVault, exportToVault } from './obsidian.js';
 import { rollDice } from './dice.js';
@@ -23,9 +23,25 @@ import * as masters from './masters.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const diskUpload = (dir, allowed, maxMb) => multer({
+// which: 'AUDIO_DIR' | 'MAPS_DIR' | 'IMAGES_DIR'. No self-hosted a pasta é a global de
+// sempre; no modo multi é a da campanha do Mestre que está subindo o arquivo — resolvida
+// direto da sessão (uploads são sempre ação do Mestre logado numa campanha), sem depender
+// do contexto AsyncLocalStorage, que não se propaga de forma garantida pro callback do
+// multer (dirigido por eventos do stream da requisição).
+const diskUpload = (which, allowed, maxMb) => multer({
   storage: multer.diskStorage({
-    destination: dir,
+    destination: (req, file, cb) => {
+      let dir;
+      if (!MULTI) {
+        dir = { AUDIO_DIR, MAPS_DIR, IMAGES_DIR }[which];
+      } else {
+        const cid = req.session?.campaignId;
+        if (!cid) return cb(new Error('Nenhuma campanha selecionada.'));
+        dir = dirsFor(cid)[which];
+      }
+      fs.mkdirSync(dir, { recursive: true });
+      cb(null, dir);
+    },
     filename: (req, file, cb) => cb(null, `${newId()}${path.extname(file.originalname).toLowerCase()}`),
   }),
   fileFilter: (req, file, cb) => {
@@ -35,9 +51,9 @@ const diskUpload = (dir, allowed, maxMb) => multer({
   limits: { fileSize: maxMb * 1024 * 1024 },
 });
 
-const upload = diskUpload(AUDIO_DIR, /\.(mp3|ogg|wav|m4a|webm|flac)$/i, 50);
-const mapUpload = diskUpload(MAPS_DIR, /\.(png|jpe?g|webp|gif)$/i, 25);
-const imageUpload = diskUpload(IMAGES_DIR, /\.(png|jpe?g|webp|gif)$/i, 10);
+const upload = diskUpload('AUDIO_DIR', /\.(mp3|ogg|wav|m4a|webm|flac)$/i, 50);
+const mapUpload = diskUpload('MAPS_DIR', /\.(png|jpe?g|webp|gif)$/i, 25);
+const imageUpload = diskUpload('IMAGES_DIR', /\.(png|jpe?g|webp|gif)$/i, 10);
 
 export function startServer() {
   const app = express();
@@ -55,10 +71,32 @@ export function startServer() {
   });
   app.use(sessionMiddleware);
   app.use(express.static(path.join(__dirname, '..', 'public')));
-  app.use('/audio-files', express.static(AUDIO_DIR));
+
+  // Existe uma campanha com esse id em disco? (só faz sentido no modo multi)
+  const campanhaExiste = (cid) => !!cid && fs.existsSync(dirsFor(cid).file);
+
+  // Mídia por campanha (áudio, mapas, retratos). No self-hosted é a pasta global de
+  // sempre; no modo multi resolve a campanha pela sessão — do Mestre (campaignId), do
+  // jogador (playerCid) ou, pra tela compartilhada sem cookie, do ?c= na URL. Reusa um
+  // express.static por pasta (mantém range/etag/cache) em vez de reimplementar o envio.
+  const staticPorPasta = new Map();
+  const campaignStatic = (dir) => {
+    let s = staticPorPasta.get(dir);
+    if (!s) { s = express.static(dir); staticPorPasta.set(dir, s); }
+    return s;
+  };
+  const serveMedia = (which) => (req, res, next) => {
+    if (!MULTI) return campaignStatic({ AUDIO_DIR, MAPS_DIR, IMAGES_DIR }[which])(req, res, next);
+    const cid = req.session?.campaignId || req.session?.playerCid
+      || (typeof req.query.c === 'string' ? req.query.c : null);
+    if (!campanhaExiste(cid)) return res.status(404).end();
+    return campaignStatic(dirsFor(cid)[which])(req, res, next);
+  };
+  app.use('/audio-files', serveMedia('AUDIO_DIR'));
+  app.use('/map-files', serveMedia('MAPS_DIR'));
+  app.use('/images', serveMedia('IMAGES_DIR'));
+  // Globais (dados genéricos, não privados de uma campanha): prévia de voz TTS e mapas de exemplo.
   app.use('/tts-files', express.static(tts.TTS_DIR));
-  app.use('/map-files', express.static(MAPS_DIR));
-  app.use('/images', express.static(IMAGES_DIR));
   app.use('/sample-map-files', express.static(SAMPLES_DIR));
 
   const wrap = (fn) => (req, res) => {
@@ -67,9 +105,6 @@ export function startServer() {
       res.status(400).json({ error: err.message });
     });
   };
-
-  // Existe uma campanha com esse id em disco? (só faz sentido no modo multi)
-  const campanhaExiste = (cid) => !!cid && fs.existsSync(dirsFor(cid).file);
 
   // ---- Login do Mestre (só no modo multi — por código de convite) ----
   // No self-hosted o painel não tem login: estas rotas nem existem, pra não dar a
@@ -402,7 +437,7 @@ export function startServer() {
     const r = await fetch(`${previewUrl}${previewUrl.includes('?') ? '&' : '?'}token=${fsKey()}`);
     if (!r.ok) throw new Error(`Falha ao baixar o som (${r.status}).`);
     const filename = `${newId()}.mp3`;
-    fs.writeFileSync(path.join(AUDIO_DIR, filename), Buffer.from(await r.arrayBuffer()));
+    fs.writeFileSync(path.join(activeDirs().AUDIO_DIR, filename), Buffer.from(await r.arrayBuffer()));
     const item = addItem('audio', {
       name: name || 'Som do Freesound',
       filename,
@@ -489,7 +524,7 @@ export function startServer() {
       await youtubedl(`https://www.youtube.com/watch?v=${videoId}`, {
         extractAudio: true,
         audioFormat: 'mp3',
-        output: path.join(AUDIO_DIR, filename),
+        output: path.join(activeDirs().AUDIO_DIR, filename),
         ffmpegLocation: ffmpegPath,
         noCheckCertificates: true,
         noWarnings: true,
@@ -534,7 +569,7 @@ export function startServer() {
     const safe = String(req.params.index).replace(/[^a-z0-9-]/gi, '');
     if (!safe) return res.json({ url: null });
     const filename = `srd-${safe}.png`;
-    const dest = path.join(IMAGES_DIR, filename);
+    const dest = path.join(activeDirs().IMAGES_DIR, filename);
     const localUrl = `/images/${filename}`;
     if (fs.existsSync(dest)) return res.json({ url: localUrl });
     const m = await srdFetch(`/api/2014/monsters/${encodeURIComponent(req.params.index)}`);
@@ -628,7 +663,7 @@ export function startServer() {
 
     const origem = path.join(SAMPLES_DIR, path.basename(file));
     const filename = `${newId()}${path.extname(file).toLowerCase()}`;
-    fs.copyFileSync(origem, path.join(MAPS_DIR, filename));
+    fs.copyFileSync(origem, path.join(activeDirs().MAPS_DIR, filename));
 
     const map = addItem('maps', {
       name: name || prettyName(file),
