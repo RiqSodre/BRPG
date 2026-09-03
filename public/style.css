@@ -1144,3 +1144,47 @@ textarea { resize: vertical; min-height: 80px; }
 /* Resultado da importação/exportação */
 .obs-result { margin-top: 14px; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; font-size: 13px; line-height: 1.6; max-width: 520px; }
 .obs-detail { margin-top: 8px; font-size: 12px; color: var(--muted); max-height: 180px; overflow-y: auto; }
+
+/* ---------- Modo multi: gate do Mestre (login + seletor de campanha) ---------- */
+/* Só aparece na versão pública (BRPG_MULTI=1). No self-hosted nada disso é montado. */
+#master-gate {
+  position: fixed; inset: 0; z-index: 200;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg); padding: 24px;
+}
+.gate-card {
+  max-width: 420px; width: 100%; background: var(--bg2);
+  border: 1px solid var(--border); border-radius: 16px; padding: 28px; text-align: center;
+}
+.gate-card.gate-wide { max-width: 560px; }
+.gate-card h1 { font-size: 22px; color: var(--accent2); margin-bottom: 6px; }
+.gate-card > p { color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+.gate-form { display: flex; gap: 8px; }
+.gate-form input { flex: 1; }
+.gate-erro { color: var(--danger); font-size: 13px; margin-top: 10px; min-height: 1em; }
+.gate-camps { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; text-align: left; }
+.gate-camp { display: flex; gap: 8px; }
+.gate-camp-open {
+  flex: 1; display: flex; flex-direction: column; gap: 2px;
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 10px;
+  padding: 12px 14px; cursor: pointer; color: var(--text); text-align: left; font: inherit;
+}
+.gate-camp-open:hover { border-color: var(--accent2); }
+.gate-camp-open b { font-size: 15px; }
+.gate-camp-open span { font-size: 12px; color: var(--muted); }
+.gate-camp-del {
+  background: none; border: 1px solid var(--border); border-radius: 10px;
+  color: var(--muted); width: 42px; cursor: pointer; font-size: 14px;
+}
+.gate-camp-del:hover { border-color: var(--danger); color: var(--danger); }
+.gate-vazio { color: var(--muted); font-size: 14px; padding: 8px 0 16px; text-align: center; }
+.gate-logout { margin-top: 16px; background: none; border: none; color: var(--muted); font-size: 13px; cursor: pointer; text-decoration: underline; }
+
+/* Barra da campanha no topo do painel + modal de links de convite */
+.campaign-bar { display: inline-flex; align-items: center; gap: 8px; }
+.campaign-bar-name {
+  font-size: 13px; color: var(--accent2); font-weight: 600;
+  max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.link-row { display: flex; gap: 8px; margin: 4px 0 12px; }
+.link-row input { flex: 1; }

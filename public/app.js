@@ -1524,7 +1524,7 @@ function renderMapTab() {
             </div>
             <div class="ov-panel">
               <span class="ov-group-label">Jogadores</span>
-              <a class="ov-btn" href="/mesa.html" target="_blank" title="Abrir a tela dos jogadores (segunda tela, sem login)"><svg class="icon"><use href="#i-desktop"/></svg>Tela dos jogadores</a>
+              <a class="ov-btn" href="${telaJogadoresHref()}" target="_blank" title="Abrir a tela dos jogadores (segunda tela, sem login)"><svg class="icon"><use href="#i-desktop"/></svg>Tela dos jogadores</a>
             </div>
             <div class="ov-panel ov-img hidden" id="img-align">
               <span class="ov-label">Ajustar imagem:</span>
@@ -3716,8 +3716,152 @@ $('#btn-roll').onclick = async () => {
 };
 $('#dice-expr').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#btn-roll').click(); });
 
+// ---------- Modo multi: login do Mestre + seleção de campanha ----------
+// Só entra em ação quando o servidor está em modo público (GET /api/config → multi).
+// No self-hosted nada disso roda: o painel abre direto, sem login, como sempre.
+let MULTI_MODE = false;
+let campanhaAtual = null; // { id, name } da campanha selecionada (modo multi)
+
+// Link da tela compartilhada — no modo multi carrega a campanha no ?c=.
+function telaJogadoresHref() {
+  return MULTI_MODE && campanhaAtual ? `/mesa.html?c=${encodeURIComponent(campanhaAtual.id)}` : '/mesa.html';
+}
+
+function gateEl() {
+  let g = $('#master-gate');
+  if (!g) { g = document.createElement('div'); g.id = 'master-gate'; document.body.appendChild(g); }
+  return g;
+}
+const fecharGate = () => $('#master-gate')?.remove();
+
+// Tela de login do Mestre: cola o código de convite.
+function showMasterLogin() {
+  return new Promise((resolve) => {
+    const g = gateEl();
+    g.innerHTML = `
+      <div class="gate-card">
+        <h1>Mesa do Mestre</h1>
+        <p>Cole o seu código de convite para entrar.</p>
+        <form id="gate-login-form" class="gate-form">
+          <input type="password" id="gate-code" placeholder="brpg_..." autocomplete="off" required />
+          <button class="btn" type="submit">Entrar</button>
+        </form>
+        <p class="gate-erro" id="gate-erro"></p>`;
+    $('#gate-code').focus();
+    $('#gate-login-form').onsubmit = async (e) => {
+      e.preventDefault();
+      const code = $('#gate-code').value.trim();
+      if (!code) return;
+      try { await api('/master/login', { method: 'POST', body: { code } }); resolve(); }
+      catch { $('#gate-erro').textContent = 'Código inválido.'; }
+    };
+  });
+}
+
+// Seletor de campanha: lista as do Mestre, cria nova, abre ou apaga. Resolve quando uma
+// campanha é escolhida (abrir) ou criada (que já entra nela).
+function showCampaignPicker() {
+  return new Promise((resolve) => {
+    const g = gateEl();
+    const render = async () => {
+      const camps = await api('/campaigns');
+      g.innerHTML = `
+        <div class="gate-card gate-wide">
+          <h1>Suas campanhas</h1>
+          <p>Escolha uma mesa para abrir, ou crie uma nova.</p>
+          <div class="gate-camps">
+            ${camps.length ? camps.map((c) => `
+              <div class="gate-camp">
+                <button class="gate-camp-open" data-open="${esc(c.id)}">
+                  <b>${esc(c.name)}</b><span>${esc(c.system || '')}</span>
+                </button>
+                <button class="gate-camp-del" data-del="${esc(c.id)}" title="Apagar campanha" aria-label="Apagar ${esc(c.name)}">✕</button>
+              </div>`).join('') : '<p class="gate-vazio">Nenhuma campanha ainda — crie a primeira abaixo.</p>'}
+          </div>
+          <form id="gate-new-form" class="gate-form">
+            <input type="text" id="gate-new-name" placeholder="Nome da nova campanha" maxlength="80" />
+            <button class="btn" type="submit">Criar</button>
+          </form>
+          <button class="gate-logout" id="gate-logout" type="button">Sair da conta</button>`;
+      g.querySelectorAll('[data-open]').forEach((b) => b.onclick = async () => {
+        await api(`/campaigns/${b.dataset.open}/select`, { method: 'POST' });
+        resolve();
+      });
+      g.querySelectorAll('[data-del]').forEach((b) => b.onclick = async () => {
+        const camp = camps.find((c) => c.id === b.dataset.del);
+        if (!confirm(`Apagar a campanha "${camp?.name}"? Isso remove tudo dela e não tem volta.`)) return;
+        await api(`/campaigns/${b.dataset.del}`, { method: 'DELETE' });
+        render(); // re-renderiza a lista sem sair do seletor
+      });
+      $('#gate-new-form').onsubmit = async (e) => {
+        e.preventDefault();
+        const name = $('#gate-new-name').value.trim();
+        await api('/campaigns', { method: 'POST', body: { name } }); // já entra na nova
+        resolve();
+      };
+      $('#gate-logout').onclick = async () => { await api('/master/logout', { method: 'POST' }); location.reload(); };
+    };
+    render();
+  });
+}
+
+// Barra compacta no topo com o nome da campanha e ações (links de convite, trocar de mesa).
+function mountCampaignBar() {
+  const bar = $('.sound-bar');
+  if (!bar || $('#campaign-bar')) return;
+  const div = document.createElement('div');
+  div.id = 'campaign-bar';
+  div.className = 'campaign-bar';
+  div.innerHTML = `
+    <span class="campaign-bar-name" title="Campanha atual">${esc(campanhaAtual?.name || '')}</span>
+    <button class="btn small ghost" id="btn-campaign-links" type="button"><svg class="icon"><use href="#i-link"/></svg>Links</button>
+    <button class="btn small ghost" id="btn-campaign-switch" type="button">Trocar</button>`;
+  bar.appendChild(div);
+  $('#btn-campaign-links').onclick = showShareLinks;
+  // Trocar de campanha recarrega o painel inteiro na mesa nova (state, WebSocket, tudo).
+  $('#btn-campaign-switch').onclick = async () => { await showCampaignPicker(); location.reload(); };
+}
+
+// Links de convite pra compartilhar com a mesa.
+function showShareLinks() {
+  const cid = campanhaAtual?.id;
+  const jog = `${location.origin}/jogador.html?c=${encodeURIComponent(cid)}`;
+  const tela = `${location.origin}/mesa.html?c=${encodeURIComponent(cid)}`;
+  $('#modal').innerHTML = `
+    <h3>Links da campanha</h3>
+    <p class="muted">Compartilhe estes links com a sua mesa.</p>
+    <label>Portal do jogador (cada jogador entra com a senha da ficha)</label>
+    <div class="link-row"><input readonly value="${esc(jog)}" /><button class="btn small" data-copy="${esc(jog)}" type="button">Copiar</button></div>
+    <label>Tela compartilhada (segunda tela / projetor, sem login)</label>
+    <div class="link-row"><input readonly value="${esc(tela)}" /><button class="btn small" data-copy="${esc(tela)}" type="button">Copiar</button></div>
+    <div class="modal-actions"><button class="btn ghost" id="modal-cancel" type="button">Fechar</button></div>`;
+  openModalBackdrop();
+  $('#modal-cancel').onclick = closeModal;
+  $('#modal').querySelectorAll('[data-copy]').forEach((b) => b.onclick = async () => {
+    try { await navigator.clipboard.writeText(b.dataset.copy); toast('Link copiado.'); }
+    catch { toast('Copie o link manualmente.', true); }
+  });
+}
+
+// No modo multi, segura o painel até haver Mestre logado e campanha escolhida.
+async function masterGate() {
+  let me = await api('/master/me').then((r) => r.master).catch(() => null);
+  while (!me) { await showMasterLogin(); me = await api('/master/me').then((r) => r.master).catch(() => null); }
+  let camps = await api('/campaigns');
+  let sel = camps.find((c) => c.selected);
+  if (!sel) { await showCampaignPicker(); camps = await api('/campaigns'); sel = camps.find((c) => c.selected); }
+  campanhaAtual = sel || null;
+  fecharGate();
+}
+
 // ---------- Início ----------
+async function boot() {
+  const cfg = await api('/config').catch(() => ({ multi: false }));
+  MULTI_MODE = !!cfg.multi;
+  if (MULTI_MODE) { await masterGate(); mountCampaignBar(); }
+  await refresh();
+  connectMesa();
+}
+
 api('/tts/voices').then((v) => { ttsVoices = v; }).catch(() => {});
-refresh()
-  .then(connectMesa)
-  .catch((e) => toast(`Erro ao carregar: ${e.message}`, true));
+boot().catch((e) => toast(`Erro ao carregar: ${e.message}`, true));

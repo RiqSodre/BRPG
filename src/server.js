@@ -106,6 +106,9 @@ export function startServer() {
     });
   };
 
+  // Config pública que o front usa pra decidir o modo (existe nos dois modos).
+  app.get('/api/config', (req, res) => res.json({ multi: MULTI }));
+
   // ---- Login do Mestre (só no modo multi — por código de convite) ----
   // No self-hosted o painel não tem login: estas rotas nem existem, pra não dar a
   // impressão de que há uma conta a criar quando roda em casa.

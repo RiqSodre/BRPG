@@ -301,7 +301,12 @@ function renderCombatLog(log) {
 
 function connect() {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const ws = new WebSocket(`${proto}//${location.host}${WS_PATH}`);
+  // Modo multi: a tela compartilhada (mesa.html) carrega a campanha no ?c= da URL. O
+  // portal autenticado (/portal-ws) resolve a campanha pela sessão, então não usa ?c=.
+  // Leio inline (sem const de topo) pra não colidir com jogador.js no escopo compartilhado.
+  const cidUrl = new URLSearchParams(location.search).get('c');
+  const q = (WS_PATH === '/mesa' && cidUrl) ? `?c=${encodeURIComponent(cidUrl)}` : '';
+  const ws = new WebSocket(`${proto}//${location.host}${WS_PATH}${q}`);
 
   ws.onopen = () => {
     setStatus(true, 'ao vivo');

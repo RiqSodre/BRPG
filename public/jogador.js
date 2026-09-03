@@ -8,6 +8,15 @@ const live = document.getElementById('portal-live');
 
 const escPortal = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+// No modo multi o jogador chega por um link com a campanha (jogador.html?c=<id>); esse id
+// vai nas chamadas do portal (roster/login) pra dizer de qual mesa ele é. No self-hosted
+// não há ?c= e nada muda — o servidor ignora e opera na campanha única.
+const campanhaDaUrl = () => new URLSearchParams(location.search).get('c');
+const comCampanha = (p) => {
+  const c = campanhaDaUrl();
+  return c ? `${p}${p.includes('?') ? '&' : '?'}c=${encodeURIComponent(c)}` : p;
+};
+
 // Um script por vez, na ordem certa: <script> criado por JS não garante ordem de
 // execução sozinho (isso só vale para tags estáticas do HTML), então cada um só é
 // inserido depois que o anterior terminou de carregar.
@@ -81,7 +90,7 @@ function renderLoginForm(roster, erro) {
     const r = await fetch('/api/portal/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ characterId: selecionado, passcode }),
+      body: JSON.stringify({ characterId: selecionado, passcode, c: campanhaDaUrl() || undefined }),
     }).then((r2) => r2.json()).catch(() => ({ ok: false, erro: 'Não consegui falar com o servidor.' }));
 
     if (r.ok) { await entrarComoJogador(r.character); return; }
@@ -99,7 +108,7 @@ async function init() {
   const me = await fetch('/api/portal/me').then((r) => r.json()).catch(() => null);
   if (me?.character) { await entrarComoJogador(me.character); return; }
 
-  const roster = await fetch('/api/portal/roster').then((r) => r.json()).catch(() => []);
+  const roster = await fetch(comCampanha('/api/portal/roster')).then((r) => r.json()).catch(() => []);
   renderLoginForm(roster);
 }
 
