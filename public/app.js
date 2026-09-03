@@ -3744,7 +3744,7 @@ function showMasterLogin() {
         <p>Cole o seu código de convite para entrar.</p>
         <form id="gate-login-form" class="gate-form">
           <input type="password" id="gate-code" placeholder="brpg_..." autocomplete="off" required />
-          <button class="btn" type="submit">Entrar</button>
+          <button class="btn" type="submit" id="gate-login-btn">Entrar</button>
         </form>
         <p class="gate-erro" id="gate-erro"></p>`;
     $('#gate-code').focus();
@@ -3752,15 +3752,29 @@ function showMasterLogin() {
       e.preventDefault();
       const code = $('#gate-code').value.trim();
       if (!code) return;
-      try { await api('/master/login', { method: 'POST', body: { code } }); resolve(); }
-      catch { $('#gate-erro').textContent = 'Código inválido.'; }
+      const btn = $('#gate-login-btn');
+      $('#gate-erro').textContent = '';
+      btn.disabled = true; btn.textContent = 'Entrando...'; // H1: status visível
+      try {
+        await api('/master/login', { method: 'POST', body: { code } });
+        resolve();
+      } catch (err) {
+        // H9: diagnostica de verdade — 401 é código errado; o resto é falha de conexão,
+        // e rotular isso de "código inválido" mandaria o Mestre caçar o problema errado.
+        btn.disabled = false; btn.textContent = 'Entrar';
+        $('#gate-erro').textContent = /401|inválid/i.test(err.message)
+          ? 'Código inválido. Confira se copiou o código inteiro.'
+          : 'Não consegui falar com o servidor. Tente de novo em instantes.';
+      }
     };
   });
 }
 
-// Seletor de campanha: lista as do Mestre, cria nova, abre ou apaga. Resolve quando uma
-// campanha é escolhida (abrir) ou criada (que já entra nela).
-function showCampaignPicker() {
+// Seletor de campanha: lista as do Mestre, cria nova, abre ou apaga. Resolve com `true`
+// quando uma campanha é escolhida (abrir) ou criada (que já entra nela); com `false` se o
+// Mestre cancela. `cancelavel` (H3: controle e liberdade) mostra uma saída quando já há
+// uma campanha aberta atrás do seletor — no boot inicial não há pra onde voltar.
+function showCampaignPicker({ cancelavel = false } = {}) {
   return new Promise((resolve) => {
     const g = gateEl();
     const render = async () => {
@@ -3780,12 +3794,15 @@ function showCampaignPicker() {
           </div>
           <form id="gate-new-form" class="gate-form">
             <input type="text" id="gate-new-name" placeholder="Nome da nova campanha" maxlength="80" />
-            <button class="btn" type="submit">Criar</button>
+            <button class="btn" type="submit" id="gate-new-btn">Criar</button>
           </form>
-          <button class="gate-logout" id="gate-logout" type="button">Sair da conta</button>`;
+          <div class="gate-foot">
+            ${cancelavel ? '<button class="gate-link" id="gate-cancel" type="button">Cancelar</button>' : ''}
+            <button class="gate-link" id="gate-logout" type="button">Sair da conta</button>
+          </div>`;
       g.querySelectorAll('[data-open]').forEach((b) => b.onclick = async () => {
         await api(`/campaigns/${b.dataset.open}/select`, { method: 'POST' });
-        resolve();
+        resolve(true);
       });
       g.querySelectorAll('[data-del]').forEach((b) => b.onclick = async () => {
         const camp = camps.find((c) => c.id === b.dataset.del);
@@ -3796,9 +3813,17 @@ function showCampaignPicker() {
       $('#gate-new-form').onsubmit = async (e) => {
         e.preventDefault();
         const name = $('#gate-new-name').value.trim();
-        await api('/campaigns', { method: 'POST', body: { name } }); // já entra na nova
-        resolve();
+        const btn = $('#gate-new-btn');
+        btn.disabled = true; btn.textContent = 'Criando...'; // H1: status visível
+        try {
+          await api('/campaigns', { method: 'POST', body: { name } }); // já entra na nova
+          resolve(true);
+        } catch (err) {
+          btn.disabled = false; btn.textContent = 'Criar';
+          toast(err.message, true);
+        }
       };
+      if (cancelavel) $('#gate-cancel').onclick = () => { fecharGate(); resolve(false); };
       $('#gate-logout').onclick = async () => { await api('/master/logout', { method: 'POST' }); location.reload(); };
     };
     render();
@@ -3819,7 +3844,11 @@ function mountCampaignBar() {
   bar.appendChild(div);
   $('#btn-campaign-links').onclick = showShareLinks;
   // Trocar de campanha recarrega o painel inteiro na mesa nova (state, WebSocket, tudo).
-  $('#btn-campaign-switch').onclick = async () => { await showCampaignPicker(); location.reload(); };
+  // Se o Mestre cancelar (H3), não recarrega nada — volta pra campanha atual.
+  $('#btn-campaign-switch').onclick = async () => {
+    const trocou = await showCampaignPicker({ cancelavel: true });
+    if (trocou) location.reload();
+  };
 }
 
 // Links de convite pra compartilhar com a mesa.
