@@ -71,7 +71,7 @@ function renderLoginForm(roster, erro) {
       <input type="password" name="passcode" placeholder="Senha" autocomplete="current-password" required />
       <button class="portal-btn" type="submit" id="portal-login-submit" disabled>Entrar</button>
     </form>
-    ${erro ? `<p class="portal-login-erro">${escPortal(erro)}</p>` : ''}`;
+    <p class="portal-login-erro" id="portal-login-erro">${erro ? escPortal(erro) : ''}</p>`;
 
   let selecionado = null;
   const submitBtn = document.getElementById('portal-login-submit');
@@ -94,7 +94,11 @@ function renderLoginForm(roster, erro) {
     }).then((r2) => r2.json()).catch(() => ({ ok: false, erro: 'Não consegui falar com o servidor.' }));
 
     if (r.ok) { await entrarComoJogador(r.character); return; }
-    renderLoginForm(roster, r.erro || 'Não foi possível entrar.');
+    // H3/H9: mantém o personagem escolhido e a senha digitada — mostra o erro inline e
+    // deixa tentar de novo, em vez de re-renderizar tudo e fazer o jogador recomeçar.
+    document.getElementById('portal-login-erro').textContent = r.erro || 'Não foi possível entrar.';
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Entrar';
   };
 }
 

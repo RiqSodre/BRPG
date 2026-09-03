@@ -43,6 +43,18 @@ const tryApi = async (fn, okMsg) => {
   }
 };
 
+// Empty state no padrão NN/g (heurísticas 6 e 10): em vez de só "nada aqui", diz o que
+// vai naquele espaço, por que importa (motiva) e oferece a própria ação — a tela vazia
+// vira um convite pra começar, não um beco. actionId liga o botão a um handler depois do render.
+function emptyState({ icon = 'sparkle', title, hint = '', actionId = '', actionLabel = '' }) {
+  return `<div class="empty">
+    <svg class="icon empty-icon"><use href="#i-${icon}"/></svg>
+    <p class="empty-title">${esc(title)}</p>
+    ${hint ? `<p class="empty-hint">${esc(hint)}</p>` : ''}
+    ${actionId ? `<button class="btn" id="${esc(actionId)}" type="button">${esc(actionLabel)}</button>` : ''}
+  </div>`;
+}
+
 // ---------- Modal ----------
 // #modal fica com role="dialog"/aria-modal (ver index.html). Abrir/fechar sempre passa por
 // estas duas funções pra manter foco, Escape e o "inert" do resto da página consistentes,
@@ -419,7 +431,12 @@ function renderCharacters() {
       </div>
     </div>
     <h2 style="margin:14px 0 10px;color:var(--accent2);font-size:17px;display:flex;align-items:center;gap:8px;"><svg class="icon"><use href="#i-game-controller"/></svg>Personagens dos Jogadores</h2>
-    <div class="grid">${pcs.map(pcCard).join('') || '<div class="empty">Nenhum jogador ainda.</div>'}</div>
+    <div class="grid">${pcs.map(pcCard).join('') || emptyState({
+      icon: 'game-controller',
+      title: 'Nenhum jogador ainda',
+      hint: 'Cadastre a ficha de cada jogador — com a senha do portal — pra eles acompanharem a mesa ao vivo.',
+      actionId: 'empty-new-pc', actionLabel: '+ Criar jogador',
+    })}</div>
     <div style="display:flex;align-items:center;gap:10px;margin:20px 0 10px;">
       <h2 style="color:var(--accent2);font-size:17px;margin:0;display:flex;align-items:center;gap:8px;"><svg class="icon"><use href="#i-mask-happy"/></svg>NPCs</h2>
       <div style="display:flex;gap:4px;flex-wrap:wrap;">
@@ -433,7 +450,12 @@ function renderCharacters() {
           <svg class="icon"><use href="#i-${NPC_TYPES[g.key].icon}"/></svg>${NPC_TYPES[g.key].text.toUpperCase()} (${g.npcs.length})
         </div>
         <div class="grid">${g.npcs.map(npcCard).join('')}</div>
-      </div>`).join('') || '<div class="empty">Nenhum NPC ainda.</div>'}`;
+      </div>`).join('') || emptyState({
+        icon: 'mask-happy',
+        title: 'Nenhum NPC ainda',
+        hint: 'Crie aliados, vilões e figurantes pra dar vida ao mundo — e dê voz a eles na Cabine.',
+        actionId: 'empty-new-npc', actionLabel: '+ Criar NPC',
+      })}`;
 
   // Filtro por tipo: clique no label mostra/oculta aquele grupo
   $$('#tab-characters .npc-type-filter').forEach((btn) => btn.onclick = () => {
@@ -447,6 +469,9 @@ function renderCharacters() {
 
   $('#btn-new-pc').onclick = () => charModal({ type: 'pc' });
   $('#btn-new-npc').onclick = () => charModal({ type: 'npc' });
+  // Ações dos empty states (só existem quando a lista está vazia)
+  $('#empty-new-pc')?.addEventListener('click', () => charModal({ type: 'pc' }));
+  $('#empty-new-npc')?.addEventListener('click', () => charModal({ type: 'npc' }));
   $$('#tab-characters [data-edit-char]').forEach((b) => b.onclick = () => charModal(chars.find((c) => c.id === b.dataset.editChar)));
   $$('#tab-characters [data-sheet-char]').forEach((b) => b.onclick = () => characterSheetModal(chars.find((c) => c.id === b.dataset.sheetChar)));
   $$('#tab-characters [data-del-char]').forEach((b) => b.onclick = async () => {
@@ -2934,9 +2959,15 @@ function renderSessions() {
           <button class="btn small ghost" data-edit-session="${s.id}">Editar</button>
           <button class="btn small danger" data-del-session="${s.id}"><svg class="icon"><use href="#i-trash"/></svg></button>
         </div>
-      </div>`).join('') || '<div class="empty">Nenhuma sessão registrada.</div>'}</div>`;
+      </div>`).join('') || emptyState({
+        icon: 'calendar',
+        title: 'Nenhuma sessão registrada',
+        hint: 'Anote o que rolou em cada encontro — a IA gera um recap épico pra relembrar o grupo antes da próxima.',
+        actionId: 'empty-new-session', actionLabel: '+ Nova sessão',
+      })}</div>`;
 
   $('#btn-new-session').onclick = () => sessionModal();
+  $('#empty-new-session')?.addEventListener('click', () => sessionModal());
   $$('#tab-sessions [data-edit-session]').forEach((b) => b.onclick = () => sessionModal(state.sessions.find((s) => s.id === b.dataset.editSession)));
   $$('#tab-sessions [data-del-session]').forEach((b) => b.onclick = async () => {
     if (confirm('Excluir esta sessão?')) { await api(`/sessions/${b.dataset.delSession}`, { method: 'DELETE' }); refresh(); }
