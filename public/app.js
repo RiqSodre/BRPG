@@ -9,13 +9,26 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 
 // ---------- API ----------
 async function api(path, opts = {}) {
-  const res = await fetch(`/api${path}`, {
-    headers: opts.body instanceof FormData ? {} : { 'Content-Type': 'application/json' },
-    ...opts,
-    body: opts.body instanceof FormData ? opts.body : opts.body ? JSON.stringify(opts.body) : undefined,
-  });
+  let res;
+  try {
+    res = await fetch(`/api${path}`, {
+      headers: opts.body instanceof FormData ? {} : { 'Content-Type': 'application/json' },
+      ...opts,
+      body: opts.body instanceof FormData ? opts.body : opts.body ? JSON.stringify(opts.body) : undefined,
+    });
+  } catch {
+    // H9: falha de rede em linguagem clara, com o próximo passo — não o "Failed to fetch" cru.
+    throw new Error('Sem conexão com o servidor. Verifique sua internet e tente de novo.');
+  }
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || `Erro ${res.status}`);
+  if (!res.ok) {
+    // H9: quando o servidor não manda uma mensagem própria, evita expor código cru e diz o próximo passo.
+    throw new Error(data.error || (
+      res.status >= 500 ? 'O servidor teve um problema. Tente de novo em instantes.'
+        : res.status === 404 ? 'Não encontrei isso — talvez já tenha sido removido.'
+          : 'Não foi possível completar a ação. Tente de novo.'
+    ));
+  }
   return data;
 }
 
@@ -42,6 +55,17 @@ const tryApi = async (fn, okMsg) => {
     return null;
   }
 };
+
+// H1 (visibilidade do status): enquanto uma ação lenta roda, o botão mostra que está
+// trabalhando e não aceita clique duplo; restaura o rótulo ao fim (sucesso ou erro).
+async function withBusy(btn, label, fn) {
+  if (!btn) return fn();
+  const original = btn.innerHTML;
+  btn.disabled = true;
+  btn.textContent = label;
+  try { return await fn(); }
+  finally { btn.disabled = false; btn.innerHTML = original; }
+}
 
 // Empty state no padrão NN/g (heurísticas 6 e 10): em vez de só "nada aqui", diz o que
 // vai naquele espaço, por que importa (motiva) e oferece a própria ação — a tela vazia
@@ -286,9 +310,15 @@ function renderScenes() {
           <button class="btn small danger" data-del-scene="${s.id}"><svg class="icon"><use href="#i-trash"/></svg></button>
         </div>
       </div>`;
-    }).join('') || '<div class="empty">Nenhuma cena ainda. Crie a primeira!</div>'}</div>`;
+    }).join('') || emptyState({
+      icon: 'mask-happy',
+      title: 'Nenhuma cena ainda',
+      hint: 'Monte cenas com leitura, notas, imagem e trilha — e ative uma pra dar o tom da mesa na hora.',
+      actionId: 'empty-new-scene', actionLabel: '+ Nova cena',
+    })}</div>`;
 
   $('#btn-new-scene').onclick = () => sceneModal();
+  $('#empty-new-scene')?.addEventListener('click', () => sceneModal());
   $$('#tab-scenes [data-edit-scene]').forEach((b) => b.onclick = () => sceneModal(state.scenes.find((s) => s.id === b.dataset.editScene)));
   $$('#tab-scenes [data-del-scene]').forEach((b) => b.onclick = async () => {
     if (confirm('Excluir esta cena?')) { await api(`/scenes/${b.dataset.delScene}`, { method: 'DELETE' }); refresh(); }
@@ -590,9 +620,15 @@ function renderItems() {
           <button class="btn small danger" data-del-item="${it.id}"><svg class="icon"><use href="#i-trash"/></svg></button>
         </div>
       </div>`;
-    }).join('') || '<div class="empty">Nenhum item ainda. Crie o primeiro — uma poção, uma espada, um bilhete...</div>'}</div>`;
+    }).join('') || emptyState({
+      icon: 'backpack',
+      title: 'Nenhum item ainda',
+      hint: 'Monte o catálogo — poções, armas, um bilhete misterioso — e entregue a quantos personagens quiser.',
+      actionId: 'empty-new-item', actionLabel: '+ Novo item',
+    })}</div>`;
 
   $('#btn-new-item').onclick = () => itemModal();
+  $('#empty-new-item')?.addEventListener('click', () => itemModal());
   $$('#tab-items [data-edit-item]').forEach((b) => b.onclick = () => itemModal(itens.find((x) => x.id === b.dataset.editItem)));
   $$('#tab-items [data-del-item]').forEach((b) => b.onclick = async () => {
     if (!confirm('Excluir este item do catálogo? Ele some das mochilas de todo mundo também.')) return;
@@ -1045,8 +1081,14 @@ function renderAudio() {
       <input id="lib-sfx-search" class="sb-search" style="max-width:220px;" placeholder="filtrar por nome ou tag..." value="${esc(libFiltro)}" />
     </div>
     ${sfx.length ? sfx.map(audioRowHtml).join('')
-      : `<div class="empty">${todosSfx.length ? 'Nenhum efeito nessa categoria/filtro.' : 'Envie efeitos (porta, espadas, trovão) e organize por categoria.'}</div>`}
-    ${!ambientes.length && !musicas.length && !todosSfx.length ? '<div class="empty">Envie áudios de ambiente (chuva, taverna, floresta), músicas e efeitos.</div>' : ''}`;
+      : `<div class="empty">${todosSfx.length
+          ? 'Nenhum efeito com esse filtro — limpe a busca ou escolha outra categoria.'
+          : 'Nenhum efeito ainda. Use a busca do Freesound/YouTube acima, ou envie os seus.'}</div>`}
+    ${!ambientes.length && !musicas.length && !todosSfx.length ? emptyState({
+      icon: 'music-notes',
+      title: 'Sua biblioteca está vazia',
+      hint: 'Busque no Freesound ou no YouTube acima, ou envie seus próprios áudios de ambiente, música e efeitos.',
+    }) : ''}`;
 
   $('#up-type').onchange = (e) => { $('#up-category').style.display = e.target.value === 'sfx' ? '' : 'none'; };
   $('#up-type').dispatchEvent(new Event('change'));
@@ -3719,7 +3761,7 @@ function renderSettings() {
     refresh();
   };
 
-  $('#btn-obs-import').onclick = async () => {
+  $('#btn-obs-import').onclick = (e) => withBusy(e.currentTarget, 'Importando...', async () => {
     const r = await tryApi(() => api('/obsidian/import', { method: 'POST' }));
     if (!r) return;
     const res = $('#obs-result');
@@ -3727,16 +3769,16 @@ function renderSettings() {
     res.innerHTML = `<b>Importação concluída:</b> ${r.created} criados, ${r.updated} atualizados.<br/>`
       + (r.details.length ? `<div class="obs-detail">${r.details.join('<br/>')}</div>` : '');
     refresh();
-  };
+  });
 
-  $('#btn-obs-export').onclick = async () => {
+  $('#btn-obs-export').onclick = (e) => withBusy(e.currentTarget, 'Exportando...', async () => {
     const r = await tryApi(() => api('/obsidian/export', { method: 'POST' }));
     if (!r) return;
     const res = $('#obs-result');
     res.style.display = 'block';
     res.innerHTML = `<b>Exportação concluída:</b> ${r.written} arquivo(s) escritos no vault.<br/>`
       + (r.details.length ? `<div class="obs-detail">${r.details.join('<br/>')}</div>` : '');
-  };
+  });
 }
 
 // ---------- Barra de topo ----------
