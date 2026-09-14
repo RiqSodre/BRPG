@@ -120,6 +120,43 @@ npm start
 Abra **http://localhost:3000** — esse é o seu painel do Mestre. Os jogadores acessam
 `http://localhost:3000/jogador.html` (ou o endereço da sua rede/hospedagem).
 
+## Hospedar online
+
+O BRPG mantém uma conexão WebSocket ao vivo com cada jogador e guarda os dados em disco —
+então ele precisa de um host que roda um **processo Node persistente com um volume de
+disco**: **Render**, **Railway** ou **Fly.io** (ou um VPS). Ele **não** cabe em
+plataformas serverless como a Vercel, onde não há processo fixo pra segurar os WebSockets
+nem disco que persista entre requisições.
+
+O repositório já vem com um **`Dockerfile`** (portável pra qualquer um desses hosts) e um
+**`render.yaml`** pronto pro Render.
+
+### Deploy no Render (caminho recomendado)
+
+1. Suba este repositório pro GitHub.
+2. No Render: **New → Blueprint**, aponte pro repositório. Ele lê o `render.yaml`, cria o
+   serviço Docker, um disco persistente de 1 GB em `/data` e gera o `SESSION_SECRET`.
+   (O disco persistente exige um plano pago — o gratuito não tem disco.)
+3. Depois do primeiro deploy, abra a aba **Shell** do serviço e crie a sua conta de Mestre:
+   ```bash
+   node scripts/mint-master.js "Seu nome"
+   ```
+   Copie o **código de convite** que aparece (só aparece uma vez) e use pra entrar no painel.
+4. (Opcional) Preencha `OPENAI_API_KEY`/`GROQ_API_KEY` e `FREESOUND_API_KEY` no dashboard
+   pra ligar o Assistente de IA e a busca de sons.
+
+Variáveis que o deploy usa: `NODE_ENV=production` (liga HTTPS/cookie seguro),
+`BRPG_DATA_DIR=/data` (o volume), `BRPG_MULTI=1` (modo público, vários Mestres) e
+`SESSION_SECRET` (obrigatório em produção). Veja o `.env.example`.
+
+> **Uma instância só.** O BRPG transmite o estado da mesa a partir de um único processo.
+> Não ligue autoscaling nem múltiplas instâncias — os jogadores presos numa segunda
+> instância não receberiam as atualizações do Mestre.
+
+> **Importar do YouTube num servidor** costuma esbarrar no "Sign in to confirm you're not
+> a bot" (IP de datacenter). Se precisar, configure `YOUTUBE_COOKIES` — veja a seção do
+> `.env` acima. Freesound e upload direto de arquivos funcionam sem isso.
+
 ## Fluxo de uma sessão
 
 1. **Antes:** escreva a história na aba 📜, cadastre NPCs e PCs na 🧙 (com senha do

@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import express from 'express';
 import session from 'express-session';
+import sessionFileStore from 'session-file-store';
 import { EventEmitter } from 'events';
 import multer from 'multer';
 import youtubedl from 'youtube-dl-exec';
@@ -58,16 +59,44 @@ const imageUpload = diskUpload('IMAGES_DIR', /\.(png|jpe?g|webp|gif)$/i, 10);
 export function startServer() {
   const app = express();
   app.use(express.json({ limit: '2mb' }));
-  // Sessão do PORTAL DO JOGADOR (login nativo — personagem + senha). O painel do
-  // Mestre não usa sessão nem cookie — continua acessado direto, sem login, como sempre foi.
-  // Fica numa variável porque o handshake do WebSocket do portal (/portal-ws, mais
-  // abaixo) também precisa rodar esse mesmo middleware fora do pipeline de rotas.
+
+  // Produção (hospedado) vs. self-hosted local. Em produção o host termina o TLS num
+  // proxy à frente do app: sem confiar nesse proxy, o express-session vê a conexão como
+  // "http" e recusa gravar um cookie secure — o login do Mestre e do jogador não gruda.
+  const isProd = process.env.NODE_ENV === 'production';
+  if (isProd) app.set('trust proxy', 1);
+
+  // Chave de assinatura da sessão. Em casa (self-hosted, http) uma chave de dev serve e o
+  // painel abre sem configurar nada. Hospedado, ela é obrigatória: um segredo fixo e
+  // conhecido deixaria qualquer um forjar uma sessão — então falha alto no boot se faltar.
+  const sessionSecret = process.env.SESSION_SECRET || (isProd ? null : 'dev-only-troque-no-.env');
+  if (!sessionSecret) {
+    throw new Error('SESSION_SECRET é obrigatório em produção (NODE_ENV=production). Gere um valor longo e aleatório e configure a variável de ambiente do host.');
+  }
+  if (sessionSecret === 'dev-only-troque-no-.env') {
+    console.warn('[aviso] Usando SESSION_SECRET de desenvolvimento. Defina SESSION_SECRET antes de expor o painel além do localhost.');
+  }
+
+  // Onde guardar as sessões. Em produção, num arquivo no volume persistente (DATA_DIR/
+  // sessions): sobrevive a redeploys — o Mestre e os jogadores não são deslogados a cada
+  // atualização — e não vaza memória como o MemoryStore padrão. Em casa, MemoryStore
+  // basta (some ao reiniciar, sem incomodar). logFn silencia o log verboso da lib.
+  const FileStore = sessionFileStore(session);
+  const sessionStore = isProd
+    ? new FileStore({ path: path.join(DATA_DIR, 'sessions'), ttl: 30 * 24 * 60 * 60, retries: 1, logFn: () => {} })
+    : undefined;
+
+  // Sessão do PORTAL DO JOGADOR e do LOGIN DO MESTRE (modo multi). O painel do Mestre no
+  // self-hosted não exige login — continua acessado direto. Fica numa variável porque o
+  // handshake do WebSocket (/portal-ws, /mesa) roda esse mesmo middleware fora das rotas.
   const sessionMiddleware = session({
     name: 'brpg.sid',
-    secret: process.env.SESSION_SECRET || 'dev-only-troque-no-.env',
+    secret: sessionSecret,
+    store: sessionStore,
     resave: false,
     saveUninitialized: false,
-    cookie: { httpOnly: true, sameSite: 'lax', maxAge: 30 * 24 * 60 * 60 * 1000 },
+    // secure só em produção (HTTPS via proxy do host); em http local quebraria o cookie.
+    cookie: { httpOnly: true, sameSite: 'lax', secure: isProd, maxAge: 30 * 24 * 60 * 60 * 1000 },
   });
   app.use(sessionMiddleware);
   app.use(express.static(path.join(__dirname, '..', 'public')));

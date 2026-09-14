@@ -1,0 +1,44 @@
+# Blueprint do Render pro BRPG (Mesa do Mestre).
+# No painel do Render: New > Blueprint, aponte pro repositório e ele lê este arquivo.
+#
+# IMPORTANTE: o BRPG guarda estado em memória (conexões WebSocket por mesa, brute-force
+# do login) e transmite pra todos os jogadores de UM processo só. Ele precisa rodar como
+# UMA ÚNICA instância — não ligue autoscaling/múltiplas instâncias, senão o update do
+# Mestre não alcança jogadores presos em outra instância (o mesmo motivo de não caber na
+# Vercel). O disco persistente também exige um plano pago (o gratuito não tem disco).
+services:
+  - type: web
+    name: brpg
+    runtime: docker            # usa o Dockerfile do repositório
+    plan: starter              # disco persistente requer plano pago (starter)
+    healthCheckPath: /api/config
+    autoDeploy: true
+    # Volume onde vivem as campanhas (campaign.json, masters.json, audio/maps/images).
+    disk:
+      name: brpg-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Dados no volume persistente (o store resolve caminho absoluto direto).
+      - key: BRPG_DATA_DIR
+        value: /data
+      # Modo público multi-tenant: vários Mestres, login por código de convite.
+      # Depois do 1º deploy, abra o Shell do serviço e rode:  node scripts/mint-master.js "Seu nome"
+      # Copie o código gerado e use pra entrar no painel. (Remova esta var pra rodar em
+      # modo self-hosted, sem login, uma campanha só.)
+      - key: BRPG_MULTI
+        value: "1"
+      # Render gera um segredo aleatório forte pra assinar a sessão.
+      - key: SESSION_SECRET
+        generateValue: true
+      # ---- Opcionais: preencha no dashboard do Render se quiser ----
+      # IA do Assistente (chat, recap, tradução do bestiário, sons por IA):
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      # Buscar/importar sons do Freesound:
+      - key: FREESOUND_API_KEY
+        sync: false

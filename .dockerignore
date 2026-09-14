@@ -1,0 +1,17 @@
+# Reconstruídos/baixados dentro da imagem — nunca copiar do host
+node_modules/
+
+# Segredos e dados de runtime (os dados reais vivem no volume do host)
+.env
+data/
+data-demo/audio/
+data-demo/maps/
+data-demo/images/
+data-demo/tts/
+
+# Ruído do repositório
+.git/
+.gitignore
+.claude/
+*.log
+scratchpad/
