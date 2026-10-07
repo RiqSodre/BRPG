@@ -1,0 +1,32 @@
+# Sobe o BRPG numa VM (ex.: Oracle Cloud Always Free) com um comando:
+#   docker compose up -d --build
+#
+# O app fica escutando SÓ no localhost da VM (127.0.0.1:3000) — quem dá o HTTPS público
+# é um túnel/reverse-proxy na frente (Cloudflare Tunnel ou Caddy), o que também evita ter
+# que abrir portas no firewall do Oracle. Os dados vivem no volume brpg-data (persistem
+# a redeploys e reinícios da VM).
+#
+# Antes de subir, crie um arquivo .env ao lado deste (veja .env.example). O mínimo:
+#   SESSION_SECRET=<um valor longo e aleatório>   # obrigatório em produção
+#   BRPG_MULTI=1                                   # modo público (vários Mestres)
+#   NODE_ENV=production
+# E, se quiser IA/sons: OPENAI_API_KEY ou GROQ_API_KEY, FREESOUND_API_KEY.
+services:
+  brpg:
+    build: .
+    restart: unless-stopped
+    # Só no loopback da VM: o túnel (cloudflared) ou o Caddy falam com ele aqui.
+    # Pra expor direto na internet (sem túnel), troque por "80:3000" e abra a porta 80
+    # no Security List do Oracle E no firewall da VM (ufw/iptables).
+    ports:
+      - "127.0.0.1:3000:3000"
+    env_file:
+      - .env
+    environment:
+      # Dados no volume persistente (sempre, independente do .env).
+      BRPG_DATA_DIR: /data
+    volumes:
+      - brpg-data:/data
+
+volumes:
+  brpg-data:

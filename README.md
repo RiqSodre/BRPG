@@ -131,7 +131,13 @@ nem disco que persista entre requisições.
 O repositório já vem com um **`Dockerfile`** (portável pra qualquer um desses hosts) e um
 **`render.yaml`** pronto pro Render.
 
-### Deploy no Render (caminho recomendado)
+### Grátis: Oracle Cloud (Always Free)
+
+Uma VM gratuita e permanente, com disco, + Cloudflare Tunnel pro HTTPS. O repositório traz
+um `docker-compose.yml` que sobe tudo com um comando. Passo a passo em
+[`docs/deploy-oracle.md`](docs/deploy-oracle.md).
+
+### Deploy no Render (pago, o mais simples)
 
 1. Suba este repositório pro GitHub.
 2. No Render: **New → Blueprint**, aponte pro repositório. Ele lê o `render.yaml`, cria o
